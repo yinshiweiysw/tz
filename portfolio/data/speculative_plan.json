@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "as_of": "2026-04-01",
+  "generated_at": "2026-04-02T01:25:13.465Z",
+  "account_id": "main",
+  "system": "left_speculative_sleeve",
+  "trigger_sources_supported": [
+    "valuation_momentum_exhaustion",
+    "event_dislocation",
+    "manual_override"
+  ],
+  "source": {
+    "opportunity_pool": "/Users/yinshiwei/codex/tz/portfolio/data/opportunity_pool.json",
+    "signals_matrix": "/Users/yinshiwei/codex/tz/portfolio/signals/signals_matrix.json",
+    "index_valuation_matrix": "/Users/yinshiwei/codex/tz/portfolio/signals/index_valuation_matrix.json",
+    "portfolio_state": "/Users/yinshiwei/codex/tz/portfolio/state/portfolio_state.json",
+    "asset_master": "/Users/yinshiwei/codex/tz/portfolio/config/asset_master.json"
+  },
+  "budget_context": {
+    "total_assets_cny": 443079.97,
+    "initial_speculative_exposure_cny": 0,
+    "initial_exposure_note": "未识别到显式 speculative 持仓标签（如 bucket=SPECULATIVE 或 tags 含 speculative），当前按 0 处理。",
+    "max_pct": 0.15,
+    "sleeve_cap_cny": 66462,
+    "remaining_budget_cny": 66462
+  },
+  "instructions": []
+}

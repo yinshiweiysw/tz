@@ -1,0 +1,167 @@
+{
+  "schema_version": 3,
+  "routing_model": "regime_switching_factor_router",
+  "description": "Institutional routing sample for Route A dynamic cash gate and bucket-level hard caps.",
+  "fallback_bucket_key": "TACTICAL",
+  "bucket_order": [
+    "CN_CORE",
+    "GLB_MOM",
+    "INCOME",
+    "TACTICAL"
+  ],
+  "global_constraints": {
+    "max_drawdown_limit": 0.1,
+    "absolute_equity_cap": 0.65
+  },
+  "cash_sweeper": {
+    "enabled": true,
+    "symbol": "016482",
+    "name": "兴全恒信债券C",
+    "execution_type": "OTC",
+    "activation_threshold_cny": 1000,
+    "min_trade_amount_cny": 1000,
+    "priority_rank": 999,
+    "note": "所有核心资产完成分配后，将超出现金防线的尾款自动归集到低波动短债底仓。"
+  },
+  "buckets": {
+    "CN_CORE": {
+      "label": "A股核心赔率仓",
+      "risk_role": "core",
+      "target_pct": 0.2,
+      "min_pct": 0.0,
+      "max_pct": 0.25,
+      "priority_rank": 1,
+      "is_equity_like": true
+    },
+    "GLB_MOM": {
+      "label": "全球动量仓",
+      "risk_role": "growth",
+      "target_pct": 0.1,
+      "min_pct": 0.0,
+      "max_pct": 0.15,
+      "priority_rank": 2,
+      "is_equity_like": true
+    },
+    "INCOME": {
+      "label": "红利收益仓",
+      "risk_role": "income",
+      "target_pct": 0.1,
+      "min_pct": 0.0,
+      "max_pct": 0.15,
+      "priority_rank": 3,
+      "is_equity_like": true
+    },
+    "TACTICAL": {
+      "label": "战术波动仓",
+      "risk_role": "tactical",
+      "target_pct": 0.05,
+      "min_pct": 0.0,
+      "max_pct": 0.1,
+      "priority_rank": 4,
+      "is_equity_like": true
+    }
+  },
+  "assets": [
+    {
+      "symbol": "007339",
+      "name": "易方达沪深300ETF联接C",
+      "execution_type": "OTC",
+      "bucket": "CN_CORE",
+      "market": "CN",
+      "category": "A股宽基",
+      "strategy_regime": {
+        "type": "erp_mean_reversion",
+        "pricing_anchor": {
+          "use_erp": true,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 12,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.035,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "021482",
+      "name": "华夏中证红利低波动ETF发起式联接A",
+      "execution_type": "OTC",
+      "bucket": "INCOME",
+      "market": "CN",
+      "category": "A股红利低波",
+      "strategy_regime": {
+        "type": "dividend_carry",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": true,
+          "crowding_penalty": true
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 6,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.028,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "513100",
+      "name": "国泰纳斯达克100ETF",
+      "execution_type": "EXCHANGE",
+      "ticker": "513100",
+      "settlement_rule": "T+0",
+      "lot_size": 100,
+      "slippage_buffer": 0.002,
+      "bucket": "GLB_MOM",
+      "market": "CN",
+      "category": "美股场内代理",
+      "signal_proxy_symbol": "QQQ",
+      "strategy_regime": {
+        "type": "macro_momentum",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 12,
+          "moving_average": 200
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.06,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "013172",
+      "name": "华夏恒生互联网科技业ETF联接(QDII)C",
+      "execution_type": "OTC",
+      "bucket": "TACTICAL",
+      "market": "HK",
+      "category": "港股互联网/QDII",
+      "strategy_regime": {
+        "type": "target_volatility",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 6,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.08,
+          "kill_switch_enabled": true
+        }
+      }
+    }
+  ]
+}

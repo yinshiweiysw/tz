@@ -1,0 +1,146 @@
+{
+  "generated_at": "2026-04-01T14:00:33+08:00",
+  "db_path": "/Users/yinshiwei/codex/tz/portfolio/data/market_lake.db",
+  "proxy_config_path": "/Users/yinshiwei/codex/tz/portfolio/config/backtest_proxy_mapping.json",
+  "requested_window": {
+    "start_date": "2025-01-01",
+    "end_date": "2026-03-30"
+  },
+  "alignment": {
+    "requested_start": "2025-01-01",
+    "requested_end": null,
+    "effective_start": "2025-01-01",
+    "effective_end": "2026-03-30",
+    "effective_rows": 298,
+    "start_was_truncated": false
+  },
+  "resolved_symbols": {
+    "hs300": {
+      "symbol": "510300",
+      "label": "HS300",
+      "live_symbol": "007339",
+      "reference_targets": [
+        "000300.SH",
+        "510300.SH"
+      ],
+      "candidate_symbols": [
+        "510300",
+        "007339"
+      ],
+      "proxy_note": "Prefer the long-history domestic HS300 ETF for backtests; fall back to the feeder fund only if the ETF is unavailable locally.",
+      "first_date": "2012-05-28",
+      "last_date": "2026-03-30",
+      "rows": 3362
+    },
+    "nasdaq100": {
+      "symbol": "513100",
+      "label": "Nasdaq100",
+      "live_symbol": "015299",
+      "reference_targets": [
+        "NDX.GI",
+        "513100.SH"
+      ],
+      "candidate_symbols": [
+        "513100",
+        "QQQ",
+        "015299"
+      ],
+      "proxy_note": "Prefer the domestic exchange ETF proxy for A-share account consistency; use QQQ only as a secondary fallback.",
+      "first_date": "2013-05-15",
+      "last_date": "2026-03-31",
+      "rows": 3129
+    },
+    "gold": {
+      "symbol": "518880",
+      "label": "Gold",
+      "live_symbol": "000216",
+      "reference_targets": [
+        "AU9999.SGE",
+        "518880.SH"
+      ],
+      "candidate_symbols": [
+        "518880",
+        "GC=F",
+        "000216"
+      ],
+      "proxy_note": "Prefer the domestic gold ETF for RMB-denominated backtests; use COMEX gold only when the local ETF is unavailable.",
+      "first_date": "2013-07-29",
+      "last_date": "2026-03-30",
+      "rows": 3079
+    },
+    "dividend": {
+      "symbol": "512890",
+      "label": "Dividend_Index",
+      "live_symbol": "021482",
+      "reference_targets": [
+        "H30269.CSI",
+        "512890.SH"
+      ],
+      "candidate_symbols": [
+        "512890",
+        "510880",
+        "021482"
+      ],
+      "proxy_note": "Prefer the closer red-dividend-low-vol ETF when available; use 510880 as the long-history fallback to preserve the full 2018 stress window.",
+      "first_date": "2019-01-18",
+      "last_date": "2026-03-30",
+      "rows": 1741
+    }
+  },
+  "parameters": {
+    "initial_capital": 1.0,
+    "high_erp_threshold_pct": 5.5,
+    "low_erp_threshold_pct": 3.5,
+    "offense_cash_pct": 0.1,
+    "neutral_cash_pct": 0.25,
+    "defense_cash_pct": 0.4,
+    "trend_filter_window_days": 120,
+    "strategic_weights": {
+      "cn_core_target": 0.2,
+      "cn_core_max": 0.25,
+      "dividend_target": 0.1,
+      "dividend_max": 0.15,
+      "glb_mom_max": 0.15,
+      "gold_base_weight": 0.1,
+      "gold_crisis_weight": 0.2
+    }
+  },
+  "strategy_metrics": {
+    "cagr": 0.122906,
+    "max_drawdown": -0.063945,
+    "sharpe_ratio": 1.275746,
+    "calmar_ratio": 1.922076
+  },
+  "benchmark_metrics": {
+    "cagr": 0.09879,
+    "max_drawdown": -0.100754,
+    "sharpe_ratio": 0.5782,
+    "calmar_ratio": 0.980505
+  },
+  "risk_monitor": {
+    "high_cash_defense_days": 159,
+    "nasdaq_trend_filter_off_days": 152,
+    "gold_crisis_hedge_days": 142,
+    "max_drawdown_limit": 0.1,
+    "strategy_breached_max_drawdown_limit": false
+  },
+  "stress_windows": {
+    "2018": null,
+    "2022": null
+  },
+  "ending_nav": {
+    "strategy": 1.148179,
+    "benchmark": 1.118846
+  },
+  "runtime_paths": {
+    "portfolio_root": "/Users/yinshiwei/codex/tz/portfolio_users/wenge",
+    "manifest_path": "/Users/yinshiwei/codex/tz/portfolio_users/wenge/state-manifest.json"
+  },
+  "artifacts": {
+    "summary_output": "/Users/yinshiwei/codex/tz/portfolio_users/wenge/data/backtest_engine_results.json",
+    "equity_output": "/Users/yinshiwei/codex/tz/portfolio_users/wenge/data/backtest_engine_equity.csv",
+    "plot_output": "/Users/yinshiwei/codex/tz/portfolio_users/wenge/reports/backtest_engine_nav_vs_hs300.png",
+    "plot_generated": true,
+    "plot_warning": null
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "account_id": "wenge",
+  "as_of_snapshot_date": "2026-04-01",
+  "created_at": "2026-04-01T08:13:00.066Z",
+  "updated_at": "2026-04-01T08:13:00.066Z",
+  "entries": [],
+  "notes": [
+    "Execution ledger initialized for dual-ledger architecture."
+  ]
+}

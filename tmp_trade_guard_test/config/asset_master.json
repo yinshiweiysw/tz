@@ -1,0 +1,639 @@
+{
+  "version": 3,
+  "schema_version": 4,
+  "routing_model": "regime_switching_factor_router_v6",
+  "description": "Route A asset master with six plain-language buckets, dynamic intervals, execution-aware routing, and the B offensive-growth profile burned in.",
+  "active_profile": "B_offensive_growth_v1",
+  "fallback_bucket_key": "TACTICAL",
+  "bucket_order": [
+    "A_CORE",
+    "GLB_MOM",
+    "INCOME",
+    "HEDGE",
+    "TACTICAL",
+    "CASH"
+  ],
+  "global_constraints": {
+    "max_drawdown_limit": 0.15,
+    "absolute_equity_cap": 0.75
+  },
+  "buckets": {
+    "A_CORE": {
+      "label": "A股核心",
+      "short_label": "A股",
+      "target": 0.22,
+      "min": 0.1,
+      "max": 0.3,
+      "risk_role": "core",
+      "driver": "估值/ERP",
+      "priority_rank": 10,
+      "is_equity_like": true
+    },
+    "GLB_MOM": {
+      "label": "全球动量",
+      "short_label": "全球",
+      "target": 0.14,
+      "min": 0.0,
+      "max": 0.2,
+      "risk_role": "growth",
+      "driver": "趋势均线",
+      "priority_rank": 20,
+      "is_equity_like": true
+    },
+    "INCOME": {
+      "label": "红利收息",
+      "short_label": "红利",
+      "target": 0.12,
+      "min": 0.08,
+      "max": 0.15,
+      "risk_role": "defensive",
+      "driver": "利差/拥挤",
+      "priority_rank": 30,
+      "is_equity_like": true
+    },
+    "HEDGE": {
+      "label": "黄金避险",
+      "short_label": "黄金",
+      "target": 0.12,
+      "min": 0.1,
+      "max": 0.15,
+      "risk_role": "defensive",
+      "driver": "宏观危机",
+      "composition_note": "纯黄金是 HEDGE 的核心防线，大宗商品只作为卫星仓补充，不与纯黄金等权看待。",
+      "sub_sleeves": {
+        "core_gold": {
+          "label": "纯黄金核心",
+          "portfolio_target_hint": 0.1,
+          "portfolio_max_hint": 0.12
+        },
+        "commodity_satellite": {
+          "label": "商品卫星",
+          "portfolio_target_hint": 0.02,
+          "portfolio_max_hint": 0.03
+        }
+      },
+      "priority_rank": 40,
+      "is_equity_like": true
+    },
+    "TACTICAL": {
+      "label": "战术刺客",
+      "short_label": "战术",
+      "target": 0.06,
+      "min": 0.0,
+      "max": 0.1,
+      "risk_role": "tactical",
+      "driver": "波动率",
+      "priority_rank": 50,
+      "is_equity_like": true,
+      "buy_gate": "frozen"
+    },
+    "CASH": {
+      "label": "现金防线",
+      "short_label": "现金",
+      "target": 0.34,
+      "min": 0.15,
+      "max": 0.45,
+      "risk_role": "cash",
+      "driver": "保底枢纽",
+      "priority_rank": 60,
+      "is_equity_like": false
+    }
+  },
+  "bucket_mapping_rules": [
+    {
+      "bucket_key": "A_CORE",
+      "category_equals": [
+        "A股宽基",
+        "A股主动"
+      ],
+      "name_patterns": [
+        "沪深300",
+        "招商量化",
+        "量化增强"
+      ]
+    },
+    {
+      "bucket_key": "GLB_MOM",
+      "category_equals": [
+        "美股指数/QDII",
+        "美股科技/QDII",
+        "海外科技/QDII",
+        "美股场内代理"
+      ],
+      "name_patterns": [
+        "纳斯达克",
+        "纳指",
+        "标普500",
+        "QQQ",
+        "海外科技"
+      ]
+    },
+    {
+      "bucket_key": "INCOME",
+      "category_equals": [
+        "A股红利低波"
+      ],
+      "name_patterns": [
+        "红利低波",
+        "红利",
+        "高股息"
+      ]
+    },
+    {
+      "bucket_key": "HEDGE",
+      "category_equals": [
+        "黄金",
+        "大宗商品/QDII"
+      ],
+      "name_patterns": [
+        "黄金",
+        "大宗商品",
+        "商品"
+      ]
+    },
+    {
+      "bucket_key": "TACTICAL",
+      "category_equals": [
+        "港股互联网/QDII",
+        "港股科技/QDII",
+        "港股银行/QDII"
+      ],
+      "name_patterns": [
+        "恒生互联网",
+        "恒生科技",
+        "港股互联网",
+        "半导体"
+      ]
+    },
+    {
+      "bucket_key": "CASH",
+      "category_equals": [
+        "偏债混合",
+        "债券",
+        "货币"
+      ],
+      "name_patterns": [
+        "恒信债",
+        "宁景",
+        "债券",
+        "短债",
+        "货币"
+      ]
+    }
+  ],
+  "cash_sweeper": {
+    "enabled": true,
+    "bucket": "CASH",
+    "symbol": "016482",
+    "name": "兴全恒信债券C",
+    "execution_type": "OTC",
+    "activation_threshold_cny": 1000,
+    "min_trade_amount_cny": 1000,
+    "priority_rank": 999,
+    "note": "所有核心资产完成分配后，将超出现金防线的尾款自动归集到低波动短债底仓。"
+  },
+  "performance_benchmark": {
+    "name": "全天候多资产实盘基准",
+    "description": "Brinson 归因使用的投入资本基准，不含现金桶，强调 A 股核心、全球成长、红利收息与黄金对冲四条主线。",
+    "scope": "invested_capital_ex_cash",
+    "notes": [
+      "Benchmark weights are defined on invested capital only, excluding the cash defense sleeve.",
+      "Global growth exposure is split between GLB_MOM and TACTICAL so Brinson can separately attribute broad overseas beta and high-beta tactical risk."
+    ],
+    "sleeves": {
+      "cn_core": {
+        "label": "A股核心底仓",
+        "bucket_weights_pct": {
+          "A_CORE": 30
+        }
+      },
+      "global_growth": {
+        "label": "海外成长与科技",
+        "bucket_weights_pct": {
+          "GLB_MOM": 20,
+          "TACTICAL": 10
+        }
+      },
+      "income_defense": {
+        "label": "红利收息",
+        "bucket_weights_pct": {
+          "INCOME": 20
+        }
+      },
+      "macro_hedge": {
+        "label": "黄金对冲",
+        "bucket_weights_pct": {
+          "HEDGE": 20
+        }
+      }
+    }
+  },
+  "assets": [
+    {
+      "symbol": "007339",
+      "name": "易方达沪深300ETF联接C",
+      "execution_type": "OTC",
+      "bucket": "A_CORE",
+      "market": "CN",
+      "category": "A股宽基",
+      "strategy_regime": {
+        "type": "erp_mean_reversion",
+        "pricing_anchor": {
+          "use_erp": true,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 12,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.035,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "001917",
+      "name": "招商量化精选股票A",
+      "execution_type": "OTC",
+      "bucket": "A_CORE",
+      "market": "CN",
+      "category": "A股主动",
+      "strategy_regime": {
+        "type": "erp_mean_reversion",
+        "pricing_anchor": {
+          "use_erp": true,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 12,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.04,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "006075",
+      "name": "博时标普500ETF联接(QDII)C",
+      "execution_type": "OTC",
+      "bucket": "GLB_MOM",
+      "market": "US",
+      "category": "美股指数/QDII",
+      "strategy_regime": {
+        "type": "macro_momentum",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 12,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.06,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "019118",
+      "name": "景顺长城纳斯达克科技市值加权ETF联接(QDII)E",
+      "execution_type": "OTC",
+      "bucket": "GLB_MOM",
+      "market": "US",
+      "category": "美股科技/QDII",
+      "strategy_regime": {
+        "type": "macro_momentum",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 12,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.065,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "019172",
+      "name": "摩根纳斯达克100指数(QDII)A",
+      "execution_type": "OTC",
+      "bucket": "GLB_MOM",
+      "market": "US",
+      "category": "美股科技/QDII",
+      "strategy_regime": {
+        "type": "macro_momentum",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 12,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.06,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "016532",
+      "name": "嘉实纳斯达克100ETF联接(QDII)A",
+      "execution_type": "OTC",
+      "bucket": "GLB_MOM",
+      "market": "US",
+      "category": "美股科技/QDII",
+      "strategy_regime": {
+        "type": "macro_momentum",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 12,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.06,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "017641",
+      "name": "摩根标普500指数(QDII)A",
+      "execution_type": "OTC",
+      "bucket": "GLB_MOM",
+      "market": "US",
+      "category": "美股指数/QDII",
+      "strategy_regime": {
+        "type": "macro_momentum",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 12,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.055,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "017204",
+      "name": "华宝海外科技股票(QDII-FOF-LOF)C",
+      "execution_type": "OTC",
+      "bucket": "GLB_MOM",
+      "market": "US",
+      "category": "海外科技/QDII",
+      "strategy_regime": {
+        "type": "macro_momentum",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 12,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.07,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "513100",
+      "name": "国泰纳斯达克100ETF",
+      "execution_type": "EXCHANGE",
+      "ticker": "513100",
+      "settlement_rule": "T+0",
+      "lot_size": 100,
+      "slippage_buffer": 0.002,
+      "bucket": "GLB_MOM",
+      "market": "CN",
+      "category": "美股场内代理",
+      "signal_proxy_symbol": "QQQ",
+      "strategy_regime": {
+        "type": "macro_momentum",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 12,
+          "moving_average": 200
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.06,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "021482",
+      "name": "华夏中证红利低波动ETF发起式联接A",
+      "execution_type": "OTC",
+      "bucket": "INCOME",
+      "market": "CN",
+      "category": "A股红利低波",
+      "strategy_regime": {
+        "type": "dividend_carry",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": true,
+          "crowding_penalty": true
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 6,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.028,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "022502",
+      "name": "国泰黄金ETF联接E",
+      "execution_type": "OTC",
+      "bucket": "HEDGE",
+      "hedge_sleeve_type": "core_gold",
+      "portfolio_role": "纯黄金核心仓",
+      "bucket_target_bias": 5.0,
+      "market": "CN",
+      "category": "黄金",
+      "strategy_regime": {
+        "type": "macro_momentum",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 6,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.05,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "025162",
+      "name": "国泰大宗商品配置(QDII-LOF-FOF)D",
+      "execution_type": "OTC",
+      "bucket": "HEDGE",
+      "hedge_sleeve_type": "commodity_satellite",
+      "portfolio_role": "商品卫星仓",
+      "bucket_target_bias": 1.0,
+      "portfolio_weight_cap": 0.03,
+      "market": "GLB",
+      "category": "大宗商品/QDII",
+      "strategy_regime": {
+        "type": "macro_momentum",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 6,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.07,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "013172",
+      "name": "华夏恒生互联网科技业ETF联接(QDII)C",
+      "execution_type": "OTC",
+      "bucket": "TACTICAL",
+      "market": "HK",
+      "category": "港股互联网/QDII",
+      "strategy_regime": {
+        "type": "target_volatility",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 6,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.08,
+          "kill_switch_enabled": true
+        }
+      }
+    },
+    {
+      "symbol": "025209",
+      "name": "永赢先锋半导体智选混合C",
+      "execution_type": "OTC",
+      "bucket": "TACTICAL",
+      "market": "CN",
+      "category": "A股主动",
+      "strategy_regime": {
+        "type": "target_volatility",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 6,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.085,
+          "kill_switch_enabled": true
+        }
+      }
+    },
+    {
+      "symbol": "011803",
+      "name": "景顺长城宁景6个月持有期混合A",
+      "execution_type": "OTC",
+      "bucket": "CASH",
+      "market": "CN",
+      "category": "偏债混合",
+      "signal_enabled": false
+    },
+    {
+      "symbol": "016482",
+      "name": "兴全恒信债券C",
+      "execution_type": "OTC",
+      "bucket": "CASH",
+      "market": "CN",
+      "category": "偏债混合",
+      "signal_enabled": false
+    }
+  ],
+  "portfolio_backtest": {
+    "initial_capital_cny": 1000000,
+    "lookback_days": 1250,
+    "warmup_days": 120,
+    "execution_model": "signal_on_close_execute_next_day_close",
+    "annual_cash_yield_pct": 2.0,
+    "bucket_representatives": {
+      "A_CORE": {
+        "symbol": "007339",
+        "display_name": "易方达沪深300ETF联接C",
+        "proxy_note": "A-share core sleeve uses the local HS300 feeder fund directly."
+      },
+      "GLB_MOM": {
+        "symbol": "QQQ",
+        "display_name": "Invesco QQQ Trust",
+        "proxy_note": "Global momentum sleeve reads QQQ for signal generation while live domestic execution routes through 513100."
+      },
+      "INCOME": {
+        "symbol": "021482",
+        "display_name": "华夏中证红利低波动ETF发起式联接A",
+        "proxy_note": "Income sleeve uses the domestic dividend-low-vol feeder fund directly."
+      },
+      "HEDGE": {
+        "symbol": "022502",
+        "display_name": "国泰黄金ETF联接E",
+        "proxy_note": "Hedge sleeve uses the local gold feeder fund directly."
+      },
+      "TACTICAL": {
+        "symbol": "013172",
+        "display_name": "华夏恒生互联网科技业ETF联接(QDII)C",
+        "proxy_note": "Tactical sleeve uses the HSI internet feeder fund directly."
+      },
+      "CASH": {
+        "symbol": "CASH_CNY",
+        "display_name": "现金防线",
+        "synthetic_cash": true,
+        "proxy_note": "Cash sleeve is modeled as synthetic CNY cash yield."
+      }
+    }
+  }
+}

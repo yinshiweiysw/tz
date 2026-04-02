@@ -1,0 +1,26 @@
+{
+  "fundListM": [
+    {
+      "code": "011452",
+      "num": 11775.83
+    },
+    {
+      "code": "025209",
+      "num": 4562.71
+    },
+    {
+      "code": "016874",
+      "num": 19456.33
+    },
+    {
+      "code": "018099",
+      "num": 9721.87
+    }
+  ],
+  "isLiveUpdate": true,
+  "showAmount": true,
+  "showGains": true,
+  "showGSZ": true,
+  "showCost": false,
+  "showCostRate": false
+}

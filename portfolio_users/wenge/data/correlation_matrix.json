@@ -1,0 +1,137 @@
+{
+  "version": 1,
+  "generated_at": "2026-04-01T13:04:09+08:00",
+  "layer_role": "layer_2_dynamic_correlation_engine",
+  "source": "Local SQLite market_lake daily_prices",
+  "parameters": {
+    "lookback_trading_days": 60,
+    "indicator": "累计净值走势",
+    "return_method": "daily_pct_change",
+    "min_pair_observations": 20
+  },
+  "source_pool": {
+    "watchlist_as_of": "2026-03-30",
+    "watchlist_basis": "seeded_from_2026-03-30_account_screenshot_and_user_followup",
+    "latest_snapshot_date": "2026-04-01"
+  },
+  "funds": [
+    {
+      "code": "011452",
+      "name": "华泰柏瑞质量成长混合C",
+      "latest_category": "A股主动",
+      "watchlist_amount_cny": 25647.76
+    },
+    {
+      "code": "025209",
+      "name": "永赢先锋半导体智选混合发起C",
+      "latest_category": "A股主动",
+      "watchlist_amount_cny": 7404.37
+    },
+    {
+      "code": "016874",
+      "name": "广发远见智选混合C",
+      "latest_category": "A股主动",
+      "watchlist_amount_cny": 30381.06
+    },
+    {
+      "code": "018099",
+      "name": "方正富邦中证保险主题指数C",
+      "latest_category": "A股主动",
+      "watchlist_amount_cny": 10567.67
+    }
+  ],
+  "matrix": {
+    "011452": {
+      "011452": 1.0,
+      "025209": 0.4902,
+      "016874": 0.6054,
+      "018099": 0.0976
+    },
+    "025209": {
+      "011452": 0.4902,
+      "025209": 1.0,
+      "016874": 0.8095,
+      "018099": 0.2613
+    },
+    "016874": {
+      "011452": 0.6054,
+      "025209": 0.8095,
+      "016874": 1.0,
+      "018099": 0.2841
+    },
+    "018099": {
+      "011452": 0.0976,
+      "025209": 0.2613,
+      "016874": 0.2841,
+      "018099": 1.0
+    }
+  },
+  "pair_statistics": [
+    {
+      "left_code": "025209",
+      "left_name": "永赢先锋半导体智选混合发起C",
+      "left_category": "A股主动",
+      "right_code": "016874",
+      "right_name": "广发远见智选混合C",
+      "right_category": "A股主动",
+      "correlation": 0.8095,
+      "overlapping_return_points": 58
+    },
+    {
+      "left_code": "011452",
+      "left_name": "华泰柏瑞质量成长混合C",
+      "left_category": "A股主动",
+      "right_code": "016874",
+      "right_name": "广发远见智选混合C",
+      "right_category": "A股主动",
+      "correlation": 0.6054,
+      "overlapping_return_points": 59
+    },
+    {
+      "left_code": "011452",
+      "left_name": "华泰柏瑞质量成长混合C",
+      "left_category": "A股主动",
+      "right_code": "025209",
+      "right_name": "永赢先锋半导体智选混合发起C",
+      "right_category": "A股主动",
+      "correlation": 0.4902,
+      "overlapping_return_points": 58
+    },
+    {
+      "left_code": "016874",
+      "left_name": "广发远见智选混合C",
+      "left_category": "A股主动",
+      "right_code": "018099",
+      "right_name": "方正富邦中证保险主题指数C",
+      "right_category": "A股主动",
+      "correlation": 0.2841,
+      "overlapping_return_points": 59
+    },
+    {
+      "left_code": "025209",
+      "left_name": "永赢先锋半导体智选混合发起C",
+      "left_category": "A股主动",
+      "right_code": "018099",
+      "right_name": "方正富邦中证保险主题指数C",
+      "right_category": "A股主动",
+      "correlation": 0.2613,
+      "overlapping_return_points": 58
+    },
+    {
+      "left_code": "011452",
+      "left_name": "华泰柏瑞质量成长混合C",
+      "left_category": "A股主动",
+      "right_code": "018099",
+      "right_name": "方正富邦中证保险主题指数C",
+      "right_category": "A股主动",
+      "correlation": 0.0976,
+      "overlapping_return_points": 59
+    }
+  ],
+  "errors": [],
+  "data_quality": {
+    "aligned_nav_rows": 61,
+    "aligned_return_rows": 60,
+    "funds_with_history": 4
+  }
+}

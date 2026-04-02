@@ -1,0 +1,64 @@
+{
+  "version": 3,
+  "generated_at": "2026-03-31T10:30:00+08:00",
+  "layer_role": "regime_signal_router_demo",
+  "risk_budget": {
+    "regime_state": "high_erp_offense",
+    "cash_reserve_pct": 0.25
+  },
+  "signals": {
+    "007339": {
+      "symbol": "007339",
+      "name": "易方达沪深300ETF联接C",
+      "bucket": "CN_CORE",
+      "execution_type": "OTC",
+      "Action": "Accumulate",
+      "Weight_Target": 0.15,
+      "bucket_priority_rank": 1,
+      "reasons": [
+        "ERP above high-threshold, accumulate from the left side regardless of weak tape"
+      ],
+      "execution_context": {
+        "target_amount_cny": 45000.0,
+        "target_value_cny": 45000.0,
+        "last_price": 1.7913,
+        "signal_symbol": "007339",
+        "execution_symbol": "007339",
+        "price_source": "signal_proxy_history",
+        "price_date": "2026-03-31"
+      }
+    },
+    "513100": {
+      "symbol": "513100",
+      "name": "国泰纳斯达克100ETF",
+      "bucket": "GLB_MOM",
+      "execution_type": "EXCHANGE",
+      "ticker": "513100",
+      "settlement_rule": "T+0",
+      "lot_size": 100,
+      "slippage_buffer": 0.002,
+      "Action": "Buy",
+      "Weight_Target": 0.08,
+      "bucket_priority_rank": 2,
+      "reasons": [
+        "price above long moving average and short breakout confirmed"
+      ],
+      "market_data_symbol": "QQQ",
+      "execution_context": {
+        "target_value_cny": 24000.0,
+        "last_price": 1.683,
+        "signal_symbol": "QQQ",
+        "signal_last_price": 562.58,
+        "execution_symbol": "513100",
+        "price_source": "market_lake",
+        "price_date": "2026-03-31",
+        "slippage_buffer": 0.002,
+        "ticker": "513100",
+        "lot_size": 100,
+        "target_shares": 14200,
+        "target_notional_cny": 23898.6
+      }
+    }
+  },
+  "errors": []
+}

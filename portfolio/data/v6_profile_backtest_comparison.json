@@ -1,0 +1,175 @@
+{
+  "generated_at": "2026-03-31T19:22:45.140823+08:00",
+  "requested_window": {
+    "start": "2021-01-01",
+    "end": "2026-03-31"
+  },
+  "effective_window": {
+    "start": "2021-09-17",
+    "end": "2026-03-27",
+    "rows": 1090
+  },
+  "cost_model": {
+    "fee_bps_one_way": 2.0,
+    "slippage_bps_one_way": 8.0,
+    "total_bps_one_way": 10.0
+  },
+  "resolved_symbols": {
+    "hs300": {
+      "symbol": "510300",
+      "first_date": "2012-05-28",
+      "live_symbol": "007339",
+      "reference_targets": [
+        "000300.SH",
+        "510300.SH"
+      ],
+      "selection_note": "Prefer the long-history domestic HS300 ETF for backtests; fall back to the feeder fund only if the ETF is unavailable locally."
+    },
+    "nasdaq100": {
+      "symbol": "513100",
+      "first_date": "2013-07-31",
+      "live_symbol": "015299",
+      "reference_targets": [
+        "NDX.GI",
+        "513100.SH"
+      ],
+      "selection_note": "Prefer the domestic exchange ETF proxy for A-share account consistency; use QQQ only as a secondary fallback."
+    },
+    "gold": {
+      "symbol": "518880",
+      "first_date": "2013-07-29",
+      "live_symbol": "000216",
+      "reference_targets": [
+        "AU9999.SGE",
+        "518880.SH"
+      ],
+      "selection_note": "Prefer the domestic gold ETF for RMB-denominated backtests; use COMEX gold only when the local ETF is unavailable."
+    },
+    "dividend": {
+      "symbol": "512890",
+      "first_date": "2019-01-18",
+      "live_symbol": "021482",
+      "reference_targets": [
+        "H30269.CSI",
+        "512890.SH"
+      ],
+      "selection_note": "Prefer the closer red-dividend-low-vol ETF when available; use 510880 as the long-history fallback to preserve the full 2018 stress window."
+    },
+    "tactical": {
+      "symbol": "013172",
+      "first_date": "2021-09-14",
+      "live_symbol": "013172",
+      "reference_targets": [],
+      "selection_note": "Use live tactical sleeve itself; local inception limits the effective window."
+    }
+  },
+  "results": {
+    "A_absolute_return": {
+      "profile": {
+        "label": "版本1-绝对收益版",
+        "max_drawdown_limit": 0.1,
+        "equity_cap": 0.6,
+        "buckets": {
+          "a_core": {
+            "min": 0.1,
+            "target": 0.2,
+            "max": 0.25
+          },
+          "glb_mom": {
+            "min": 0.0,
+            "target": 0.08,
+            "max": 0.12
+          },
+          "income": {
+            "min": 0.1,
+            "target": 0.12,
+            "max": 0.15
+          },
+          "hedge": {
+            "min": 0.1,
+            "target": 0.12,
+            "max": 0.15
+          },
+          "tactical": {
+            "min": 0.0,
+            "target": 0.03,
+            "max": 0.08
+          },
+          "cash": {
+            "min": 0.3,
+            "target": 0.45,
+            "max": 0.55
+          }
+        }
+      },
+      "metrics": {
+        "cagr": 0.04787946042351554,
+        "max_drawdown": -0.11857957239532502,
+        "max_drawdown_date": "2022-10-31",
+        "max_drawdown_month": "2022-10",
+        "sharpe_ratio": 0.33400610636512357,
+        "calmar_ratio": 0.4037749458557095,
+        "ending_nav": 550254.4520966514,
+        "high_cash_peak_2022": 0.56,
+        "high_cash_avg_2022": 0.4557261410788383,
+        "breached_limit": true
+      }
+    },
+    "B_offensive_growth": {
+      "profile": {
+        "label": "版本2-进攻增强版",
+        "max_drawdown_limit": 0.15,
+        "equity_cap": 0.75,
+        "buckets": {
+          "a_core": {
+            "min": 0.1,
+            "target": 0.22,
+            "max": 0.3
+          },
+          "glb_mom": {
+            "min": 0.0,
+            "target": 0.14,
+            "max": 0.2
+          },
+          "income": {
+            "min": 0.08,
+            "target": 0.12,
+            "max": 0.15
+          },
+          "hedge": {
+            "min": 0.1,
+            "target": 0.12,
+            "max": 0.15
+          },
+          "tactical": {
+            "min": 0.0,
+            "target": 0.06,
+            "max": 0.1
+          },
+          "cash": {
+            "min": 0.15,
+            "target": 0.34,
+            "max": 0.45
+          }
+        }
+      },
+      "metrics": {
+        "cagr": 0.054023151767483846,
+        "max_drawdown": -0.1334703873343629,
+        "max_drawdown_date": "2022-10-31",
+        "max_drawdown_month": "2022-10",
+        "sharpe_ratio": 0.3674585563305358,
+        "calmar_ratio": 0.40475758590666205,
+        "ending_nav": 564548.5598990413,
+        "high_cash_peak_2022": 0.54,
+        "high_cash_avg_2022": 0.39568464730290465,
+        "breached_limit": false
+      }
+    }
+  },
+  "artifacts": {
+    "summary": "/Users/yinshiwei/codex/tz/portfolio/data/v6_profile_backtest_comparison.json",
+    "equity": "/Users/yinshiwei/codex/tz/portfolio/data/v6_profile_backtest_comparison_equity.csv",
+    "plot": "/Users/yinshiwei/codex/tz/portfolio/reports/v6_profile_backtest_comparison.png"
+  }
+}

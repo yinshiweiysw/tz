@@ -1,0 +1,258 @@
+{
+  "version": 1,
+  "account_id": "wenge",
+  "generated_at": "2026-04-01T15:25:59+08:00",
+  "layer_role": "layer_2_fund_signal_engine",
+  "source": "Local SQLite market_lake daily_prices (OHLC unified)",
+  "parameters": {
+    "short_window": 20,
+    "long_window": 60,
+    "rsi_window": 14,
+    "adx_window": 14,
+    "adx_trend_threshold": 25,
+    "macd_fast": 12,
+    "macd_slow": 26,
+    "macd_signal": 9,
+    "drawdown_window": 60,
+    "db": "/Users/yinshiwei/codex/tz/portfolio_users/wenge/data/market_lake.db"
+  },
+  "source_pool": {
+    "watchlist_as_of": "2026-03-30",
+    "watchlist_basis": "seeded_from_2026-03-30_account_screenshot_and_user_followup",
+    "latest_snapshot_date": "2026-04-01",
+    "latest_summary": {
+      "basis": "only_current_holdings",
+      "total_fund_assets": 75212,
+      "pending_buy_confirm": 0,
+      "pending_sell_to_arrive": 0,
+      "effective_exposure_after_pending_sell": 75212,
+      "yesterday_profit": 1211.14,
+      "holding_profit": 1211.14,
+      "cumulative_profit": 0,
+      "performance_precision": "auto_mark_to_market_live_valuation",
+      "available_cash_cny": 0,
+      "total_portfolio_assets_cny": 75212,
+      "last_auto_mark_to_market_at": "2026-04-01T04:34:19.090Z"
+    },
+    "market_lake_db": "/Users/yinshiwei/codex/tz/portfolio_users/wenge/data/market_lake.db"
+  },
+  "signals": {
+    "011452": {
+      "code": "011452",
+      "name": "华泰柏瑞质量成长混合C",
+      "signal_date": "2026-03-27",
+      "history_points": 1240,
+      "portfolio_context": {
+        "watchlist_amount_cny": 25647.76,
+        "latest_position_amount_cny": 26209.45,
+        "latest_daily_pnl_cny": 0.0,
+        "latest_category": "A股主动",
+        "watchlist_note": "文哥账户 2026-03-30 初始持仓；主题标签 CPO。",
+        "latest_name_match": "华泰柏瑞质量成长混合C"
+      },
+      "valuation_context": {
+        "proxy_key": null,
+        "proxy_name": null,
+        "composite_percentile_5y": null,
+        "valuation_regime_primary": null
+      },
+      "indicators": {
+        "current_nav": 2.1804,
+        "sma_20": 2.1241,
+        "sma_60": 1.9477,
+        "bias_20_percent": 2.65,
+        "rsi_14": 56.37,
+        "atr_14": 0.0553,
+        "plus_di_14": 56.37,
+        "minus_di_14": 43.63,
+        "adx_14": 15.35,
+        "macd_line": 0.049884,
+        "macd_signal": 0.051012,
+        "macd_hist": -0.001129,
+        "max_drawdown_60d_percent": -7.85,
+        "current_drawdown_60d_percent": -2.11,
+        "annualized_volatility_20d_percent": 53.56
+      },
+      "derived_signals": {
+        "trend_status": "choppy_sideways",
+        "raw_trend_status": "bullish",
+        "trend_score": 1.0,
+        "bias_regime": "near_mean",
+        "rsi_regime": "strong",
+        "left_side_regime": "neutral",
+        "hist_increasing": true
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "025209": {
+      "code": "025209",
+      "name": "永赢先锋半导体智选混合发起C",
+      "signal_date": "2026-03-30",
+      "history_points": 128,
+      "portfolio_context": {
+        "watchlist_amount_cny": 7404.37,
+        "latest_position_amount_cny": 7482.12,
+        "latest_daily_pnl_cny": 0.0,
+        "latest_category": "A股主动",
+        "watchlist_note": "文哥账户 2026-03-30 初始持仓；主题标签 存储芯片。",
+        "latest_name_match": "永赢先锋半导体智选混合发起C"
+      },
+      "valuation_context": {
+        "proxy_key": null,
+        "proxy_name": null,
+        "composite_percentile_5y": null,
+        "valuation_regime_primary": null
+      },
+      "indicators": {
+        "current_nav": 1.6641,
+        "sma_20": 1.6806,
+        "sma_60": 1.6273,
+        "bias_20_percent": -0.98,
+        "rsi_14": 48.84,
+        "atr_14": 0.0374,
+        "plus_di_14": 48.84,
+        "minus_di_14": 51.16,
+        "adx_14": 10.12,
+        "macd_line": 0.014005,
+        "macd_signal": 0.021851,
+        "macd_hist": -0.007846,
+        "max_drawdown_60d_percent": -16.84,
+        "current_drawdown_60d_percent": -9.1,
+        "annualized_volatility_20d_percent": 48.29
+      },
+      "derived_signals": {
+        "trend_status": "choppy_sideways",
+        "raw_trend_status": "weak_bullish",
+        "trend_score": 0.3333,
+        "bias_regime": "near_mean",
+        "rsi_regime": "neutral",
+        "left_side_regime": "neutral",
+        "hist_increasing": false
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "016874": {
+      "code": "016874",
+      "name": "广发远见智选混合C",
+      "signal_date": "2026-03-27",
+      "history_points": 780,
+      "portfolio_context": {
+        "watchlist_amount_cny": 30381.06,
+        "latest_position_amount_cny": 30769.94,
+        "latest_daily_pnl_cny": 0.0,
+        "latest_category": "A股主动",
+        "watchlist_note": "文哥账户 2026-03-30 初始持仓；代码按公开基金资料补全。",
+        "latest_name_match": "广发远见智选混合C"
+      },
+      "valuation_context": {
+        "proxy_key": null,
+        "proxy_name": null,
+        "composite_percentile_5y": null,
+        "valuation_regime_primary": null
+      },
+      "indicators": {
+        "current_nav": 1.5144,
+        "sma_20": 1.4643,
+        "sma_60": 1.3249,
+        "bias_20_percent": 3.42,
+        "rsi_14": 57.65,
+        "atr_14": 0.0378,
+        "plus_di_14": 57.65,
+        "minus_di_14": 42.35,
+        "adx_14": 20.73,
+        "macd_line": 0.037692,
+        "macd_signal": 0.041268,
+        "macd_hist": -0.003576,
+        "max_drawdown_60d_percent": -8.58,
+        "current_drawdown_60d_percent": -1.32,
+        "annualized_volatility_20d_percent": 49.83
+      },
+      "derived_signals": {
+        "trend_status": "choppy_sideways",
+        "raw_trend_status": "bullish",
+        "trend_score": 1.0,
+        "bias_regime": "strong_above_mean",
+        "rsi_regime": "strong",
+        "left_side_regime": "neutral",
+        "hist_increasing": true
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "018099": {
+      "code": "018099",
+      "name": "方正富邦中证保险主题指数C",
+      "signal_date": "2026-03-27",
+      "history_points": 729,
+      "portfolio_context": {
+        "watchlist_amount_cny": 10567.67,
+        "latest_position_amount_cny": 10750.49,
+        "latest_daily_pnl_cny": 0.0,
+        "latest_category": "A股主动",
+        "watchlist_note": "文哥账户 2026-03-30 初始持仓；主题标签 保险主题指数。",
+        "latest_name_match": "方正富邦中证保险主题指数C"
+      },
+      "valuation_context": {
+        "proxy_key": null,
+        "proxy_name": null,
+        "composite_percentile_5y": null,
+        "valuation_regime_primary": null
+      },
+      "indicators": {
+        "current_nav": 1.074,
+        "sma_20": 1.1344,
+        "sma_60": 1.2102,
+        "bias_20_percent": -5.33,
+        "rsi_14": 29.56,
+        "atr_14": 0.0139,
+        "plus_di_14": 29.56,
+        "minus_di_14": 70.44,
+        "adx_14": 28.22,
+        "macd_line": -0.030911,
+        "macd_signal": -0.026158,
+        "macd_hist": -0.004754,
+        "max_drawdown_60d_percent": -19.25,
+        "current_drawdown_60d_percent": -19.25,
+        "annualized_volatility_20d_percent": 23.23
+      },
+      "derived_signals": {
+        "trend_status": "bearish",
+        "raw_trend_status": "bearish",
+        "trend_score": -1.0,
+        "bias_regime": "below_mean",
+        "rsi_regime": "oversold",
+        "left_side_regime": "falling_knife",
+        "hist_increasing": false
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    }
+  },
+  "errors": []
+}

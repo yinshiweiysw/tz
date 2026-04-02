@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "theme_order": [
+    "黄金",
+    "A股核心",
+    "港股互联网",
+    "半导体",
+    "红利低波"
+  ],
+  "themes": [
+    {
+      "theme_name": "黄金",
+      "market": "GLOBAL",
+      "driver": "地缘+真实利率",
+      "risk_note": "冲突缓和时回撤会很快",
+      "action_bias_default": "研究观察",
+      "tradable_proxies": [
+        {
+          "symbol": "022502",
+          "name": "国泰黄金ETF联接E",
+          "account_scope": [
+            "main"
+          ]
+        }
+      ]
+    },
+    {
+      "theme_name": "A股核心",
+      "market": "CN",
+      "driver": "估值与盈利周期",
+      "risk_note": "盈利下修阶段波动会放大",
+      "action_bias_default": "研究观察",
+      "tradable_proxies": [
+        {
+          "symbol": "007339",
+          "name": "易方达沪深300ETF联接C",
+          "account_scope": [
+            "main"
+          ]
+        }
+      ]
+    },
+    {
+      "theme_name": "港股互联网",
+      "market": "HK",
+      "driver": "风险偏好修复+平台经济估值再定价",
+      "risk_note": "外盘波动与政策预期反复会放大回撤",
+      "action_bias_default": "研究观察",
+      "tradable_proxies": [
+        {
+          "symbol": "513330",
+          "name": "华夏恒生互联网科技业ETF(QDII)",
+          "account_scope": [
+            "main"
+          ]
+        }
+      ]
+    },
+    {
+      "theme_name": "半导体",
+      "market": "CN",
+      "driver": "国产替代+算力资本开支",
+      "risk_note": "高贝塔高拥挤，景气验证前回撤风险高",
+      "action_bias_default": "研究观察",
+      "tradable_proxies": [
+        {
+          "symbol": "159995",
+          "name": "华夏国证半导体芯片ETF",
+          "account_scope": [
+            "main"
+          ]
+        }
+      ]
+    },
+    {
+      "theme_name": "红利低波",
+      "market": "CN",
+      "driver": "利差环境+稳健现金流",
+      "risk_note": "风险偏好快速抬升时可能阶段性跑输",
+      "action_bias_default": "研究观察",
+      "tradable_proxies": [
+        {
+          "symbol": "007443",
+          "name": "易方达中证红利ETF联接C",
+          "account_scope": [
+            "main"
+          ]
+        }
+      ]
+    }
+  ]
+}

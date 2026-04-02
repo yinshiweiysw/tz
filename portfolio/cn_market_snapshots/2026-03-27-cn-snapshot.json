@@ -1,0 +1,536 @@
+{
+  "version": 2,
+  "trade_date": "2026-03-27",
+  "generated_at": "2026-03-27T17:25:07+08:00",
+  "status": "partial",
+  "source": "AkShare",
+  "runtime": {
+    "python": "/Users/yinshiwei/codex/tz/.venv-akshare/bin/python3",
+    "auto_venv_path": "/Users/yinshiwei/codex/tz/.venv-akshare/bin/python3"
+  },
+  "layer_role": "china_market_supplement_only",
+  "guardrails": [
+    "仅用于中国市场补充核验，不替代 market-mcp 主链。",
+    "不得作为 latest.json、risk_dashboard.json 或基金估值主底座的唯一来源。",
+    "优先用于 A 股广度、板块资金流、宏观周期和 sector rotation 验证。"
+  ],
+  "sections": {
+    "market_breadth": {
+      "status": "ok",
+      "total_count": 5480,
+      "up_count": 4337,
+      "down_count": 1073,
+      "flat_count": 70,
+      "up_ratio_pct": 79.14,
+      "average_change_pct": 1.43,
+      "median_change_pct": 1.19,
+      "strong_up_count": 1619,
+      "strong_down_count": 245,
+      "top_turnover": [
+        {
+          "code": "300502",
+          "name": "新易盛",
+          "change_pct": -2.1,
+          "turnover_cny": 13437274609.0
+        },
+        {
+          "code": "300308",
+          "name": "中际旭创",
+          "change_pct": -2.64,
+          "turnover_cny": 13421963396.0
+        },
+        {
+          "code": "300750",
+          "name": "宁德时代",
+          "change_pct": 3.4,
+          "turnover_cny": 12465856864.0
+        },
+        {
+          "code": "000988",
+          "name": "华工科技",
+          "change_pct": 3.94,
+          "turnover_cny": 10598647402.0
+        },
+        {
+          "code": "002460",
+          "name": "赣锋锂业",
+          "change_pct": 10.0,
+          "turnover_cny": 10074180745.0
+        }
+      ]
+    },
+    "northbound_flow": {
+      "status": "partial",
+      "channels": [
+        {
+          "channel": "沪股通",
+          "related_index": "上证指数",
+          "index_change_pct": 0.63,
+          "up_count": 1157,
+          "flat_count": 32,
+          "down_count": 354,
+          "net_buy_100m_cny": 0.0,
+          "trading_status": "3"
+        },
+        {
+          "channel": "深股通",
+          "related_index": "深证成指",
+          "index_change_pct": 1.13,
+          "up_count": 1379,
+          "flat_count": 20,
+          "down_count": 331,
+          "net_buy_100m_cny": 0.0,
+          "trading_status": "3"
+        }
+      ],
+      "latest_date": "2026-03-27",
+      "latest_summary_net_buy_100m_cny": 0.0,
+      "latest_intraday_time": "15:00",
+      "latest_intraday_net_inflow_100m_cny": 0.0,
+      "intraday_trend_label": "持平",
+      "note": "当前北向端点可返回通道状态，但当日净流入数值回零，暂不做强解释。"
+    },
+    "macro_cycle": {
+      "status": "ok",
+      "phase": "contraction",
+      "phase_label": "偏收缩",
+      "favored_groups": [
+        "高股息",
+        "低波防守",
+        "现金流稳定资产"
+      ],
+      "disfavored_groups": [
+        "高弹性成长",
+        "纯情绪周期"
+      ],
+      "manufacturing_pmi": 49.0,
+      "cpi_yoy": null,
+      "m2_yoy": 9.0
+    },
+    "sector_fund_flow": {
+      "status": "ok",
+      "industry": {
+        "today": {
+          "status": "ok",
+          "leaders": [
+            {
+              "name": "有色金属",
+              "change_pct": 3.05,
+              "main_net_inflow_100m_cny": 92.45,
+              "main_net_inflow_pct": 6.64,
+              "leader_stock": "赣锋锂业",
+              "style_label": "资源周期"
+            },
+            {
+              "name": "基础化工",
+              "change_pct": 2.36,
+              "main_net_inflow_100m_cny": 54.44,
+              "main_net_inflow_pct": 4.42,
+              "leader_stock": "神剑股份",
+              "style_label": "资源周期"
+            },
+            {
+              "name": "医药生物",
+              "change_pct": 3.46,
+              "main_net_inflow_100m_cny": 48.43,
+              "main_net_inflow_pct": 4.46,
+              "leader_stock": "恒瑞医药",
+              "style_label": "内需消费医药"
+            },
+            {
+              "name": "能源金属",
+              "change_pct": 7.36,
+              "main_net_inflow_100m_cny": 39.49,
+              "main_net_inflow_pct": 11.47,
+              "leader_stock": "赣锋锂业",
+              "style_label": "资源周期"
+            },
+            {
+              "name": "电池",
+              "change_pct": 2.88,
+              "main_net_inflow_100m_cny": 38.62,
+              "main_net_inflow_pct": 3.57,
+              "leader_stock": "宁德时代",
+              "style_label": "制造升级"
+            }
+          ],
+          "laggards": [
+            {
+              "name": "公用事业",
+              "change_pct": -0.4,
+              "main_net_inflow_100m_cny": -44.75,
+              "main_net_inflow_pct": -3.83,
+              "leader_stock": "东方新能",
+              "style_label": "金融红利防守"
+            },
+            {
+              "name": "电力",
+              "change_pct": -0.73,
+              "main_net_inflow_100m_cny": -43.14,
+              "main_net_inflow_pct": -4.02,
+              "leader_stock": "东方新能",
+              "style_label": "金融红利防守"
+            },
+            {
+              "name": "通信网络设备及器件",
+              "change_pct": 0.95,
+              "main_net_inflow_100m_cny": -28.82,
+              "main_net_inflow_pct": -3.81,
+              "leader_stock": "光库科技",
+              "style_label": "制造升级"
+            },
+            {
+              "name": "通信",
+              "change_pct": 0.72,
+              "main_net_inflow_100m_cny": -26.95,
+              "main_net_inflow_pct": -2.13,
+              "leader_stock": "光库科技",
+              "style_label": "科技成长"
+            },
+            {
+              "name": "通信设备",
+              "change_pct": 0.77,
+              "main_net_inflow_100m_cny": -24.57,
+              "main_net_inflow_pct": -2.26,
+              "leader_stock": "光库科技",
+              "style_label": "制造升级"
+            }
+          ],
+          "positive_sector_count": 295,
+          "negative_sector_count": 200
+        },
+        "five_day": {
+          "status": "ok",
+          "leaders": [
+            {
+              "name": "有色金属",
+              "change_pct": 2.13,
+              "main_net_inflow_100m_cny": 85.45,
+              "main_net_inflow_pct": 1.21,
+              "leader_stock": "赣锋锂业",
+              "style_label": "资源周期"
+            },
+            {
+              "name": "电池",
+              "change_pct": 4.54,
+              "main_net_inflow_100m_cny": 67.26,
+              "main_net_inflow_pct": 1.4,
+              "leader_stock": "天赐材料",
+              "style_label": "制造升级"
+            },
+            {
+              "name": "电池化学品",
+              "change_pct": 7.28,
+              "main_net_inflow_100m_cny": 60.92,
+              "main_net_inflow_pct": 2.7,
+              "leader_stock": "天赐材料",
+              "style_label": "制造升级"
+            },
+            {
+              "name": "能源金属",
+              "change_pct": 16.26,
+              "main_net_inflow_100m_cny": 60.74,
+              "main_net_inflow_pct": 5.02,
+              "leader_stock": "赣锋锂业",
+              "style_label": "资源周期"
+            },
+            {
+              "name": "锂",
+              "change_pct": 21.77,
+              "main_net_inflow_100m_cny": 53.24,
+              "main_net_inflow_pct": 5.46,
+              "leader_stock": "赣锋锂业",
+              "style_label": "资源周期"
+            }
+          ],
+          "laggards": [
+            {
+              "name": "电子",
+              "change_pct": -1.72,
+              "main_net_inflow_100m_cny": -378.67,
+              "main_net_inflow_pct": -2.3,
+              "leader_stock": "德明利",
+              "style_label": "科技成长"
+            },
+            {
+              "name": "计算机",
+              "change_pct": -2.64,
+              "main_net_inflow_100m_cny": -216.19,
+              "main_net_inflow_pct": -3.58,
+              "leader_stock": "中润光学",
+              "style_label": "科技成长"
+            },
+            {
+              "name": "电力设备",
+              "change_pct": 0.34,
+              "main_net_inflow_100m_cny": -185.41,
+              "main_net_inflow_pct": -1.25,
+              "leader_stock": "天赐材料",
+              "style_label": "制造升级"
+            },
+            {
+              "name": "半导体",
+              "change_pct": -2.28,
+              "main_net_inflow_100m_cny": -167.08,
+              "main_net_inflow_pct": -2.28,
+              "leader_stock": "德明利",
+              "style_label": "科技成长"
+            },
+            {
+              "name": "光伏设备",
+              "change_pct": -3.27,
+              "main_net_inflow_100m_cny": -143.22,
+              "main_net_inflow_pct": -3.22,
+              "leader_stock": "爱旭股份",
+              "style_label": "制造升级"
+            }
+          ],
+          "positive_sector_count": 99,
+          "negative_sector_count": 397
+        }
+      },
+      "concept": {
+        "today": {
+          "status": "ok",
+          "leaders": [
+            {
+              "name": "电池技术",
+              "change_pct": 2.01,
+              "main_net_inflow_100m_cny": 128.14,
+              "main_net_inflow_pct": 3.57,
+              "leader_stock": "赣锋锂业",
+              "style_label": "制造升级"
+            },
+            {
+              "name": "锂电池概念",
+              "change_pct": 2.4,
+              "main_net_inflow_100m_cny": 127.81,
+              "main_net_inflow_pct": 4.41,
+              "leader_stock": "赣锋锂业",
+              "style_label": "资源周期"
+            },
+            {
+              "name": "融资融券",
+              "change_pct": 1.34,
+              "main_net_inflow_100m_cny": 96.51,
+              "main_net_inflow_pct": 0.6,
+              "leader_stock": "赣锋锂业",
+              "style_label": "其他"
+            },
+            {
+              "name": "深股通",
+              "change_pct": 1.44,
+              "main_net_inflow_100m_cny": 91.23,
+              "main_net_inflow_pct": 1.0,
+              "leader_stock": "赣锋锂业",
+              "style_label": "其他"
+            },
+            {
+              "name": "小金属概念",
+              "change_pct": 2.93,
+              "main_net_inflow_100m_cny": 84.28,
+              "main_net_inflow_pct": 6.79,
+              "leader_stock": "赣锋锂业",
+              "style_label": "资源周期"
+            }
+          ],
+          "laggards": [
+            {
+              "name": "算力概念",
+              "change_pct": 0.54,
+              "main_net_inflow_100m_cny": -62.72,
+              "main_net_inflow_pct": -4.04,
+              "leader_stock": "奥瑞德",
+              "style_label": "科技成长"
+            },
+            {
+              "name": "风能",
+              "change_pct": 0.26,
+              "main_net_inflow_100m_cny": -50.83,
+              "main_net_inflow_pct": -2.99,
+              "leader_stock": "江特电机",
+              "style_label": "其他"
+            },
+            {
+              "name": "新能源",
+              "change_pct": 0.35,
+              "main_net_inflow_100m_cny": -48.46,
+              "main_net_inflow_pct": -3.05,
+              "leader_stock": "川能动力",
+              "style_label": "其他"
+            },
+            {
+              "name": "云计算",
+              "change_pct": 0.84,
+              "main_net_inflow_100m_cny": -44.52,
+              "main_net_inflow_pct": -3.01,
+              "leader_stock": "沪电股份",
+              "style_label": "其他"
+            },
+            {
+              "name": "5G概念",
+              "change_pct": 0.78,
+              "main_net_inflow_100m_cny": -41.11,
+              "main_net_inflow_pct": -1.55,
+              "leader_stock": "光库科技",
+              "style_label": "其他"
+            }
+          ],
+          "positive_sector_count": 281,
+          "negative_sector_count": 202
+        },
+        "five_day": {
+          "status": "ok",
+          "leaders": [
+            {
+              "name": "锂电池概念",
+              "change_pct": 2.49,
+              "main_net_inflow_100m_cny": 117.06,
+              "main_net_inflow_pct": 0.84,
+              "leader_stock": "赣锋锂业",
+              "style_label": "资源周期"
+            },
+            {
+              "name": "固态电池",
+              "change_pct": 2.28,
+              "main_net_inflow_100m_cny": 109.62,
+              "main_net_inflow_pct": 1.39,
+              "leader_stock": "赣锋锂业",
+              "style_label": "制造升级"
+            },
+            {
+              "name": "锂矿概念",
+              "change_pct": 10.33,
+              "main_net_inflow_100m_cny": 98.77,
+              "main_net_inflow_pct": 2.31,
+              "leader_stock": "赣锋锂业",
+              "style_label": "资源周期"
+            },
+            {
+              "name": "小金属概念",
+              "change_pct": 1.56,
+              "main_net_inflow_100m_cny": 68.94,
+              "main_net_inflow_pct": 1.1,
+              "leader_stock": "赣锋锂业",
+              "style_label": "资源周期"
+            },
+            {
+              "name": "动力电池回收",
+              "change_pct": 2.85,
+              "main_net_inflow_100m_cny": 68.31,
+              "main_net_inflow_pct": 2.54,
+              "leader_stock": "赣锋锂业",
+              "style_label": "制造升级"
+            }
+          ],
+          "laggards": [
+            {
+              "name": "融资融券",
+              "change_pct": -0.49,
+              "main_net_inflow_100m_cny": -1494.09,
+              "main_net_inflow_pct": -1.63,
+              "leader_stock": "赣锋锂业",
+              "style_label": "其他"
+            },
+            {
+              "name": "富时罗素",
+              "change_pct": -0.59,
+              "main_net_inflow_100m_cny": -959.68,
+              "main_net_inflow_pct": -1.96,
+              "leader_stock": "赣锋锂业",
+              "style_label": "其他"
+            },
+            {
+              "name": "MSCI中国",
+              "change_pct": -0.99,
+              "main_net_inflow_100m_cny": -906.59,
+              "main_net_inflow_pct": -2.11,
+              "leader_stock": "赣锋锂业",
+              "style_label": "其他"
+            },
+            {
+              "name": "深股通",
+              "change_pct": -0.34,
+              "main_net_inflow_100m_cny": -794.17,
+              "main_net_inflow_pct": -1.57,
+              "leader_stock": "赣锋锂业",
+              "style_label": "其他"
+            },
+            {
+              "name": "沪股通",
+              "change_pct": -0.24,
+              "main_net_inflow_100m_cny": -735.26,
+              "main_net_inflow_pct": -1.8,
+              "leader_stock": "亨通光电",
+              "style_label": "其他"
+            }
+          ],
+          "positive_sector_count": 50,
+          "negative_sector_count": 433
+        }
+      }
+    },
+    "sector_rotation_validation": {
+      "status": "ok",
+      "rotation_mode": "trend_extension",
+      "rotation_mode_label": "趋势延续",
+      "confirmation_level": "high",
+      "confirmation_level_label": "高",
+      "today_focus_styles": [
+        "资源周期",
+        "制造升级",
+        "内需消费医药"
+      ],
+      "five_day_focus_styles": [
+        "资源周期",
+        "制造升级"
+      ],
+      "industry_overlap": [
+        "有色金属",
+        "电池",
+        "能源金属"
+      ],
+      "today_style_scores": [
+        {
+          "label": "资源周期",
+          "score": 334.84
+        },
+        {
+          "label": "制造升级",
+          "score": 128.32
+        },
+        {
+          "label": "内需消费医药",
+          "score": 48.43
+        },
+        {
+          "label": "其他",
+          "score": 39.43
+        }
+      ],
+      "five_day_style_scores": [
+        {
+          "label": "资源周期",
+          "score": 398.77
+        },
+        {
+          "label": "制造升级",
+          "score": 252.73
+        }
+      ],
+      "conclusion": "今日与近 5 日的资金主线都围绕 资源周期、制造升级 展开，说明轮动并非完全随机，短期主线具有延续性。",
+      "evidence": [
+        "今日行业净流入前三：有色金属、基础化工、医药生物",
+        "5日行业净流入前三：有色金属、电池、电池化学品",
+        "今日概念净流入前三：电池技术、锂电池概念、融资融券",
+        "行业重叠：有色金属、电池、能源金属",
+        "宏观相位：偏收缩"
+      ]
+    }
+  },
+  "notes": [
+    "A股广度与板块资金流同时偏暖，当前修复并非只靠少数权重拉动。",
+    "宏观背景仍偏向高股息和低波防守，补充层不能被误用成激进加仓理由。",
+    "北向资金当日净流入端点回零，当前只保留其为辅助核验，不把它作为单独拍板依据。"
+  ]
+}

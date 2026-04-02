@@ -1,0 +1,49 @@
+{
+  "as_of": "2026-04-02",
+  "status": "restored_from_pre_v6_backup_for_v6_dual_track",
+  "reported_cash_estimate_cny": 134400,
+  "reported_total_assets_range_cny": {
+    "min": 443079.97,
+    "max": 443079.97
+  },
+  "notes": [
+    "User reported that total assets including current holdings were around 448,000 CNY before today's move.",
+    "User estimated today's loss near 3,000 CNY, implying a current total assets level around 445,000 CNY.",
+    "Current cash estimate is inferred as 445,000 minus latest active holdings 200,392.66 CNY, so it remains a working number until a fresh full-account screenshot is available.",
+    "V6.0 数据修复已执行：reported_cash_estimate_cny 已按 restored OTC 持仓重新校准。",
+    "pre-v6 冷启动前缓存的现金估计为 244607.34 元，仅保留作审计参考。",
+    "2026-04-01 用户提供最新持仓截图，确认基金市值 278027.83 元、现金 164400 元，总资产 442427.83 元；account_context 已同步。"
+  ],
+  "user_reported_profit_snapshot": {
+    "as_of": "2026-04-01",
+    "holding_profit_cny": -22442.41,
+    "cumulative_profit_cny": -26313.84,
+    "yesterday_profit_cny": -1079.63,
+    "source": "user_screenshot_reported_by_user"
+  },
+  "available_cash_cny": 134400,
+  "pre_v6_reported_cash_estimate_cny": 244607.34,
+  "broker_accounts": [
+    {
+      "account_id": "broker_exchange",
+      "channel": "broker_exchange",
+      "base_currency": "CNY",
+      "cash_cny": 0,
+      "market_value_cny": 0,
+      "notes": "当前尚无场内持仓，保留双轨空壳位。"
+    },
+    {
+      "account_id": "fund_otc",
+      "channel": "fund_otc",
+      "base_currency": "CNY",
+      "cash_cny": 134400,
+      "market_value_cny": 308679.97,
+      "notes": "2026-04-02 自动按实时基金估值更新 OTC 市值。"
+    }
+  ],
+  "related_files": {
+    "latest_snapshot": "/Users/yinshiwei/codex/tz/portfolio/latest.json",
+    "pre_v6_backup": "/Users/yinshiwei/codex/tz/portfolio/account_context.pre-v6-cold-start.backup.json",
+    "pre_restore_template_backup": "/Users/yinshiwei/codex/tz/portfolio/account_context.pre-v6-restore-merge.backup.json"
+  }
+}

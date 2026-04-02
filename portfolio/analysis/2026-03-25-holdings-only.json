@@ -1,0 +1,113 @@
+{
+  "as_of": "2026-03-25",
+  "basis": "only_current_holdings",
+  "note": "This snapshot ignores pending sell settlement and evaluates only currently held fund positions with status=active and amount>0.",
+  "summary": {
+    "current_holdings_total": 166392.66,
+    "top_theme": "港股相关",
+    "top_theme_amount": 72068.26,
+    "top_theme_weight_pct": 43.31
+  },
+  "category_breakdown": [
+    {
+      "category": "港股互联网/QDII",
+      "amount": 72068.26,
+      "weight_pct": 43.31
+    },
+    {
+      "category": "黄金",
+      "amount": 31320.63,
+      "weight_pct": 18.82
+    },
+    {
+      "category": "A股主动",
+      "amount": 18648.66,
+      "weight_pct": 11.21
+    },
+    {
+      "category": "偏债混合",
+      "amount": 15132.56,
+      "weight_pct": 9.09
+    },
+    {
+      "category": "海外科技/QDII",
+      "amount": 11224.96,
+      "weight_pct": 6.75
+    },
+    {
+      "category": "大宗商品/QDII",
+      "amount": 7176.16,
+      "weight_pct": 4.31
+    },
+    {
+      "category": "美股科技/QDII",
+      "amount": 7127.44,
+      "weight_pct": 4.28
+    },
+    {
+      "category": "A股宽基",
+      "amount": 2000.01,
+      "weight_pct": 1.2
+    },
+    {
+      "category": "美股指数/QDII",
+      "amount": 1685.02,
+      "weight_pct": 1.01
+    },
+    {
+      "category": "日本股市/QDII",
+      "amount": 8.96,
+      "weight_pct": 0.01
+    }
+  ],
+  "top_positions": [
+    {
+      "name": "华夏恒生互联网科技业ETF联接(QDII)C",
+      "amount": 72068.26,
+      "weight_pct": 43.31,
+      "category": "港股互联网/QDII"
+    },
+    {
+      "name": "工银瑞信黄金ETF联接C",
+      "amount": 29320.63,
+      "weight_pct": 17.62,
+      "category": "黄金"
+    },
+    {
+      "name": "招商量化精选股票A",
+      "amount": 18648.66,
+      "weight_pct": 11.21,
+      "category": "A股主动"
+    },
+    {
+      "name": "景顺长城宁景6个月持有期混合A",
+      "amount": 15132.56,
+      "weight_pct": 9.09,
+      "category": "偏债混合"
+    },
+    {
+      "name": "华宝海外科技股票(QDII-FOF-LOF)C",
+      "amount": 11224.96,
+      "weight_pct": 6.75,
+      "category": "海外科技/QDII"
+    },
+    {
+      "name": "国泰大宗商品配置(QDII-LOF-FOF)D",
+      "amount": 7176.16,
+      "weight_pct": 4.31,
+      "category": "大宗商品/QDII"
+    },
+    {
+      "name": "摩根纳斯达克100指数(QDII)A",
+      "amount": 3206.74,
+      "weight_pct": 1.93,
+      "category": "美股科技/QDII"
+    },
+    {
+      "name": "嘉实纳斯达克100ETF联接(QDII)A",
+      "amount": 3058.61,
+      "weight_pct": 1.84,
+      "category": "美股科技/QDII"
+    }
+  ]
+}

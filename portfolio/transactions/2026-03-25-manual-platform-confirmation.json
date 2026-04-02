@@ -1,0 +1,72 @@
+{
+  "snapshot_date": "2026-03-25",
+  "source": "platform_operations_screenshot",
+  "status": "merged_into_latest_from_dialogue_confirmation",
+  "platform_confirmation_date": "2026-03-26",
+  "confirmation_basis": "User provided platform screenshot and explicitly confirmed that funds bought or converted before 15:00 on 2026-03-25 started counting profit on 2026-03-26.",
+  "platform_confirmed_reference_transactions": [
+    {
+      "trade_date": "2026-03-25",
+      "trade_time": "14:59:36",
+      "fund_name": "国泰黄金ETF联接E",
+      "amount_cny": 5000,
+      "status": "already_merged_earlier_now_platform_confirmed"
+    },
+    {
+      "trade_date": "2026-03-25",
+      "trade_time": "14:23:29",
+      "fund_name": "华夏中证红利低波动ETF发起式联接A",
+      "amount_cny": 10000,
+      "status": "already_merged_earlier_now_platform_confirmed"
+    }
+  ],
+  "executed_buy_transactions": [
+    {
+      "trade_date": "2026-03-25",
+      "trade_time": "12:53:31",
+      "fund_name": "永赢先锋半导体智选混合C",
+      "amount_cny": 3000,
+      "status": "platform_confirmed_submitted_before_1500_effective_next_day"
+    },
+    {
+      "trade_date": "2026-03-24",
+      "trade_time": "12:01:18",
+      "fund_name": "国泰大宗商品配置(QDII-LOF-FOF)D",
+      "amount_cny": 1000,
+      "status": "platform_confirmed_submitted_before_1500"
+    }
+  ],
+  "executed_conversion_transactions": [
+    {
+      "trade_date": "2026-03-25",
+      "trade_time": "13:22:12",
+      "from_fund_name": "工银瑞信黄金ETF联接C",
+      "to_fund_name": "国泰黄金ETF联接E",
+      "from_shares": 13340.9,
+      "from_amount_cny": 29320.63,
+      "to_amount_cny": 29320.63,
+      "status": "platform_confirmed_submitted_before_1500_effective_next_day",
+      "amount_interpretation": "Use the full existing ICBC gold position amount from latest.json as the approximate converted capital until the platform refresh shows final confirmed amount and units."
+    }
+  ],
+  "pending_settlement_transactions": [
+    {
+      "trade_date": "2026-03-25",
+      "trade_time": "13:24:20",
+      "trade_type": "sell",
+      "fund_name": "华安三菱日联日经225ETF联接(QDII)A",
+      "shares": 7.85,
+      "expected_arrival": "2026-03-27 24:00",
+      "status": "sell_pending_settlement_not_merged_by_amount"
+    }
+  ],
+  "notes": [
+    "This file records platform-confirmed operations shown in the screenshot shared on 2026-03-26.",
+    "The 10000 CNY red-low-vol buy and 5000 CNY Guotai gold buy were already merged into latest.json earlier from dialogue confirmation, so they are kept here only as reference and should not be merged again.",
+    "The ICBC gold to Guotai gold conversion is now treated as effective for current holdings, with amount kept approximate until the platform refresh confirms final converted units and amount.",
+    "The tiny Nikkei sell is preserved as a pending settlement note instead of being merged by amount, because the screenshot shows shares rather than a reliable CNY amount.",
+    "Merged into latest.json based on user dialogue confirmation. PnL precision remains approximate until the next platform refresh."
+  ],
+  "merged_at": "2026-03-26T01:40:08.212Z",
+  "merged_target": "/Users/yinshiwei/codex/tz/portfolio/latest.json"
+}

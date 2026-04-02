@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "as_of": "2026-04-01",
+  "generated_at": "2026-04-02T01:24:59.923Z",
+  "account_id": "main",
+  "source": {
+    "opportunity_master": "/Users/yinshiwei/codex/tz/portfolio/config/opportunity_master.json",
+    "macro_state": "/Users/yinshiwei/codex/tz/portfolio/data/macro_state.json",
+    "cn_market_snapshot": "/Users/yinshiwei/codex/tz/portfolio/cn_market_snapshots/2026-04-01-cn-snapshot.json"
+  },
+  "candidates": [
+    {
+      "theme_name": "红利低波",
+      "market": "CN",
+      "driver": "利差环境+稳健现金流",
+      "expected_vs_actual": "红利利差 +281.29bp，防守资产相对吸引力仍在。",
+      "technical_state": "防守因子稳定，适合承接组合波动。",
+      "funding_flow_state": "风险偏好未显著扩张，防守类配置仍有相对优势。",
+      "risk_note": "风险偏好快速抬升时可能阶段性跑输",
+      "tradable_proxies": [
+        {
+          "symbol": "007443",
+          "name": "易方达中证红利ETF联接C",
+          "account_scope": [
+            "main"
+          ]
+        }
+      ],
+      "action_bias": "允许试单",
+      "total_score": 5
+    },
+    {
+      "theme_name": "A股核心",
+      "market": "CN",
+      "driver": "估值与盈利周期",
+      "expected_vs_actual": "沪深300 ERP +570.17bp，估值与利率错位仍提供安全垫。",
+      "technical_state": "宏观周期处于修复段，核心宽基更容易承接机构资金。",
+      "funding_flow_state": "北向当日净流入 0亿（持平）。",
+      "risk_note": "盈利下修阶段波动会放大",
+      "tradable_proxies": [
+        {
+          "symbol": "007339",
+          "name": "易方达沪深300ETF联接C",
+          "account_scope": [
+            "main"
+          ]
+        }
+      ],
+      "action_bias": "允许试单",
+      "total_score": 4
+    },
+    {
+      "theme_name": "半导体",
+      "market": "CN",
+      "driver": "国产替代+算力资本开支",
+      "expected_vs_actual": "宏观修复阶段偏好制造升级，产业链景气预期仍可交易。",
+      "technical_state": "板块波动放大，需等待分歧后再确认。",
+      "funding_flow_state": "板块资金流抓取存在缺口，暂不做强判断。",
+      "risk_note": "高贝塔高拥挤，景气验证前回撤风险高",
+      "tradable_proxies": [
+        {
+          "symbol": "159995",
+          "name": "华夏国证半导体芯片ETF",
+          "account_scope": [
+            "main"
+          ]
+        }
+      ],
+      "action_bias": "不做",
+      "total_score": 1
+    },
+    {
+      "theme_name": "港股互联网",
+      "market": "HK",
+      "driver": "风险偏好修复+平台经济估值再定价",
+      "expected_vs_actual": "修复期内高弹性资产具备交易窗口，但持续性仍需外盘验证。",
+      "technical_state": "高波动风格，适合分批试单而非一次性确认仓。",
+      "funding_flow_state": "南北向共振不足，资金侧以跟踪为主。",
+      "risk_note": "外盘波动与政策预期反复会放大回撤",
+      "tradable_proxies": [
+        {
+          "symbol": "513330",
+          "name": "华夏恒生互联网科技业ETF(QDII)",
+          "account_scope": [
+            "main"
+          ]
+        }
+      ],
+      "action_bias": "不做",
+      "total_score": 1
+    },
+    {
+      "theme_name": "黄金",
+      "market": "GLOBAL",
+      "driver": "地缘+真实利率",
+      "expected_vs_actual": "10Y 国债收益率 +1.817%，真实利率环境对黄金仍不构成强压制。",
+      "technical_state": "风险资产修复中，黄金短线可能高位震荡。",
+      "funding_flow_state": "北向资金对黄金主题代表性有限，资金面仅作辅助参考。",
+      "risk_note": "冲突缓和时回撤会很快",
+      "tradable_proxies": [
+        {
+          "symbol": "022502",
+          "name": "国泰黄金ETF联接E",
+          "account_scope": [
+            "main"
+          ]
+        }
+      ],
+      "action_bias": "不做",
+      "total_score": 1
+    }
+  ]
+}

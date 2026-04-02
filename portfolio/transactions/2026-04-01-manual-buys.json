@@ -1,0 +1,91 @@
+{
+  "snapshot_date": "2026-04-01",
+  "source": "user_reported_manual_execution",
+  "status": "merged_into_execution_ledger_from_dialogue_confirmation",
+  "executed_buy_transactions": [
+    {
+      "trade_date": "2026-04-01",
+      "fund_name_user_stated": "007339",
+      "interpreted_fund_name": "易方达沪深300ETF联接C",
+      "fund_code": "007339",
+      "amount_cny": 8000,
+      "status": "user_reported_executed",
+      "execution_type": "OTC",
+      "submitted_before_cutoff": true,
+      "cutoff_time_local": "15:00",
+      "profit_effective_on": "2026-04-02",
+      "raw_snapshot_includes_trade": true,
+      "merge_impact_on_latest": "pending_until_profit_effective_on",
+      "interpretation_basis": "User explicitly confirmed 2026-04-01 same-day add of 8000 CNY to 007339; this OTC buy should only begin counting profit from 2026-04-02."
+    },
+    {
+      "trade_date": "2026-04-01",
+      "fund_name_user_stated": "021482",
+      "interpreted_fund_name": "华夏中证红利低波动ETF发起式联接A",
+      "fund_code": "021482",
+      "amount_cny": 5000,
+      "status": "user_reported_executed",
+      "execution_type": "OTC",
+      "submitted_before_cutoff": true,
+      "cutoff_time_local": "15:00",
+      "profit_effective_on": "2026-04-02",
+      "raw_snapshot_includes_trade": true,
+      "merge_impact_on_latest": "pending_until_profit_effective_on",
+      "interpretation_basis": "User explicitly confirmed 2026-04-01 same-day add of 5000 CNY to 021482; this OTC buy should only begin counting profit from 2026-04-02."
+    },
+    {
+      "trade_date": "2026-04-01",
+      "fund_name_user_stated": "001917",
+      "interpreted_fund_name": "招商量化精选股票A",
+      "fund_code": "001917",
+      "amount_cny": 2000,
+      "status": "user_reported_executed",
+      "execution_type": "OTC",
+      "submitted_before_cutoff": true,
+      "cutoff_time_local": "15:00",
+      "profit_effective_on": "2026-04-02",
+      "raw_snapshot_includes_trade": true,
+      "merge_impact_on_latest": "pending_until_profit_effective_on",
+      "interpretation_basis": "User explicitly confirmed 2026-04-01 same-day add of 2000 CNY to 001917; this OTC buy should only begin counting profit from 2026-04-02."
+    },
+    {
+      "trade_date": "2026-04-01",
+      "fund_name_user_stated": "国金量化多因子股票A",
+      "interpreted_fund_name": "国金量化多因子股票A",
+      "fund_code": "006195",
+      "amount_cny": 5000,
+      "status": "user_reported_executed",
+      "execution_type": "OTC",
+      "submitted_before_cutoff": true,
+      "cutoff_time_local": "15:00",
+      "profit_effective_on": "2026-04-02",
+      "raw_snapshot_includes_trade": true,
+      "merge_impact_on_latest": "pending_until_profit_effective_on",
+      "interpretation_basis": "User explicitly confirmed 2026-04-01 same-day first allocation of 5000 CNY to 国金量化多因子股票A; this OTC buy should only begin counting profit from 2026-04-02."
+    },
+    {
+      "trade_date": "2026-04-01",
+      "fund_name_user_stated": "022502",
+      "interpreted_fund_name": "国泰黄金ETF联接E",
+      "fund_code": "022502",
+      "amount_cny": 10000,
+      "status": "user_reported_executed",
+      "execution_type": "OTC",
+      "submitted_before_cutoff": true,
+      "cutoff_time_local": "15:00",
+      "profit_effective_on": "2026-04-02",
+      "raw_snapshot_includes_trade": true,
+      "merge_impact_on_latest": "pending_until_profit_effective_on",
+      "interpretation_basis": "User explicitly confirmed 2026-04-01 same-day add of 10000 CNY to 022502; this OTC buy should only begin counting profit from 2026-04-02."
+    }
+  ],
+  "notes": [
+    "These buys were reported by the user in chat after execution.",
+    "All five buys are OTC fund orders and must remain outside same-day profit accounting until 2026-04-02.",
+    "The current raw snapshot already reflects these trades in position amounts and cash; strategy state must unwind them first and then rematerialize them via execution_ledger.",
+    "After ledger merge, latest.json should show them under pending_profit_effective_positions rather than contaminating 2026-04-01 active PnL.",
+    "Merged into execution_ledger.json based on user dialogue confirmation; state is now materialized separately."
+  ],
+  "merged_at": "2026-04-01T11:14:03.210Z",
+  "merged_target": "/Users/yinshiwei/codex/tz/portfolio/ledger/execution_ledger.json"
+}

@@ -1,0 +1,62 @@
+{
+  "generated_at": "2026-03-30T23:48:31+08:00",
+  "source": {
+    "db": "/Users/yinshiwei/codex/tz/portfolio/data/market_lake.db",
+    "cn_symbol": "007339",
+    "us_symbol": "513100",
+    "benchmark_symbol": "007339",
+    "factor_source": "fallback_proxy",
+    "factor_note": "market_lake.db 缺少历史 ERP 表，自动降级为价格代理因子。"
+  },
+  "config": {
+    "requested_lookback_years": 10,
+    "cash_yield_pct": 2.0,
+    "high_erp_threshold_pct": 5.5,
+    "low_erp_threshold_pct": 3.5,
+    "high_erp_weights": {
+      "cash": 0.1,
+      "cn": 0.6,
+      "us": 0.3
+    },
+    "neutral_weights": {
+      "cash": 0.2,
+      "cn": 0.5,
+      "us": 0.3
+    },
+    "low_erp_weights": {
+      "cash": 0.4,
+      "cn": 0.3,
+      "us": 0.3
+    },
+    "signal_execution_rule": "factor_t_close_shift_1__weights_t__capture_return_t"
+  },
+  "period": {
+    "start_date": "2019-04-26",
+    "end_date": "2026-03-30",
+    "trading_days": 1682,
+    "actual_years": 6.9268,
+    "requested_start_date": "2016-03-30",
+    "used_max_available_history": true
+  },
+  "strategy": {
+    "total_return_pct": 30.4829,
+    "cagr_pct": 3.9159,
+    "max_drawdown_pct": -39.8167,
+    "sharpe_ratio": 0.2093,
+    "ending_nav": 1.304849,
+    "average_cash_weight_pct": 20.3389
+  },
+  "benchmark": {
+    "total_return_pct": 34.1777,
+    "cagr_pct": 4.3357,
+    "max_drawdown_pct": -39.7921,
+    "sharpe_ratio": 0.225,
+    "ending_nav": 1.341777
+  },
+  "regime_day_count": {
+    "neutral": 839,
+    "high_erp": 543,
+    "low_erp": 300
+  },
+  "account_id": "main"
+}

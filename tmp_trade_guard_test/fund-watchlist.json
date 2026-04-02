@@ -1,0 +1,99 @@
+{
+  "as_of": "2026-03-30",
+  "basis": "active_holdings_with_pending_profit_effective_overlays_tagged_separately",
+  "watchlist": [
+    {
+      "code": "007339",
+      "name": "易方达沪深300ETF联接C",
+      "approxCurrentAmountCny": 17000.01,
+      "pendingAmountCny": 4000,
+      "profitEffectiveOn": "2026-03-31",
+      "enabled": true,
+      "note": "Active amount excludes the 2026-03-30 pre-15:00 add of 4000 CNY; that portion is parked as pending and should start counting profit on 2026-03-31."
+    },
+    {
+      "code": "016482",
+      "name": "兴全恒信债券C",
+      "approxCurrentAmountCny": 0,
+      "pendingAmountCny": 50000,
+      "profitEffectiveOn": "2026-03-31",
+      "enabled": true,
+      "note": "2026-03-30 pre-15:00 first allocation. Keep quoted for observation, but do not count into current holding PnL until 2026-03-31."
+    },
+    {
+      "code": "021482",
+      "name": "华夏中证红利低波动ETF发起式联接A",
+      "approxCurrentAmountCny": 18000,
+      "enabled": true,
+      "note": "Includes the 2026-03-25 initial 10000 CNY allocation and the later 8000 CNY add."
+    },
+    {
+      "code": "022502",
+      "name": "国泰黄金ETF联接E",
+      "approxCurrentAmountCny": 36320.63,
+      "enabled": true,
+      "note": "Includes historical 2000 CNY, the 2026-03-25 5000 CNY buy, and the platform-confirmed same-day conversion from ICBC gold. Final confirmed amount may still be refined after platform refresh."
+    },
+    {
+      "code": "013172",
+      "name": "华夏恒生互联网科技业ETF联接(QDII)C",
+      "approxCurrentAmountCny": 72068.26,
+      "enabled": true
+    },
+    {
+      "code": "001917",
+      "name": "招商量化精选股票A",
+      "approxCurrentAmountCny": 18648.66,
+      "enabled": true
+    },
+    {
+      "code": "011803",
+      "name": "景顺长城宁景6个月持有混合A",
+      "approxCurrentAmountCny": 15132.56,
+      "enabled": true
+    },
+    {
+      "code": "006075",
+      "name": "博时标普500ETF联接C",
+      "approxCurrentAmountCny": 1019.07,
+      "enabled": true
+    },
+    {
+      "code": "019172",
+      "name": "摩根纳斯达克100指数(QDII)人民币A",
+      "approxCurrentAmountCny": 3206.74,
+      "enabled": true
+    },
+    {
+      "code": "016532",
+      "name": "嘉实纳斯达克100ETF发起联接(QDII)A人民币",
+      "approxCurrentAmountCny": 3058.61,
+      "enabled": true
+    },
+    {
+      "code": "017641",
+      "name": "摩根标普500指数(QDII)人民币A",
+      "approxCurrentAmountCny": 665.95,
+      "enabled": true
+    },
+    {
+      "code": "017204",
+      "name": "华宝海外科技股票(QDII-LOF)C",
+      "approxCurrentAmountCny": 11224.96,
+      "enabled": true
+    },
+    {
+      "code": "025162",
+      "name": "国泰大宗商品(QDII-LOF)D",
+      "approxCurrentAmountCny": 8176.16,
+      "enabled": true
+    },
+    {
+      "code": "025209",
+      "name": "永赢先锋半导体智选混合C",
+      "approxCurrentAmountCny": 3000,
+      "enabled": true,
+      "note": "Platform screenshot confirmed the 2026-03-25 pre-15:00 buy, which should begin participating in 2026-03-26 profit and loss."
+    }
+  ]
+}

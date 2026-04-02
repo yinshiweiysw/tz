@@ -1,0 +1,20 @@
+{
+  "as_of": "2026-03-26",
+  "status": "user_reported_total_assets_with_inferred_cash",
+  "reported_cash_estimate_cny": 244607.34,
+  "reported_total_assets_range_cny": {
+    "min": 445000,
+    "max": 448000
+  },
+  "notes": [
+    "User reported that total assets including current holdings were around 448,000 CNY before today's move.",
+    "User estimated today's loss near 3,000 CNY, implying a current total assets level around 445,000 CNY.",
+    "Current cash estimate is inferred as 445,000 minus latest active holdings 200,392.66 CNY, so it remains a working number until a fresh full-account screenshot is available."
+  ],
+  "user_reported_profit_snapshot": {
+    "as_of": "2026-03-27",
+    "holding_profit_cny": -20347.37,
+    "cumulative_profit_cny": -12436.91,
+    "source": "dialogue_reported_by_user"
+  }
+}

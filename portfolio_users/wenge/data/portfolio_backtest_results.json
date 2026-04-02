@@ -1,0 +1,120 @@
+{
+  "generated_at": "2026-04-01T13:39:53+08:00",
+  "source": {
+    "asset_master": "/Users/yinshiwei/codex/tz/portfolio/config/asset_master.json",
+    "market_lake_db": "/Users/yinshiwei/codex/tz/portfolio/data/market_lake.db"
+  },
+  "config": {
+    "initial_capital_cny": 1000000.0,
+    "lookback_days": 200,
+    "warmup_days": 60,
+    "execution_model": "signal_on_close_execute_next_day_close",
+    "annual_cash_yield_pct": 2.0,
+    "adx_threshold": 25,
+    "rsi_bottom_threshold": 30,
+    "valuation_percentile_window_days": 1250,
+    "tiered_exposure_scale": {},
+    "note": "Data Lake V2 provides native OHLC series. Orders are still matched at next-trading-day close as a conservative close-to-close proxy."
+  },
+  "representatives": {
+    "A_CORE": {
+      "bucket_key": "A_CORE",
+      "label": "A股核心",
+      "target_pct": 0.22,
+      "min_pct": 0.1,
+      "max_pct": 0.3,
+      "symbol": "007339",
+      "display_name": "易方达沪深300ETF联接C",
+      "synthetic_cash": false,
+      "proxy_note": "A-share core sleeve uses the local HS300 feeder fund directly."
+    },
+    "GLB_MOM": {
+      "bucket_key": "GLB_MOM",
+      "label": "全球动量",
+      "target_pct": 0.14,
+      "min_pct": 0.0,
+      "max_pct": 0.2,
+      "symbol": "QQQ",
+      "display_name": "Invesco QQQ Trust",
+      "synthetic_cash": false,
+      "proxy_note": "Global momentum sleeve reads QQQ for signal generation while live domestic execution routes through 513100."
+    },
+    "INCOME": {
+      "bucket_key": "INCOME",
+      "label": "红利收息",
+      "target_pct": 0.12,
+      "min_pct": 0.08,
+      "max_pct": 0.15,
+      "symbol": "021482",
+      "display_name": "华夏中证红利低波动ETF发起式联接A",
+      "synthetic_cash": false,
+      "proxy_note": "Income sleeve uses the domestic dividend-low-vol feeder fund directly."
+    },
+    "HEDGE": {
+      "bucket_key": "HEDGE",
+      "label": "黄金避险",
+      "target_pct": 0.12,
+      "min_pct": 0.1,
+      "max_pct": 0.15,
+      "symbol": "022502",
+      "display_name": "国泰黄金ETF联接E",
+      "synthetic_cash": false,
+      "proxy_note": "Hedge sleeve uses the local gold feeder fund directly."
+    },
+    "TACTICAL": {
+      "bucket_key": "TACTICAL",
+      "label": "战术刺客",
+      "target_pct": 0.06,
+      "min_pct": 0.0,
+      "max_pct": 0.1,
+      "symbol": "013172",
+      "display_name": "华夏恒生互联网科技业ETF联接(QDII)C",
+      "synthetic_cash": false,
+      "proxy_note": "Tactical sleeve uses the HSI internet feeder fund directly."
+    },
+    "CASH": {
+      "bucket_key": "CASH",
+      "label": "现金防线",
+      "target_pct": 0.34,
+      "min_pct": 0.15,
+      "max_pct": 0.45,
+      "symbol": "CASH_CNY",
+      "display_name": "现金防线",
+      "synthetic_cash": true,
+      "proxy_note": "Cash sleeve is modeled as synthetic CNY cash yield."
+    }
+  },
+  "period": {
+    "start_date": "2025-06-23",
+    "end_date": "2026-03-31",
+    "evaluation_days": 200
+  },
+  "benchmark_static": {
+    "total_return_pct": 10.92,
+    "cagr_pct": 14.42,
+    "max_drawdown_pct": -12.0,
+    "avg_cash_position_pct": 0.0,
+    "ending_nav_cny": 1109198.3
+  },
+  "dynamic_portfolio_v30_phase3": {
+    "total_return_pct": 1.65,
+    "cagr_pct": 2.15,
+    "max_drawdown_pct": -0.02,
+    "avg_cash_position_pct": 99.61,
+    "ending_nav_cny": 1016500.67,
+    "trade_entries": 208,
+    "trade_exits": 124
+  },
+  "delta": {
+    "total_return_pct": -9.27,
+    "cagr_pct": -12.27,
+    "max_drawdown_pct": 11.98,
+    "avg_cash_position_pct": 99.61
+  },
+  "runtime_paths": {
+    "portfolio_root": "/Users/yinshiwei/codex/tz/portfolio_users/wenge",
+    "manifest_path": "/Users/yinshiwei/codex/tz/portfolio_users/wenge/state-manifest.json",
+    "summary_output": "/Users/yinshiwei/codex/tz/portfolio_users/wenge/data/portfolio_backtest_results.json",
+    "equity_output": "/Users/yinshiwei/codex/tz/portfolio_users/wenge/data/portfolio_backtest_equity.json"
+  }
+}

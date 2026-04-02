@@ -1,0 +1,14 @@
+{
+  "account_id": "wenge",
+  "as_of": "2026-04-02",
+  "reported_cash_estimate_cny": 0,
+  "reported_total_assets_range_cny": {
+    "min": 76341.63,
+    "max": 76341.63
+  },
+  "notes": [
+    "文哥账户 2026-03-30 截图总资产为 74000.86 元，当前按无现金、无待确认买卖处理。",
+    "当前适合作为 holdings-only 初始快照；若要生成完整 signals / risk dashboard，仍需补足基金精确代码。"
+  ],
+  "available_cash_cny": 0
+}

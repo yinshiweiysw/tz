@@ -1,0 +1,443 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codex.local/portfolio/asset_master.institutional.schema.json",
+  "title": "Institutional Asset Master",
+  "description": "Asset-level routing schema for Route A dynamic cash gating, regime switching, and bucket-level hard caps.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "routing_model",
+    "description",
+    "global_constraints",
+    "buckets",
+    "assets"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer"
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 3
+    },
+    "routing_model": {
+      "type": "string",
+      "const": "regime_switching_factor_router"
+    },
+    "description": {
+      "type": "string"
+    },
+    "fallback_bucket_key": {
+      "$ref": "#/$defs/bucket_key"
+    },
+    "bucket_order": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/bucket_key"
+      },
+      "uniqueItems": true
+    },
+    "global_constraints": {
+      "$ref": "#/$defs/global_constraints"
+    },
+    "buckets": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/bucket_key"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/bucket_config"
+      }
+    },
+    "bucket_mapping_rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/bucket_mapping_rule"
+      }
+    },
+    "cash_sweeper": {
+      "$ref": "#/$defs/cash_sweeper"
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/asset"
+      }
+    },
+    "portfolio_backtest": {
+      "$ref": "#/$defs/portfolio_backtest"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "bucket_key": {
+      "type": "string",
+      "enum": [
+        "CN_CORE",
+        "GLB_MOM",
+        "INCOME",
+        "TACTICAL"
+      ]
+    },
+    "global_constraints": {
+      "type": "object",
+      "required": [
+        "max_drawdown_limit",
+        "absolute_equity_cap"
+      ],
+      "properties": {
+        "max_drawdown_limit": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "absolute_equity_cap": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "bucket_config": {
+      "type": "object",
+      "required": [
+        "label",
+        "target_pct",
+        "max_pct"
+      ],
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "risk_role": {
+          "type": "string"
+        },
+        "target_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "min_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "max_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "priority_rank": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "is_equity_like": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "bucket_mapping_rule": {
+      "type": "object",
+      "required": [
+        "bucket_key"
+      ],
+      "properties": {
+        "bucket_key": {
+          "$ref": "#/$defs/bucket_key"
+        },
+        "category_equals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "name_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "cash_sweeper": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "symbol",
+        "name",
+        "execution_type",
+        "activation_threshold_cny"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "execution_type": {
+          "type": "string",
+          "const": "OTC"
+        },
+        "activation_threshold_cny": {
+          "type": "number",
+          "minimum": 0
+        },
+        "min_trade_amount_cny": {
+          "type": "number",
+          "minimum": 0
+        },
+        "priority_rank": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "strategy_type": {
+      "type": "string",
+      "enum": [
+        "erp_mean_reversion",
+        "dividend_carry",
+        "macro_momentum",
+        "target_volatility"
+      ]
+    },
+    "execution_type": {
+      "type": "string",
+      "enum": [
+        "OTC",
+        "EXCHANGE"
+      ]
+    },
+    "settlement_rule": {
+      "type": "string",
+      "enum": [
+        "T+0",
+        "T+1"
+      ]
+    },
+    "pricing_anchor": {
+      "type": "object",
+      "required": [
+        "use_erp",
+        "use_dividend_spread",
+        "crowding_penalty"
+      ],
+      "properties": {
+        "use_erp": {
+          "type": "boolean"
+        },
+        "use_dividend_spread": {
+          "type": "boolean"
+        },
+        "crowding_penalty": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "trend_filter": {
+      "type": "object",
+      "required": [
+        "momentum_lookback_months",
+        "moving_average"
+      ],
+      "properties": {
+        "momentum_lookback_months": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "moving_average": {
+          "type": "integer",
+          "minimum": 60
+        }
+      },
+      "additionalProperties": false
+    },
+    "risk_control": {
+      "type": "object",
+      "required": [
+        "max_atr_threshold",
+        "kill_switch_enabled"
+      ],
+      "properties": {
+        "max_atr_threshold": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "kill_switch_enabled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "strategy_regime": {
+      "type": "object",
+      "required": [
+        "type",
+        "pricing_anchor",
+        "trend_filter",
+        "risk_control"
+      ],
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/strategy_type"
+        },
+        "pricing_anchor": {
+          "$ref": "#/$defs/pricing_anchor"
+        },
+        "trend_filter": {
+          "$ref": "#/$defs/trend_filter"
+        },
+        "risk_control": {
+          "$ref": "#/$defs/risk_control"
+        }
+      },
+      "additionalProperties": false
+    },
+    "asset": {
+      "type": "object",
+      "required": [
+        "symbol",
+        "name",
+        "execution_type",
+        "bucket",
+        "strategy_regime"
+      ],
+      "properties": {
+        "symbol": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "execution_type": {
+          "$ref": "#/$defs/execution_type"
+        },
+        "bucket": {
+          "$ref": "#/$defs/bucket_key"
+        },
+        "market": {
+          "type": "string",
+          "enum": [
+            "CN",
+            "US",
+            "HK",
+            "GLD",
+            "CROSS_BORDER"
+          ]
+        },
+        "category": {
+          "type": "string"
+        },
+        "signal_proxy_symbol": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ticker": {
+          "type": "string",
+          "minLength": 1
+        },
+        "settlement_rule": {
+          "$ref": "#/$defs/settlement_rule"
+        },
+        "lot_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "slippage_buffer": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.002
+        },
+        "strategy_regime": {
+          "$ref": "#/$defs/strategy_regime"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "execution_type": {
+                "const": "EXCHANGE"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "ticker",
+              "settlement_rule",
+              "lot_size",
+              "slippage_buffer"
+            ]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "bucket_representative": {
+      "type": "object",
+      "required": [
+        "symbol",
+        "display_name"
+      ],
+      "properties": {
+        "symbol": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "proxy_note": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "portfolio_backtest": {
+      "type": "object",
+      "properties": {
+        "initial_capital_cny": {
+          "type": "number"
+        },
+        "lookback_days": {
+          "type": "integer"
+        },
+        "warmup_days": {
+          "type": "integer"
+        },
+        "execution_model": {
+          "type": "string"
+        },
+        "annual_cash_yield_pct": {
+          "type": "number"
+        },
+        "bucket_representatives": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/bucket_key"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/bucket_representative"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

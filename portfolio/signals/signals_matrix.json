@@ -1,0 +1,881 @@
+{
+  "version": 1,
+  "account_id": "main",
+  "generated_at": "2026-04-01T18:05:55+08:00",
+  "layer_role": "layer_2_fund_signal_engine",
+  "source": "Local SQLite market_lake daily_prices (OHLC unified)",
+  "parameters": {
+    "short_window": 20,
+    "long_window": 60,
+    "rsi_window": 14,
+    "adx_window": 14,
+    "adx_trend_threshold": 25,
+    "macd_fast": 12,
+    "macd_slow": 26,
+    "macd_signal": 9,
+    "drawdown_window": 60,
+    "db": "/Users/yinshiwei/codex/tz/portfolio/data/market_lake.db"
+  },
+  "source_pool": {
+    "watchlist_as_of": "2026-04-01",
+    "watchlist_basis": "active_holdings_with_pending_profit_effective_overlays_tagged_separately",
+    "portfolio_snapshot_date": "2026-04-01",
+    "portfolio_summary": {
+      "basis": "only_current_holdings",
+      "total_fund_assets": 308027.83,
+      "pending_buy_confirm": 0,
+      "pending_sell_to_arrive": 0,
+      "effective_exposure_after_pending_sell": 308027.83,
+      "yesterday_profit": 2136.12,
+      "holding_profit": -22442.41,
+      "cumulative_profit": -26313.84,
+      "performance_precision": "user_reported_app_snapshot_2026-04-01",
+      "last_user_reported_profit_update_at": "2026-04-01T12:18:00+08:00",
+      "available_cash_cny": 134400,
+      "total_portfolio_assets_cny": 442427.83,
+      "dialogue_adjusted_since_last_platform_snapshot": false,
+      "last_dialogue_merge_at": null
+    },
+    "latest_snapshot_date": "2026-04-01",
+    "latest_summary": {
+      "basis": "only_current_holdings",
+      "total_fund_assets": 308027.83,
+      "pending_buy_confirm": 0,
+      "pending_sell_to_arrive": 0,
+      "effective_exposure_after_pending_sell": 308027.83,
+      "yesterday_profit": 2136.12,
+      "holding_profit": -22442.41,
+      "cumulative_profit": -26313.84,
+      "performance_precision": "user_reported_app_snapshot_2026-04-01",
+      "last_user_reported_profit_update_at": "2026-04-01T12:18:00+08:00",
+      "available_cash_cny": 134400,
+      "total_portfolio_assets_cny": 442427.83,
+      "dialogue_adjusted_since_last_platform_snapshot": false,
+      "last_dialogue_merge_at": null
+    },
+    "portfolio_snapshot_path": "/Users/yinshiwei/codex/tz/portfolio/state/portfolio_state.json",
+    "portfolio_snapshot_source_kind": "portfolio_state",
+    "market_lake_db": "/Users/yinshiwei/codex/tz/portfolio/data/market_lake.db"
+  },
+  "signals": {
+    "007339": {
+      "code": "007339",
+      "name": "易方达沪深300ETF联接C",
+      "signal_date": "2026-03-30",
+      "history_points": 1682,
+      "portfolio_context": {
+        "watchlist_amount_cny": 28683.23,
+        "portfolio_position_amount_cny": 28683.23,
+        "latest_position_amount_cny": 28683.23,
+        "portfolio_daily_pnl_cny": 0.0,
+        "latest_daily_pnl_cny": 0.0,
+        "portfolio_category": "A股宽基",
+        "latest_category": "A股宽基",
+        "watchlist_note": "2026-04-01 用户确认今日再加仓 8000 元，当前按 latest.json active 持仓金额同步。",
+        "portfolio_name_match": "易方达沪深300ETF联接C",
+        "latest_name_match": "易方达沪深300ETF联接C"
+      },
+      "valuation_context": {
+        "proxy_key": "a_share_core_hs300",
+        "proxy_name": "沪深300",
+        "composite_percentile_5y": 72.4,
+        "valuation_regime_primary": "overvalued"
+      },
+      "indicators": {
+        "current_nav": 1.7851,
+        "sma_20": 1.8248,
+        "sma_60": 1.8525,
+        "bias_20_percent": -2.18,
+        "rsi_14": 39.8,
+        "atr_14": 0.0153,
+        "plus_di_14": 39.8,
+        "minus_di_14": 60.2,
+        "adx_14": 15.15,
+        "macd_line": -0.019748,
+        "macd_signal": -0.01452,
+        "macd_hist": -0.005228,
+        "max_drawdown_60d_percent": -7.28,
+        "current_drawdown_60d_percent": -5.8,
+        "annualized_volatility_20d_percent": 17.9
+      },
+      "derived_signals": {
+        "trend_status": "choppy_sideways",
+        "raw_trend_status": "bearish",
+        "trend_score": -1.0,
+        "bias_regime": "near_mean",
+        "rsi_regime": "weak",
+        "left_side_regime": "neutral",
+        "hist_increasing": true
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "016482": {
+      "code": "016482",
+      "name": "兴全恒信债券C",
+      "signal_date": "2026-03-30",
+      "history_points": 788,
+      "portfolio_context": {
+        "watchlist_amount_cny": 70009.17,
+        "portfolio_position_amount_cny": 70009.17,
+        "latest_position_amount_cny": 70009.17,
+        "portfolio_daily_pnl_cny": 0.0,
+        "latest_daily_pnl_cny": 0.0,
+        "portfolio_category": "偏债混合",
+        "latest_category": "偏债混合",
+        "watchlist_note": "2026-03-31 起已转为 active 持仓，当前金额与 latest.json 保持同步。",
+        "portfolio_name_match": "兴全恒信债券C",
+        "latest_name_match": "兴全恒信债券C"
+      },
+      "valuation_context": {
+        "proxy_key": null,
+        "proxy_name": null,
+        "composite_percentile_5y": null,
+        "valuation_regime_primary": null
+      },
+      "indicators": {
+        "current_nav": 1.1234,
+        "sma_20": 1.1212,
+        "sma_60": 1.1171,
+        "bias_20_percent": 0.2,
+        "rsi_14": 84.13,
+        "atr_14": 0.0003,
+        "plus_di_14": 84.13,
+        "minus_di_14": 15.87,
+        "adx_14": 57.71,
+        "macd_line": 0.001309,
+        "macd_signal": 0.001276,
+        "macd_hist": 3.3e-05,
+        "max_drawdown_60d_percent": -0.09,
+        "current_drawdown_60d_percent": 0.0,
+        "annualized_volatility_20d_percent": 0.41
+      },
+      "derived_signals": {
+        "trend_status": "weak_bullish",
+        "raw_trend_status": "weak_bullish",
+        "trend_score": 0.6667,
+        "bias_regime": "near_mean",
+        "rsi_regime": "overbought",
+        "left_side_regime": "neutral",
+        "hist_increasing": true
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "021482": {
+      "code": "021482",
+      "name": "华夏中证红利低波动ETF发起式联接A",
+      "signal_date": "2026-03-30",
+      "history_points": 417,
+      "portfolio_context": {
+        "watchlist_amount_cny": 23136.44,
+        "portfolio_position_amount_cny": 23136.44,
+        "latest_position_amount_cny": 23136.44,
+        "portfolio_daily_pnl_cny": 0.0,
+        "latest_daily_pnl_cny": 0.0,
+        "portfolio_category": "A股红利低波",
+        "latest_category": "A股红利低波",
+        "watchlist_note": "已包含 2026-03-25 初始建仓与后续追加，并于 2026-04-01 再加仓 5000 元。",
+        "portfolio_name_match": "华夏中证红利低波动ETF发起式联接A",
+        "latest_name_match": "华夏中证红利低波动ETF发起式联接A"
+      },
+      "valuation_context": {
+        "proxy_key": "a_share_defensive_dividend_proxy",
+        "proxy_name": "上证红利（红利低波估值代理）",
+        "composite_percentile_5y": 99.6,
+        "valuation_regime_primary": "overvalued"
+      },
+      "indicators": {
+        "current_nav": 1.1211,
+        "sma_20": 1.1201,
+        "sma_60": 1.1043,
+        "bias_20_percent": 0.09,
+        "rsi_14": 53.07,
+        "atr_14": 0.0075,
+        "plus_di_14": 53.07,
+        "minus_di_14": 46.93,
+        "adx_14": 14.81,
+        "macd_line": 0.001909,
+        "macd_signal": 0.003623,
+        "macd_hist": -0.001714,
+        "max_drawdown_60d_percent": -4.25,
+        "current_drawdown_60d_percent": -1.28,
+        "annualized_volatility_20d_percent": 16.02
+      },
+      "derived_signals": {
+        "trend_status": "choppy_sideways",
+        "raw_trend_status": "weak_bullish",
+        "trend_score": 0.6667,
+        "bias_regime": "near_mean",
+        "rsi_regime": "neutral",
+        "left_side_regime": "neutral",
+        "hist_increasing": true
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "022502": {
+      "code": "022502",
+      "name": "国泰黄金ETF联接E",
+      "signal_date": "2026-03-30",
+      "history_points": 327,
+      "portfolio_context": {
+        "watchlist_amount_cny": 46724.87,
+        "portfolio_position_amount_cny": 46724.87,
+        "latest_position_amount_cny": 46724.87,
+        "portfolio_daily_pnl_cny": 0.0,
+        "latest_daily_pnl_cny": 0.0,
+        "portfolio_category": "黄金",
+        "latest_category": "黄金",
+        "watchlist_note": "已包含历史底仓、2026-03-25 的黄金换仓与买入，以及 2026-04-01 额外加仓 10000 元。",
+        "portfolio_name_match": "国泰黄金ETF联接E",
+        "latest_name_match": "国泰黄金ETF联接E"
+      },
+      "valuation_context": {
+        "proxy_key": null,
+        "proxy_name": null,
+        "composite_percentile_5y": null,
+        "valuation_regime_primary": null
+      },
+      "indicators": {
+        "current_nav": 3.6358,
+        "sma_20": 3.9112,
+        "sma_60": 3.8967,
+        "bias_20_percent": -7.04,
+        "rsi_14": 40.24,
+        "atr_14": 0.0868,
+        "plus_di_14": 40.24,
+        "minus_di_14": 59.76,
+        "adx_14": 21.15,
+        "macd_line": -0.122839,
+        "macd_signal": -0.075674,
+        "macd_hist": -0.047165,
+        "max_drawdown_60d_percent": -25.05,
+        "current_drawdown_60d_percent": -18.4,
+        "annualized_volatility_20d_percent": 51.37
+      },
+      "derived_signals": {
+        "trend_status": "choppy_sideways",
+        "raw_trend_status": "weak_bearish",
+        "trend_score": -0.3333,
+        "bias_regime": "below_mean",
+        "rsi_regime": "weak",
+        "left_side_regime": "neutral",
+        "hist_increasing": true
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "013172": {
+      "code": "013172",
+      "name": "华夏恒生互联网科技业ETF联接(QDII)C",
+      "signal_date": "2026-03-31",
+      "history_points": 1098,
+      "portfolio_context": {
+        "watchlist_amount_cny": 72068.26,
+        "portfolio_position_amount_cny": 69564.99,
+        "latest_position_amount_cny": 69564.99,
+        "portfolio_daily_pnl_cny": 1493.34,
+        "latest_daily_pnl_cny": 1493.34,
+        "portfolio_category": "港股互联网/QDII",
+        "latest_category": "港股互联网/QDII",
+        "watchlist_note": null,
+        "portfolio_name_match": "华夏恒生互联网科技业ETF联接(QDII)C",
+        "latest_name_match": "华夏恒生互联网科技业ETF联接(QDII)C"
+      },
+      "valuation_context": {
+        "proxy_key": "hk_hstech",
+        "proxy_name": "恒生互联网/科技（QDII价格分位代理）",
+        "composite_percentile_5y": 15.79,
+        "valuation_regime_primary": "undervalued"
+      },
+      "indicators": {
+        "current_nav": 0.6468,
+        "sma_20": 0.6874,
+        "sma_60": 0.7665,
+        "bias_20_percent": -5.9,
+        "rsi_14": 31.08,
+        "atr_14": 0.0113,
+        "plus_di_14": 31.08,
+        "minus_di_14": 68.92,
+        "adx_14": 31.58,
+        "macd_line": -0.026028,
+        "macd_signal": -0.025096,
+        "macd_hist": -0.000933,
+        "max_drawdown_60d_percent": -25.21,
+        "current_drawdown_60d_percent": -25.21,
+        "annualized_volatility_20d_percent": 30.24
+      },
+      "derived_signals": {
+        "trend_status": "bearish",
+        "raw_trend_status": "bearish",
+        "trend_score": -1.0,
+        "bias_regime": "below_mean",
+        "rsi_regime": "weak",
+        "left_side_regime": "neutral",
+        "hist_increasing": false
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "001917": {
+      "code": "001917",
+      "name": "招商量化精选股票A",
+      "signal_date": "2026-03-30",
+      "history_points": 2431,
+      "portfolio_context": {
+        "watchlist_amount_cny": 20684.25,
+        "portfolio_position_amount_cny": 20684.25,
+        "latest_position_amount_cny": 20684.25,
+        "portfolio_daily_pnl_cny": 538.1,
+        "latest_daily_pnl_cny": 538.1,
+        "portfolio_category": "A股主动",
+        "latest_category": "A股主动",
+        "watchlist_note": "2026-04-01 用户确认今日再加仓 2000 元，作为 A_CORE 长期仓的一部分。",
+        "portfolio_name_match": "招商量化精选股票A",
+        "latest_name_match": "招商量化精选股票A"
+      },
+      "valuation_context": {
+        "proxy_key": null,
+        "proxy_name": null,
+        "composite_percentile_5y": null,
+        "valuation_regime_primary": null
+      },
+      "indicators": {
+        "current_nav": 3.6357,
+        "sma_20": 3.752,
+        "sma_60": 3.8048,
+        "bias_20_percent": -3.1,
+        "rsi_14": 41.4,
+        "atr_14": 0.0496,
+        "plus_di_14": 41.4,
+        "minus_di_14": 58.6,
+        "adx_14": 19.58,
+        "macd_line": -0.066507,
+        "macd_signal": -0.048213,
+        "macd_hist": -0.018294,
+        "max_drawdown_60d_percent": -13.1,
+        "current_drawdown_60d_percent": -9.2,
+        "annualized_volatility_20d_percent": 29.11
+      },
+      "derived_signals": {
+        "trend_status": "choppy_sideways",
+        "raw_trend_status": "bearish",
+        "trend_score": -1.0,
+        "bias_regime": "below_mean",
+        "rsi_regime": "weak",
+        "left_side_regime": "neutral",
+        "hist_increasing": true
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "011803": {
+      "code": "011803",
+      "name": "景顺长城宁景6个月持有混合A",
+      "signal_date": "2026-03-30",
+      "history_points": 1006,
+      "portfolio_context": {
+        "watchlist_amount_cny": 15132.56,
+        "portfolio_position_amount_cny": 15098.94,
+        "latest_position_amount_cny": 15098.94,
+        "portfolio_daily_pnl_cny": 52.66,
+        "latest_daily_pnl_cny": 52.66,
+        "portfolio_category": "偏债混合",
+        "latest_category": "偏债混合",
+        "watchlist_note": null,
+        "portfolio_name_match": "景顺长城宁景6个月持有期混合A",
+        "latest_name_match": "景顺长城宁景6个月持有期混合A"
+      },
+      "valuation_context": {
+        "proxy_key": null,
+        "proxy_name": null,
+        "composite_percentile_5y": null,
+        "valuation_regime_primary": null
+      },
+      "indicators": {
+        "current_nav": 1.3544,
+        "sma_20": 1.3648,
+        "sma_60": 1.369,
+        "bias_20_percent": -0.76,
+        "rsi_14": 41.03,
+        "atr_14": 0.0042,
+        "plus_di_14": 41.03,
+        "minus_di_14": 58.97,
+        "adx_14": 20.56,
+        "macd_line": -0.006635,
+        "macd_signal": -0.005112,
+        "macd_hist": -0.001523,
+        "max_drawdown_60d_percent": -3.64,
+        "current_drawdown_60d_percent": -3.02,
+        "annualized_volatility_20d_percent": 6.76
+      },
+      "derived_signals": {
+        "trend_status": "choppy_sideways",
+        "raw_trend_status": "bearish",
+        "trend_score": -1.0,
+        "bias_regime": "near_mean",
+        "rsi_regime": "weak",
+        "left_side_regime": "neutral",
+        "hist_increasing": true
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "006075": {
+      "code": "006075",
+      "name": "博时标普500ETF联接C",
+      "signal_date": "2026-03-30",
+      "history_points": 1868,
+      "portfolio_context": {
+        "watchlist_amount_cny": 1019.07,
+        "portfolio_position_amount_cny": 986.99,
+        "latest_position_amount_cny": 986.99,
+        "portfolio_daily_pnl_cny": 13.28,
+        "latest_daily_pnl_cny": 13.28,
+        "portfolio_category": "美股指数/QDII",
+        "latest_category": "美股指数/QDII",
+        "watchlist_note": null,
+        "portfolio_name_match": "博时标普500ETF联接(QDII)C",
+        "latest_name_match": "博时标普500ETF联接(QDII)C"
+      },
+      "valuation_context": {
+        "proxy_key": "us_spx",
+        "proxy_name": "标普500（QDII价格分位代理）",
+        "composite_percentile_5y": 81.88,
+        "valuation_regime_primary": "overvalued"
+      },
+      "indicators": {
+        "current_nav": 4.6091,
+        "sma_20": 4.8023,
+        "sma_60": 4.9618,
+        "bias_20_percent": -4.02,
+        "rsi_14": 28.62,
+        "atr_14": 0.0382,
+        "plus_di_14": 28.62,
+        "minus_di_14": 71.38,
+        "adx_14": 25.86,
+        "macd_line": -0.084324,
+        "macd_signal": -0.069036,
+        "macd_hist": -0.015288,
+        "max_drawdown_60d_percent": -9.63,
+        "current_drawdown_60d_percent": -9.63,
+        "annualized_volatility_20d_percent": 14.77
+      },
+      "derived_signals": {
+        "trend_status": "bearish",
+        "raw_trend_status": "bearish",
+        "trend_score": -1.0,
+        "bias_regime": "below_mean",
+        "rsi_regime": "oversold",
+        "left_side_regime": "falling_knife",
+        "hist_increasing": false
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "019172": {
+      "code": "019172",
+      "name": "摩根纳斯达克100指数(QDII)人民币A",
+      "signal_date": "2026-03-27",
+      "history_points": 597,
+      "portfolio_context": {
+        "watchlist_amount_cny": 3206.74,
+        "portfolio_position_amount_cny": 3058.8,
+        "latest_position_amount_cny": 3058.8,
+        "portfolio_daily_pnl_cny": 43.17,
+        "latest_daily_pnl_cny": 43.17,
+        "portfolio_category": "美股科技/QDII",
+        "latest_category": "美股科技/QDII",
+        "watchlist_note": null,
+        "portfolio_name_match": "摩根纳斯达克100指数(QDII)A",
+        "latest_name_match": "摩根纳斯达克100指数(QDII)A"
+      },
+      "valuation_context": {
+        "proxy_key": "us_ndx",
+        "proxy_name": "纳斯达克100（QDII价格分位代理）",
+        "composite_percentile_5y": 79.37,
+        "valuation_regime_primary": "overvalued"
+      },
+      "indicators": {
+        "current_nav": 1.4189,
+        "sma_20": 1.4943,
+        "sma_60": 1.5436,
+        "bias_20_percent": -5.04,
+        "rsi_14": 30.35,
+        "atr_14": 0.0156,
+        "plus_di_14": 30.35,
+        "minus_di_14": 69.65,
+        "adx_14": 20.26,
+        "macd_line": -0.025197,
+        "macd_signal": -0.019546,
+        "macd_hist": -0.00565,
+        "max_drawdown_60d_percent": -11.37,
+        "current_drawdown_60d_percent": -11.37,
+        "annualized_volatility_20d_percent": 18.41
+      },
+      "derived_signals": {
+        "trend_status": "choppy_sideways",
+        "raw_trend_status": "bearish",
+        "trend_score": -1.0,
+        "bias_regime": "below_mean",
+        "rsi_regime": "weak",
+        "left_side_regime": "neutral",
+        "hist_increasing": false
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "016532": {
+      "code": "016532",
+      "name": "嘉实纳斯达克100ETF发起联接(QDII)A人民币",
+      "signal_date": "2026-03-30",
+      "history_points": 855,
+      "portfolio_context": {
+        "watchlist_amount_cny": 3058.61,
+        "portfolio_position_amount_cny": 2917.67,
+        "latest_position_amount_cny": 2917.67,
+        "portfolio_daily_pnl_cny": 40.87,
+        "latest_daily_pnl_cny": 40.87,
+        "portfolio_category": "美股科技/QDII",
+        "latest_category": "美股科技/QDII",
+        "watchlist_note": null,
+        "portfolio_name_match": "嘉实纳斯达克100ETF联接(QDII)A",
+        "latest_name_match": "嘉实纳斯达克100ETF联接(QDII)A"
+      },
+      "valuation_context": {
+        "proxy_key": "us_ndx",
+        "proxy_name": "纳斯达克100（QDII价格分位代理）",
+        "composite_percentile_5y": 79.37,
+        "valuation_regime_primary": "overvalued"
+      },
+      "indicators": {
+        "current_nav": 1.7348,
+        "sma_20": 1.8304,
+        "sma_60": 1.8912,
+        "bias_20_percent": -5.22,
+        "rsi_14": 29.25,
+        "atr_14": 0.0185,
+        "plus_di_14": 29.25,
+        "minus_di_14": 70.75,
+        "adx_14": 21.16,
+        "macd_line": -0.033836,
+        "macd_signal": -0.025203,
+        "macd_hist": -0.008634,
+        "max_drawdown_60d_percent": -11.67,
+        "current_drawdown_60d_percent": -11.67,
+        "annualized_volatility_20d_percent": 18.24
+      },
+      "derived_signals": {
+        "trend_status": "choppy_sideways",
+        "raw_trend_status": "bearish",
+        "trend_score": -1.0,
+        "bias_regime": "below_mean",
+        "rsi_regime": "oversold",
+        "left_side_regime": "falling_knife",
+        "hist_increasing": false
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "017641": {
+      "code": "017641",
+      "name": "摩根标普500指数(QDII)人民币A",
+      "signal_date": "2026-03-27",
+      "history_points": 704,
+      "portfolio_context": {
+        "watchlist_amount_cny": 665.95,
+        "portfolio_position_amount_cny": 645.25,
+        "latest_position_amount_cny": 645.25,
+        "portfolio_daily_pnl_cny": -8.3,
+        "latest_daily_pnl_cny": -8.3,
+        "portfolio_category": "美股指数/QDII",
+        "latest_category": "美股指数/QDII",
+        "watchlist_note": null,
+        "portfolio_name_match": "摩根标普500指数(QDII)A",
+        "latest_name_match": "摩根标普500指数(QDII)A"
+      },
+      "valuation_context": {
+        "proxy_key": "us_spx",
+        "proxy_name": "标普500（QDII价格分位代理）",
+        "composite_percentile_5y": 81.88,
+        "valuation_regime_primary": "overvalued"
+      },
+      "indicators": {
+        "current_nav": 1.4497,
+        "sma_20": 1.5107,
+        "sma_60": 1.5546,
+        "bias_20_percent": -4.04,
+        "rsi_14": 29.0,
+        "atr_14": 0.0121,
+        "plus_di_14": 29.0,
+        "minus_di_14": 71.0,
+        "adx_14": 24.46,
+        "macd_line": -0.023345,
+        "macd_signal": -0.019204,
+        "macd_hist": -0.004141,
+        "max_drawdown_60d_percent": -9.02,
+        "current_drawdown_60d_percent": -9.02,
+        "annualized_volatility_20d_percent": 14.2
+      },
+      "derived_signals": {
+        "trend_status": "choppy_sideways",
+        "raw_trend_status": "bearish",
+        "trend_score": -1.0,
+        "bias_regime": "below_mean",
+        "rsi_regime": "oversold",
+        "left_side_regime": "falling_knife",
+        "hist_increasing": false
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "017204": {
+      "code": "017204",
+      "name": "华宝海外科技股票(QDII-LOF)C",
+      "signal_date": "2026-03-30",
+      "history_points": 715,
+      "portfolio_context": {
+        "watchlist_amount_cny": 11224.96,
+        "portfolio_position_amount_cny": 10456.43,
+        "latest_position_amount_cny": 10456.43,
+        "portfolio_daily_pnl_cny": 213.21,
+        "latest_daily_pnl_cny": 213.21,
+        "portfolio_category": "海外科技/QDII",
+        "latest_category": "海外科技/QDII",
+        "watchlist_note": null,
+        "portfolio_name_match": "华宝海外科技股票(QDII-FOF-LOF)C",
+        "latest_name_match": "华宝海外科技股票(QDII-FOF-LOF)C"
+      },
+      "valuation_context": {
+        "proxy_key": "global_overseas_tech",
+        "proxy_name": "全球科技（QDII价格分位代理）",
+        "composite_percentile_5y": 75.93,
+        "valuation_regime_primary": "overvalued"
+      },
+      "indicators": {
+        "current_nav": 1.7606,
+        "sma_20": 1.8972,
+        "sma_60": 1.9942,
+        "bias_20_percent": -7.2,
+        "rsi_14": 30.85,
+        "atr_14": 0.0297,
+        "plus_di_14": 30.85,
+        "minus_di_14": 69.15,
+        "adx_14": 19.42,
+        "macd_line": -0.046711,
+        "macd_signal": -0.036316,
+        "macd_hist": -0.010394,
+        "max_drawdown_60d_percent": -17.67,
+        "current_drawdown_60d_percent": -17.67,
+        "annualized_volatility_20d_percent": 27.5
+      },
+      "derived_signals": {
+        "trend_status": "choppy_sideways",
+        "raw_trend_status": "bearish",
+        "trend_score": -1.0,
+        "bias_regime": "below_mean",
+        "rsi_regime": "weak",
+        "left_side_regime": "neutral",
+        "hist_increasing": false
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "025162": {
+      "code": "025162",
+      "name": "国泰大宗商品(QDII-LOF)D",
+      "signal_date": "2026-03-27",
+      "history_points": 151,
+      "portfolio_context": {
+        "watchlist_amount_cny": 8176.16,
+        "portfolio_position_amount_cny": null,
+        "latest_position_amount_cny": null,
+        "portfolio_daily_pnl_cny": null,
+        "latest_daily_pnl_cny": null,
+        "portfolio_category": null,
+        "latest_category": null,
+        "watchlist_note": null,
+        "portfolio_name_match": null,
+        "latest_name_match": null
+      },
+      "valuation_context": {
+        "proxy_key": "global_commodity",
+        "proxy_name": "大宗商品（QDII价格分位代理）",
+        "composite_percentile_5y": 89.62,
+        "valuation_regime_primary": "bubble_overvalued"
+      },
+      "indicators": {
+        "current_nav": 0.761,
+        "sma_20": 0.7766,
+        "sma_60": 0.7494,
+        "bias_20_percent": -2.02,
+        "rsi_14": 47.95,
+        "atr_14": 0.0109,
+        "plus_di_14": 47.95,
+        "minus_di_14": 52.05,
+        "adx_14": 15.59,
+        "macd_line": -0.004192,
+        "macd_signal": 0.001623,
+        "macd_hist": -0.005816,
+        "max_drawdown_60d_percent": -10.27,
+        "current_drawdown_60d_percent": -6.97,
+        "annualized_volatility_20d_percent": 27.73
+      },
+      "derived_signals": {
+        "trend_status": "choppy_sideways",
+        "raw_trend_status": "weak_bullish",
+        "trend_score": 0.3333,
+        "bias_regime": "near_mean",
+        "rsi_regime": "neutral",
+        "left_side_regime": "neutral",
+        "hist_increasing": true
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    },
+    "025209": {
+      "code": "025209",
+      "name": "永赢先锋半导体智选混合C",
+      "signal_date": "2026-03-30",
+      "history_points": 128,
+      "portfolio_context": {
+        "watchlist_amount_cny": 3000.0,
+        "portfolio_position_amount_cny": 2788.95,
+        "latest_position_amount_cny": 2788.95,
+        "portfolio_daily_pnl_cny": 0.0,
+        "latest_daily_pnl_cny": 0.0,
+        "portfolio_category": "A股主动",
+        "latest_category": "A股主动",
+        "watchlist_note": "Platform screenshot confirmed the 2026-03-25 pre-15:00 buy, which should begin participating in 2026-03-26 profit and loss.",
+        "portfolio_name_match": "永赢先锋半导体智选混合C",
+        "latest_name_match": "永赢先锋半导体智选混合C"
+      },
+      "valuation_context": {
+        "proxy_key": null,
+        "proxy_name": null,
+        "composite_percentile_5y": null,
+        "valuation_regime_primary": null
+      },
+      "indicators": {
+        "current_nav": 1.6641,
+        "sma_20": 1.6806,
+        "sma_60": 1.6273,
+        "bias_20_percent": -0.98,
+        "rsi_14": 48.84,
+        "atr_14": 0.0374,
+        "plus_di_14": 48.84,
+        "minus_di_14": 51.16,
+        "adx_14": 10.12,
+        "macd_line": 0.014005,
+        "macd_signal": 0.021851,
+        "macd_hist": -0.007846,
+        "max_drawdown_60d_percent": -16.84,
+        "current_drawdown_60d_percent": -9.1,
+        "annualized_volatility_20d_percent": 48.29
+      },
+      "derived_signals": {
+        "trend_status": "choppy_sideways",
+        "raw_trend_status": "weak_bullish",
+        "trend_score": 0.3333,
+        "bias_regime": "near_mean",
+        "rsi_regime": "neutral",
+        "left_side_regime": "neutral",
+        "hist_increasing": false
+      },
+      "data_quality": {
+        "enough_history_for_sma_20": true,
+        "enough_history_for_sma_60": true,
+        "enough_history_for_rsi_14": true,
+        "enough_history_for_adx_14": true,
+        "enough_history_for_macd": true,
+        "drawdown_window_used": 60
+      }
+    }
+  },
+  "errors": [
+    {
+      "code": "006195",
+      "name": "国金量化多因子股票A",
+      "message": "SQLite 返回空历史"
+    }
+  ]
+}

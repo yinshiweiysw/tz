@@ -1,0 +1,229 @@
+{
+  "snapshot_date": "2026-03-25",
+  "currency": "CNY",
+  "source_images": [
+    "IMG_0896.PNG",
+    "IMG_0897.PNG",
+    "IMG_0898.PNG",
+    "IMG_0899.PNG",
+    "IMG_0900.PNG",
+    "IMG_0901.PNG",
+    "IMG_0902.PNG",
+    "IMG_0903.PNG"
+  ],
+  "summary": {
+    "total_fund_assets": 242451.52,
+    "pending_buy_confirm": 3000.0,
+    "pending_sell_to_arrive": 76058.86,
+    "effective_exposure_after_pending_sell": 166392.66,
+    "yesterday_profit": 3671.24,
+    "holding_profit": -20448.24,
+    "cumulative_profit": -23818.54
+  },
+  "performance_snapshot": {
+    "as_of": "2026-03-25",
+    "current_year_profit": -40538.22,
+    "current_year_return_pct": -5.9,
+    "comparison_benchmark": "沪深300",
+    "comparison_benchmark_return_pct": -3.35,
+    "relative_underperformance_pct": -2.57,
+    "peer_percentile_beaten_pct": 5.17
+  },
+  "positions": [
+    {
+      "name": "博时标普500ETF联接(QDII)C",
+      "amount": 1019.07,
+      "daily_pnl": 13.28,
+      "holding_pnl": 19.07,
+      "holding_pnl_rate_pct": 1.91,
+      "category": "美股指数/QDII",
+      "status": "active"
+    },
+    {
+      "name": "景顺长城宁景6个月持有期混合A",
+      "amount": 15132.56,
+      "daily_pnl": 52.66,
+      "holding_pnl": 132.56,
+      "holding_pnl_rate_pct": 0.88,
+      "category": "偏债混合",
+      "status": "active"
+    },
+    {
+      "name": "景顺长城纳斯达克科技市值加权ETF联接(QDII)E",
+      "amount": 862.09,
+      "daily_pnl": 10.64,
+      "holding_pnl": -37.91,
+      "holding_pnl_rate_pct": -4.21,
+      "category": "美股科技/QDII",
+      "status": "active"
+    },
+    {
+      "name": "易方达沪深300ETF联接C",
+      "amount": 2000.01,
+      "daily_pnl": 0.0,
+      "holding_pnl": 0.01,
+      "holding_pnl_rate_pct": 0.0,
+      "category": "A股宽基",
+      "status": "active"
+    },
+    {
+      "name": "易方达港股通互联网ETF联接C",
+      "amount": 20199.78,
+      "daily_pnl": 0.0,
+      "holding_pnl": 0.0,
+      "holding_pnl_rate_pct": 0.0,
+      "category": "港股互联网/QDII",
+      "status": "active"
+    },
+    {
+      "name": "鹏华香港银行指数C",
+      "amount": 37312.14,
+      "daily_pnl": 0.0,
+      "holding_pnl": 0.0,
+      "holding_pnl_rate_pct": 0.0,
+      "category": "港股银行/QDII",
+      "status": "active"
+    },
+    {
+      "name": "广发恒生科技ETF联接(QDII)C",
+      "amount": 4470.0,
+      "daily_pnl": 0.0,
+      "holding_pnl": 0.0,
+      "holding_pnl_rate_pct": 0.0,
+      "category": "港股科技/QDII",
+      "status": "active"
+    },
+    {
+      "name": "广发恒生科技ETF联接(QDII)A",
+      "amount": 14076.94,
+      "daily_pnl": 0.0,
+      "holding_pnl": 0.0,
+      "holding_pnl_rate_pct": 0.0,
+      "category": "港股科技/QDII",
+      "status": "active"
+    },
+    {
+      "name": "国泰黄金ETF联接E",
+      "amount": 2000.0,
+      "daily_pnl": 0.0,
+      "holding_pnl": 0.0,
+      "holding_pnl_rate_pct": 0.0,
+      "category": "黄金",
+      "status": "active"
+    },
+    {
+      "name": "国泰大宗商品配置(QDII-LOF-FOF)D",
+      "amount": 7176.16,
+      "daily_pnl": -260.85,
+      "holding_pnl": -365.63,
+      "holding_pnl_rate_pct": -5.59,
+      "category": "大宗商品/QDII",
+      "status": "active"
+    },
+    {
+      "name": "国金量化多因子股票A",
+      "amount": 0.0,
+      "daily_pnl": -30.5,
+      "holding_pnl": 0.0,
+      "holding_pnl_rate_pct": 0.0,
+      "category": "A股主动",
+      "status": "closed_settled"
+    },
+    {
+      "name": "摩根纳斯达克100指数(QDII)A",
+      "amount": 3206.74,
+      "daily_pnl": 43.17,
+      "holding_pnl": -133.26,
+      "holding_pnl_rate_pct": -3.99,
+      "category": "美股科技/QDII",
+      "status": "active"
+    },
+    {
+      "name": "摩根标普500指数(QDII)A",
+      "amount": 665.95,
+      "daily_pnl": -8.3,
+      "holding_pnl": -34.05,
+      "holding_pnl_rate_pct": -4.86,
+      "category": "美股指数/QDII",
+      "status": "active"
+    },
+    {
+      "name": "工银瑞信黄金ETF联接C",
+      "amount": 29320.63,
+      "daily_pnl": 1548.88,
+      "holding_pnl": -1556.1,
+      "holding_pnl_rate_pct": -5.04,
+      "category": "黄金",
+      "status": "active"
+    },
+    {
+      "name": "华宝海外科技股票(QDII-FOF-LOF)C",
+      "amount": 11224.96,
+      "daily_pnl": 213.21,
+      "holding_pnl": -600.51,
+      "holding_pnl_rate_pct": -5.08,
+      "category": "海外科技/QDII",
+      "status": "active"
+    },
+    {
+      "name": "招商量化精选股票A",
+      "amount": 18648.66,
+      "daily_pnl": 538.1,
+      "holding_pnl": -1551.34,
+      "holding_pnl_rate_pct": -7.68,
+      "category": "A股主动",
+      "status": "active"
+    },
+    {
+      "name": "嘉实纳斯达克100ETF联接(QDII)A",
+      "amount": 3058.61,
+      "daily_pnl": 40.87,
+      "holding_pnl": -313.49,
+      "holding_pnl_rate_pct": -9.3,
+      "category": "美股科技/QDII",
+      "status": "active"
+    },
+    {
+      "name": "华安三菱日联日经225ETF联接(QDII)A",
+      "amount": 8.96,
+      "daily_pnl": -0.14,
+      "holding_pnl": -1.04,
+      "holding_pnl_rate_pct": -10.41,
+      "category": "日本股市/QDII",
+      "status": "active"
+    },
+    {
+      "name": "华夏恒生互联网科技业ETF联接(QDII)C",
+      "amount": 72068.26,
+      "daily_pnl": 1493.34,
+      "holding_pnl": -16006.55,
+      "holding_pnl_rate_pct": -18.17,
+      "category": "港股互联网/QDII",
+      "status": "active"
+    }
+  ],
+  "exposure_summary": {
+    "qdii_amount": 175349.66,
+    "qdii_weight_pct": 72.32,
+    "hong_kong_related_amount": 148127.12,
+    "hong_kong_related_weight_pct": 61.1,
+    "us_related_amount": 20037.42,
+    "us_related_weight_pct": 8.26,
+    "a_share_amount": 20648.67,
+    "a_share_weight_pct": 8.52,
+    "gold_amount": 31320.63,
+    "gold_weight_pct": 12.92,
+    "bond_mixed_amount": 15132.56,
+    "bond_mixed_weight_pct": 6.24,
+    "commodity_amount": 7176.16,
+    "commodity_weight_pct": 2.96
+  },
+  "recognition_notes": [
+    "本快照根据 8 张截图人工识别整理。",
+    "其中 5 张为持仓页，2 张为最近卖出记录，1 张为收益分析页。",
+    "默认假设持仓截图已覆盖当日主要持仓列表。",
+    "截图中显示 0.00 持有收益的基金，可能为新近建仓或净值未更新，后续可继续校正。",
+    "国金量化多因子股票A 显示为卖出金额已到账、手续费 30.50 元计入昨日收益，因此视为已结算卖出。",
+    "卖出将到账 76,058.86 元以账户总览为准；部分交易明细存在撤销单、不同份额类别和部分赎回，暂不直接逐笔冲减当前持仓。"
+  ]
+}

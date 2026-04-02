@@ -1,0 +1,35 @@
+{
+  "snapshot_date": "2026-03-25",
+  "source": "user_reported_manual_execution",
+  "status": "merged_into_latest_from_dialogue_confirmation",
+  "executed_buy_transactions": [
+    {
+      "trade_date": "2026-03-25",
+      "fund_name": "易方达沪深300ETF联接C",
+      "amount_cny": 15000,
+      "status": "user_reported_executed"
+    },
+    {
+      "trade_date": "2026-03-25",
+      "fund_name": "华夏中证红利低波动ETF发起式联接A",
+      "amount_cny": 10000,
+      "status": "user_reported_executed"
+    },
+    {
+      "trade_date": "2026-03-25",
+      "fund_name_user_stated": "黄金",
+      "interpreted_fund_name": "国泰黄金ETF联接E",
+      "amount_cny": 5000,
+      "status": "user_reported_executed",
+      "interpretation_basis": "Recorded as 国泰黄金ETF联接E based on the previously agreed first-buy plan."
+    }
+  ],
+  "notes": [
+    "These buys were reported by the user in chat after execution.",
+    "Holdings totals in latest.json are not auto-incremented here; they should be reconciled against the next portfolio screenshot or platform confirmation.",
+    "The 5000 CNY gold buy is interpreted as 国泰黄金ETF联接E because that was the active execution plan immediately before the user confirmed completion.",
+    "Merged into latest.json based on user dialogue confirmation. PnL precision remains approximate until the next platform refresh."
+  ],
+  "merged_at": "2026-03-25T11:59:40.978Z",
+  "merged_target": "/Users/yinshiwei/codex/tz/portfolio/latest.json"
+}

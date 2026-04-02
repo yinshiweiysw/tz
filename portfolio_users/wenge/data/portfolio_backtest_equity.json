@@ -1,0 +1,1525 @@
+{
+  "generated_at": "2026-04-01T13:39:53+08:00",
+  "summary": {
+    "generated_at": "2026-04-01T13:39:53+08:00",
+    "source": {
+      "asset_master": "/Users/yinshiwei/codex/tz/portfolio/config/asset_master.json",
+      "market_lake_db": "/Users/yinshiwei/codex/tz/portfolio/data/market_lake.db"
+    },
+    "config": {
+      "initial_capital_cny": 1000000.0,
+      "lookback_days": 200,
+      "warmup_days": 60,
+      "execution_model": "signal_on_close_execute_next_day_close",
+      "annual_cash_yield_pct": 2.0,
+      "adx_threshold": 25,
+      "rsi_bottom_threshold": 30,
+      "valuation_percentile_window_days": 1250,
+      "tiered_exposure_scale": {},
+      "note": "Data Lake V2 provides native OHLC series. Orders are still matched at next-trading-day close as a conservative close-to-close proxy."
+    },
+    "representatives": {
+      "A_CORE": {
+        "bucket_key": "A_CORE",
+        "label": "A股核心",
+        "target_pct": 0.22,
+        "min_pct": 0.1,
+        "max_pct": 0.3,
+        "symbol": "007339",
+        "display_name": "易方达沪深300ETF联接C",
+        "synthetic_cash": false,
+        "proxy_note": "A-share core sleeve uses the local HS300 feeder fund directly."
+      },
+      "GLB_MOM": {
+        "bucket_key": "GLB_MOM",
+        "label": "全球动量",
+        "target_pct": 0.14,
+        "min_pct": 0.0,
+        "max_pct": 0.2,
+        "symbol": "QQQ",
+        "display_name": "Invesco QQQ Trust",
+        "synthetic_cash": false,
+        "proxy_note": "Global momentum sleeve reads QQQ for signal generation while live domestic execution routes through 513100."
+      },
+      "INCOME": {
+        "bucket_key": "INCOME",
+        "label": "红利收息",
+        "target_pct": 0.12,
+        "min_pct": 0.08,
+        "max_pct": 0.15,
+        "symbol": "021482",
+        "display_name": "华夏中证红利低波动ETF发起式联接A",
+        "synthetic_cash": false,
+        "proxy_note": "Income sleeve uses the domestic dividend-low-vol feeder fund directly."
+      },
+      "HEDGE": {
+        "bucket_key": "HEDGE",
+        "label": "黄金避险",
+        "target_pct": 0.12,
+        "min_pct": 0.1,
+        "max_pct": 0.15,
+        "symbol": "022502",
+        "display_name": "国泰黄金ETF联接E",
+        "synthetic_cash": false,
+        "proxy_note": "Hedge sleeve uses the local gold feeder fund directly."
+      },
+      "TACTICAL": {
+        "bucket_key": "TACTICAL",
+        "label": "战术刺客",
+        "target_pct": 0.06,
+        "min_pct": 0.0,
+        "max_pct": 0.1,
+        "symbol": "013172",
+        "display_name": "华夏恒生互联网科技业ETF联接(QDII)C",
+        "synthetic_cash": false,
+        "proxy_note": "Tactical sleeve uses the HSI internet feeder fund directly."
+      },
+      "CASH": {
+        "bucket_key": "CASH",
+        "label": "现金防线",
+        "target_pct": 0.34,
+        "min_pct": 0.15,
+        "max_pct": 0.45,
+        "symbol": "CASH_CNY",
+        "display_name": "现金防线",
+        "synthetic_cash": true,
+        "proxy_note": "Cash sleeve is modeled as synthetic CNY cash yield."
+      }
+    },
+    "period": {
+      "start_date": "2025-06-23",
+      "end_date": "2026-03-31",
+      "evaluation_days": 200
+    },
+    "benchmark_static": {
+      "total_return_pct": 10.92,
+      "cagr_pct": 14.42,
+      "max_drawdown_pct": -12.0,
+      "avg_cash_position_pct": 0.0,
+      "ending_nav_cny": 1109198.3
+    },
+    "dynamic_portfolio_v30_phase3": {
+      "total_return_pct": 1.65,
+      "cagr_pct": 2.15,
+      "max_drawdown_pct": -0.02,
+      "avg_cash_position_pct": 99.61,
+      "ending_nav_cny": 1016500.67,
+      "trade_entries": 208,
+      "trade_exits": 124
+    },
+    "delta": {
+      "total_return_pct": -9.27,
+      "cagr_pct": -12.27,
+      "max_drawdown_pct": 11.98,
+      "avg_cash_position_pct": 99.61
+    },
+    "runtime_paths": {
+      "portfolio_root": "/Users/yinshiwei/codex/tz/portfolio_users/wenge",
+      "manifest_path": "/Users/yinshiwei/codex/tz/portfolio_users/wenge/state-manifest.json",
+      "summary_output": "/Users/yinshiwei/codex/tz/portfolio_users/wenge/data/portfolio_backtest_results.json",
+      "equity_output": "/Users/yinshiwei/codex/tz/portfolio_users/wenge/data/portfolio_backtest_equity.json"
+    }
+  },
+  "equity_curve": [
+    {
+      "date": "2025-06-23",
+      "strategy_nav_cny": 1000000.0,
+      "benchmark_nav_cny": 1000000.0,
+      "strategy_cash_position_pct": 100.0,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-06-24",
+      "strategy_nav_cny": 1000079.37,
+      "benchmark_nav_cny": 1006552.85,
+      "strategy_cash_position_pct": 99.53,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-06-25",
+      "strategy_nav_cny": 1000195.51,
+      "benchmark_nav_cny": 1014654.4,
+      "strategy_cash_position_pct": 99.55,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-06-26",
+      "strategy_nav_cny": 1000286.82,
+      "benchmark_nav_cny": 1017252.18,
+      "strategy_cash_position_pct": 99.58,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-06-27",
+      "strategy_nav_cny": 1000343.75,
+      "benchmark_nav_cny": 1010812.04,
+      "strategy_cash_position_pct": 99.55,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-06-30",
+      "strategy_nav_cny": 1000430.7,
+      "benchmark_nav_cny": 1012732.79,
+      "strategy_cash_position_pct": 99.55,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-01",
+      "strategy_nav_cny": 1000517.5,
+      "benchmark_nav_cny": 1015460.65,
+      "strategy_cash_position_pct": 99.55,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-02",
+      "strategy_nav_cny": 1000601.64,
+      "benchmark_nav_cny": 1015812.24,
+      "strategy_cash_position_pct": 99.58,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-03",
+      "strategy_nav_cny": 1000695.4,
+      "benchmark_nav_cny": 1020118.24,
+      "strategy_cash_position_pct": 99.59,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-04",
+      "strategy_nav_cny": 1000793.16,
+      "benchmark_nav_cny": 1022202.49,
+      "strategy_cash_position_pct": 99.62,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-07",
+      "strategy_nav_cny": 1000864.66,
+      "benchmark_nav_cny": 1019347.96,
+      "strategy_cash_position_pct": 99.5,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-08",
+      "strategy_nav_cny": 1000954.1,
+      "benchmark_nav_cny": 1024690.82,
+      "strategy_cash_position_pct": 99.53,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-09",
+      "strategy_nav_cny": 1001051.02,
+      "benchmark_nav_cny": 1022857.18,
+      "strategy_cash_position_pct": 99.5,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-10",
+      "strategy_nav_cny": 1001141.17,
+      "benchmark_nav_cny": 1026286.56,
+      "strategy_cash_position_pct": 99.53,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-11",
+      "strategy_nav_cny": 1001209.1,
+      "benchmark_nav_cny": 1024927.16,
+      "strategy_cash_position_pct": 99.35,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-14",
+      "strategy_nav_cny": 1001308.17,
+      "benchmark_nav_cny": 1030070.58,
+      "strategy_cash_position_pct": 99.43,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-15",
+      "strategy_nav_cny": 1001376.65,
+      "benchmark_nav_cny": 1032190.47,
+      "strategy_cash_position_pct": 99.32,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-16",
+      "strategy_nav_cny": 1001441.78,
+      "benchmark_nav_cny": 1029911.14,
+      "strategy_cash_position_pct": 99.31,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-17",
+      "strategy_nav_cny": 1001549.0,
+      "benchmark_nav_cny": 1033220.55,
+      "strategy_cash_position_pct": 99.28,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-18",
+      "strategy_nav_cny": 1001667.06,
+      "benchmark_nav_cny": 1038970.68,
+      "strategy_cash_position_pct": 99.3,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-21",
+      "strategy_nav_cny": 1001778.96,
+      "benchmark_nav_cny": 1044052.91,
+      "strategy_cash_position_pct": 99.25,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-22",
+      "strategy_nav_cny": 1001874.6,
+      "benchmark_nav_cny": 1046260.55,
+      "strategy_cash_position_pct": 99.36,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-23",
+      "strategy_nav_cny": 1001987.72,
+      "benchmark_nav_cny": 1053311.91,
+      "strategy_cash_position_pct": 99.25,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-24",
+      "strategy_nav_cny": 1002067.45,
+      "benchmark_nav_cny": 1050615.13,
+      "strategy_cash_position_pct": 99.36,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-25",
+      "strategy_nav_cny": 1002119.39,
+      "benchmark_nav_cny": 1045990.55,
+      "strategy_cash_position_pct": 99.37,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-28",
+      "strategy_nav_cny": 1002208.22,
+      "benchmark_nav_cny": 1045922.05,
+      "strategy_cash_position_pct": 99.43,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-29",
+      "strategy_nav_cny": 1002290.6,
+      "benchmark_nav_cny": 1044221.4,
+      "strategy_cash_position_pct": 99.45,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-30",
+      "strategy_nav_cny": 1002366.82,
+      "benchmark_nav_cny": 1044234.85,
+      "strategy_cash_position_pct": 99.45,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-07-31",
+      "strategy_nav_cny": 1002386.27,
+      "benchmark_nav_cny": 1035185.32,
+      "strategy_cash_position_pct": 99.52,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-01",
+      "strategy_nav_cny": 1002417.11,
+      "benchmark_nav_cny": 1028017.44,
+      "strategy_cash_position_pct": 99.45,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-04",
+      "strategy_nav_cny": 1002551.91,
+      "benchmark_nav_cny": 1038086.06,
+      "strategy_cash_position_pct": 99.65,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-05",
+      "strategy_nav_cny": 1002659.44,
+      "benchmark_nav_cny": 1043563.81,
+      "strategy_cash_position_pct": 99.45,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-06",
+      "strategy_nav_cny": 1002770.14,
+      "benchmark_nav_cny": 1047393.19,
+      "strategy_cash_position_pct": 99.57,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-07",
+      "strategy_nav_cny": 1002855.12,
+      "benchmark_nav_cny": 1050043.99,
+      "strategy_cash_position_pct": 99.55,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-08",
+      "strategy_nav_cny": 1002933.6,
+      "benchmark_nav_cny": 1050577.41,
+      "strategy_cash_position_pct": 99.4,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-11",
+      "strategy_nav_cny": 1003010.33,
+      "benchmark_nav_cny": 1048124.85,
+      "strategy_cash_position_pct": 99.3,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-12",
+      "strategy_nav_cny": 1003119.43,
+      "benchmark_nav_cny": 1050349.94,
+      "strategy_cash_position_pct": 99.38,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-13",
+      "strategy_nav_cny": 1003233.51,
+      "benchmark_nav_cny": 1056389.26,
+      "strategy_cash_position_pct": 99.41,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-14",
+      "strategy_nav_cny": 1003309.99,
+      "benchmark_nav_cny": 1055424.26,
+      "strategy_cash_position_pct": 99.46,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-15",
+      "strategy_nav_cny": 1003389.28,
+      "benchmark_nav_cny": 1054745.38,
+      "strategy_cash_position_pct": 99.45,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-18",
+      "strategy_nav_cny": 1003496.97,
+      "benchmark_nav_cny": 1059009.07,
+      "strategy_cash_position_pct": 99.53,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-19",
+      "strategy_nav_cny": 1003539.26,
+      "benchmark_nav_cny": 1054220.84,
+      "strategy_cash_position_pct": 99.45,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-20",
+      "strategy_nav_cny": 1003636.38,
+      "benchmark_nav_cny": 1056705.15,
+      "strategy_cash_position_pct": 99.57,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-21",
+      "strategy_nav_cny": 1003725.89,
+      "benchmark_nav_cny": 1057370.3,
+      "strategy_cash_position_pct": 99.7,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-22",
+      "strategy_nav_cny": 1003847.66,
+      "benchmark_nav_cny": 1068580.27,
+      "strategy_cash_position_pct": 99.62,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-25",
+      "strategy_nav_cny": 1003994.06,
+      "benchmark_nav_cny": 1081136.22,
+      "strategy_cash_position_pct": 99.55,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-26",
+      "strategy_nav_cny": 1004063.99,
+      "benchmark_nav_cny": 1079758.79,
+      "strategy_cash_position_pct": 99.4,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-27",
+      "strategy_nav_cny": 1004083.64,
+      "benchmark_nav_cny": 1070421.5,
+      "strategy_cash_position_pct": 99.4,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-28",
+      "strategy_nav_cny": 1004211.8,
+      "benchmark_nav_cny": 1076106.75,
+      "strategy_cash_position_pct": 99.4,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-08-29",
+      "strategy_nav_cny": 1004302.99,
+      "benchmark_nav_cny": 1076297.96,
+      "strategy_cash_position_pct": 99.6,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-01",
+      "strategy_nav_cny": 1004407.48,
+      "benchmark_nav_cny": 1083658.7,
+      "strategy_cash_position_pct": 99.62,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-02",
+      "strategy_nav_cny": 1004471.07,
+      "benchmark_nav_cny": 1080575.52,
+      "strategy_cash_position_pct": 99.65,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-03",
+      "strategy_nav_cny": 1004543.5,
+      "benchmark_nav_cny": 1079756.68,
+      "strategy_cash_position_pct": 99.57,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-04",
+      "strategy_nav_cny": 1004555.05,
+      "benchmark_nav_cny": 1073562.82,
+      "strategy_cash_position_pct": 99.63,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-05",
+      "strategy_nav_cny": 1004698.18,
+      "benchmark_nav_cny": 1082805.72,
+      "strategy_cash_position_pct": 99.52,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-08",
+      "strategy_nav_cny": 1004796.27,
+      "benchmark_nav_cny": 1088740.24,
+      "strategy_cash_position_pct": 99.55,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-09",
+      "strategy_nav_cny": 1004880.68,
+      "benchmark_nav_cny": 1092032.06,
+      "strategy_cash_position_pct": 99.4,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-10",
+      "strategy_nav_cny": 1004971.54,
+      "benchmark_nav_cny": 1093989.74,
+      "strategy_cash_position_pct": 99.43,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-11",
+      "strategy_nav_cny": 1005115.12,
+      "benchmark_nav_cny": 1102032.24,
+      "strategy_cash_position_pct": 99.47,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-12",
+      "strategy_nav_cny": 1005207.48,
+      "benchmark_nav_cny": 1103771.44,
+      "strategy_cash_position_pct": 99.4,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-15",
+      "strategy_nav_cny": 1005301.83,
+      "benchmark_nav_cny": 1105235.85,
+      "strategy_cash_position_pct": 99.42,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-16",
+      "strategy_nav_cny": 1005389.9,
+      "benchmark_nav_cny": 1106432.83,
+      "strategy_cash_position_pct": 99.47,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-17",
+      "strategy_nav_cny": 1005493.04,
+      "benchmark_nav_cny": 1112507.61,
+      "strategy_cash_position_pct": 99.42,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-18",
+      "strategy_nav_cny": 1005532.21,
+      "benchmark_nav_cny": 1103826.48,
+      "strategy_cash_position_pct": 99.48,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-19",
+      "strategy_nav_cny": 1005624.91,
+      "benchmark_nav_cny": 1107498.22,
+      "strategy_cash_position_pct": 99.39,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-22",
+      "strategy_nav_cny": 1005741.5,
+      "benchmark_nav_cny": 1111144.46,
+      "strategy_cash_position_pct": 99.5,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-23",
+      "strategy_nav_cny": 1005820.52,
+      "benchmark_nav_cny": 1111758.64,
+      "strategy_cash_position_pct": 99.39,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-24",
+      "strategy_nav_cny": 1005951.68,
+      "benchmark_nav_cny": 1119151.65,
+      "strategy_cash_position_pct": 99.42,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-25",
+      "strategy_nav_cny": 1006042.11,
+      "benchmark_nav_cny": 1118665.46,
+      "strategy_cash_position_pct": 99.43,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-26",
+      "strategy_nav_cny": 1006077.92,
+      "benchmark_nav_cny": 1113095.14,
+      "strategy_cash_position_pct": 99.39,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-29",
+      "strategy_nav_cny": 1006236.5,
+      "benchmark_nav_cny": 1124638.16,
+      "strategy_cash_position_pct": 99.37,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-09-30",
+      "strategy_nav_cny": 1006367.72,
+      "benchmark_nav_cny": 1130590.85,
+      "strategy_cash_position_pct": 99.46,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-01",
+      "strategy_nav_cny": 1006452.19,
+      "benchmark_nav_cny": 1131674.27,
+      "strategy_cash_position_pct": 99.38,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-02",
+      "strategy_nav_cny": 1006535.89,
+      "benchmark_nav_cny": 1132607.21,
+      "strategy_cash_position_pct": 99.35,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-03",
+      "strategy_nav_cny": 1006610.8,
+      "benchmark_nav_cny": 1131647.94,
+      "strategy_cash_position_pct": 99.35,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-06",
+      "strategy_nav_cny": 1006698.07,
+      "benchmark_nav_cny": 1133352.08,
+      "strategy_cash_position_pct": 99.34,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-07",
+      "strategy_nav_cny": 1006771.86,
+      "benchmark_nav_cny": 1132148.27,
+      "strategy_cash_position_pct": 99.35,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-08",
+      "strategy_nav_cny": 1006863.33,
+      "benchmark_nav_cny": 1134755.25,
+      "strategy_cash_position_pct": 99.34,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-09",
+      "strategy_nav_cny": 1007047.21,
+      "benchmark_nav_cny": 1149432.65,
+      "strategy_cash_position_pct": 99.33,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-10",
+      "strategy_nav_cny": 1006976.5,
+      "benchmark_nav_cny": 1128416.59,
+      "strategy_cash_position_pct": 99.47,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-13",
+      "strategy_nav_cny": 1007086.42,
+      "benchmark_nav_cny": 1137392.94,
+      "strategy_cash_position_pct": 99.4,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-14",
+      "strategy_nav_cny": 1007179.88,
+      "benchmark_nav_cny": 1134210.71,
+      "strategy_cash_position_pct": 99.33,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-15",
+      "strategy_nav_cny": 1007338.6,
+      "benchmark_nav_cny": 1148814.02,
+      "strategy_cash_position_pct": 99.73,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-16",
+      "strategy_nav_cny": 1007439.05,
+      "benchmark_nav_cny": 1151458.34,
+      "strategy_cash_position_pct": 99.33,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-17",
+      "strategy_nav_cny": 1007490.78,
+      "benchmark_nav_cny": 1147120.59,
+      "strategy_cash_position_pct": 99.43,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-20",
+      "strategy_nav_cny": 1007553.64,
+      "benchmark_nav_cny": 1150133.68,
+      "strategy_cash_position_pct": 99.63,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-21",
+      "strategy_nav_cny": 1007653.31,
+      "benchmark_nav_cny": 1160723.84,
+      "strategy_cash_position_pct": 99.63,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-22",
+      "strategy_nav_cny": 1007671.3,
+      "benchmark_nav_cny": 1146849.24,
+      "strategy_cash_position_pct": 99.49,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-23",
+      "strategy_nav_cny": 1007761.66,
+      "benchmark_nav_cny": 1149492.98,
+      "strategy_cash_position_pct": 99.48,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-24",
+      "strategy_nav_cny": 1007856.02,
+      "benchmark_nav_cny": 1155785.23,
+      "strategy_cash_position_pct": 99.45,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-27",
+      "strategy_nav_cny": 1007963.74,
+      "benchmark_nav_cny": 1165340.16,
+      "strategy_cash_position_pct": 99.44,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-28",
+      "strategy_nav_cny": 1007986.97,
+      "benchmark_nav_cny": 1155233.94,
+      "strategy_cash_position_pct": 99.48,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-29",
+      "strategy_nav_cny": 1008104.65,
+      "benchmark_nav_cny": 1162836.92,
+      "strategy_cash_position_pct": 99.59,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-30",
+      "strategy_nav_cny": 1008157.76,
+      "benchmark_nav_cny": 1154697.66,
+      "strategy_cash_position_pct": 99.59,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-10-31",
+      "strategy_nav_cny": 1008220.09,
+      "benchmark_nav_cny": 1151594.47,
+      "strategy_cash_position_pct": 99.62,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-03",
+      "strategy_nav_cny": 1008323.9,
+      "benchmark_nav_cny": 1156036.51,
+      "strategy_cash_position_pct": 99.59,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-04",
+      "strategy_nav_cny": 1008386.3,
+      "benchmark_nav_cny": 1147652.98,
+      "strategy_cash_position_pct": 99.63,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-05",
+      "strategy_nav_cny": 1008475.99,
+      "benchmark_nav_cny": 1147905.27,
+      "strategy_cash_position_pct": 99.75,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-06",
+      "strategy_nav_cny": 1008537.17,
+      "benchmark_nav_cny": 1153118.31,
+      "strategy_cash_position_pct": 99.63,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-07",
+      "strategy_nav_cny": 1008609.49,
+      "benchmark_nav_cny": 1148788.3,
+      "strategy_cash_position_pct": 99.7,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-10",
+      "strategy_nav_cny": 1008707.1,
+      "benchmark_nav_cny": 1162536.94,
+      "strategy_cash_position_pct": 99.7,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-11",
+      "strategy_nav_cny": 1008777.6,
+      "benchmark_nav_cny": 1162105.43,
+      "strategy_cash_position_pct": 99.63,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-12",
+      "strategy_nav_cny": 1008863.09,
+      "benchmark_nav_cny": 1162137.45,
+      "strategy_cash_position_pct": 99.45,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-13",
+      "strategy_nav_cny": 1008960.42,
+      "benchmark_nav_cny": 1165580.67,
+      "strategy_cash_position_pct": 99.48,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-14",
+      "strategy_nav_cny": 1008997.33,
+      "benchmark_nav_cny": 1153210.68,
+      "strategy_cash_position_pct": 99.58,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-17",
+      "strategy_nav_cny": 1009035.25,
+      "benchmark_nav_cny": 1142306.88,
+      "strategy_cash_position_pct": 99.73,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-18",
+      "strategy_nav_cny": 1009087.68,
+      "benchmark_nav_cny": 1130735.22,
+      "strategy_cash_position_pct": 99.85,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-19",
+      "strategy_nav_cny": 1009170.02,
+      "benchmark_nav_cny": 1137921.89,
+      "strategy_cash_position_pct": 99.85,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-20",
+      "strategy_nav_cny": 1009256.5,
+      "benchmark_nav_cny": 1130319.29,
+      "strategy_cash_position_pct": 99.8,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-21",
+      "strategy_nav_cny": 1009317.18,
+      "benchmark_nav_cny": 1116531.8,
+      "strategy_cash_position_pct": 99.78,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-24",
+      "strategy_nav_cny": 1009389.41,
+      "benchmark_nav_cny": 1124765.36,
+      "strategy_cash_position_pct": 100.0,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-25",
+      "strategy_nav_cny": 1009469.52,
+      "benchmark_nav_cny": 1135821.16,
+      "strategy_cash_position_pct": 100.0,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-26",
+      "strategy_nav_cny": 1009549.64,
+      "benchmark_nav_cny": 1138257.33,
+      "strategy_cash_position_pct": 99.93,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-27",
+      "strategy_nav_cny": 1009631.73,
+      "benchmark_nav_cny": 1138267.31,
+      "strategy_cash_position_pct": 99.82,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-11-28",
+      "strategy_nav_cny": 1009723.32,
+      "benchmark_nav_cny": 1141970.78,
+      "strategy_cash_position_pct": 99.82,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-01",
+      "strategy_nav_cny": 1009808.09,
+      "benchmark_nav_cny": 1149937.47,
+      "strategy_cash_position_pct": 99.82,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-02",
+      "strategy_nav_cny": 1009893.28,
+      "benchmark_nav_cny": 1148664.12,
+      "strategy_cash_position_pct": 99.82,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-03",
+      "strategy_nav_cny": 1009972.0,
+      "benchmark_nav_cny": 1143615.0,
+      "strategy_cash_position_pct": 99.82,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-04",
+      "strategy_nav_cny": 1010050.34,
+      "benchmark_nav_cny": 1144660.11,
+      "strategy_cash_position_pct": 99.82,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-05",
+      "strategy_nav_cny": 1010140.05,
+      "benchmark_nav_cny": 1150341.07,
+      "strategy_cash_position_pct": 99.82,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-08",
+      "strategy_nav_cny": 1010216.25,
+      "benchmark_nav_cny": 1151303.7,
+      "strategy_cash_position_pct": 99.67,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-09",
+      "strategy_nav_cny": 1010284.46,
+      "benchmark_nav_cny": 1145241.77,
+      "strategy_cash_position_pct": 99.67,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-10",
+      "strategy_nav_cny": 1010369.43,
+      "benchmark_nav_cny": 1146501.67,
+      "strategy_cash_position_pct": 99.67,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-11",
+      "strategy_nav_cny": 1010435.19,
+      "benchmark_nav_cny": 1142000.32,
+      "strategy_cash_position_pct": 99.67,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-12",
+      "strategy_nav_cny": 1010513.8,
+      "benchmark_nav_cny": 1143591.48,
+      "strategy_cash_position_pct": 99.67,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-15",
+      "strategy_nav_cny": 1010589.96,
+      "benchmark_nav_cny": 1141536.23,
+      "strategy_cash_position_pct": 99.62,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-16",
+      "strategy_nav_cny": 1010635.32,
+      "benchmark_nav_cny": 1131874.45,
+      "strategy_cash_position_pct": 99.73,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-17",
+      "strategy_nav_cny": 1010752.66,
+      "benchmark_nav_cny": 1136956.79,
+      "strategy_cash_position_pct": 99.87,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-18",
+      "strategy_nav_cny": 1010832.15,
+      "benchmark_nav_cny": 1140254.47,
+      "strategy_cash_position_pct": 99.72,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-19",
+      "strategy_nav_cny": 1010923.05,
+      "benchmark_nav_cny": 1145438.96,
+      "strategy_cash_position_pct": 99.77,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-22",
+      "strategy_nav_cny": 1011030.18,
+      "benchmark_nav_cny": 1153189.51,
+      "strategy_cash_position_pct": 99.67,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-23",
+      "strategy_nav_cny": 1011129.44,
+      "benchmark_nav_cny": 1158352.87,
+      "strategy_cash_position_pct": 99.67,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-24",
+      "strategy_nav_cny": 1011217.48,
+      "benchmark_nav_cny": 1160391.02,
+      "strategy_cash_position_pct": 99.67,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-25",
+      "strategy_nav_cny": 1011296.46,
+      "benchmark_nav_cny": 1159940.74,
+      "strategy_cash_position_pct": 99.67,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-26",
+      "strategy_nav_cny": 1011384.49,
+      "benchmark_nav_cny": 1161781.5,
+      "strategy_cash_position_pct": 99.67,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-29",
+      "strategy_nav_cny": 1011451.45,
+      "benchmark_nav_cny": 1157907.74,
+      "strategy_cash_position_pct": 99.6,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-30",
+      "strategy_nav_cny": 1011499.4,
+      "benchmark_nav_cny": 1154146.02,
+      "strategy_cash_position_pct": 99.6,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2025-12-31",
+      "strategy_nav_cny": 1011553.61,
+      "benchmark_nav_cny": 1147869.46,
+      "strategy_cash_position_pct": 99.6,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-02",
+      "strategy_nav_cny": 1011631.63,
+      "benchmark_nav_cny": 1147421.79,
+      "strategy_cash_position_pct": 99.85,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-05",
+      "strategy_nav_cny": 1011739.52,
+      "benchmark_nav_cny": 1164968.91,
+      "strategy_cash_position_pct": 99.84,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-06",
+      "strategy_nav_cny": 1011842.72,
+      "benchmark_nav_cny": 1176459.07,
+      "strategy_cash_position_pct": 99.72,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-07",
+      "strategy_nav_cny": 1011908.64,
+      "benchmark_nav_cny": 1172298.57,
+      "strategy_cash_position_pct": 99.54,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-08",
+      "strategy_nav_cny": 1011957.09,
+      "benchmark_nav_cny": 1164590.56,
+      "strategy_cash_position_pct": 99.55,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-09",
+      "strategy_nav_cny": 1012061.39,
+      "benchmark_nav_cny": 1170810.91,
+      "strategy_cash_position_pct": 99.54,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-12",
+      "strategy_nav_cny": 1012188.41,
+      "benchmark_nav_cny": 1183097.45,
+      "strategy_cash_position_pct": 99.54,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-13",
+      "strategy_nav_cny": 1012261.47,
+      "benchmark_nav_cny": 1181637.02,
+      "strategy_cash_position_pct": 99.54,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-14",
+      "strategy_nav_cny": 1012332.21,
+      "benchmark_nav_cny": 1180223.18,
+      "strategy_cash_position_pct": 99.54,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-15",
+      "strategy_nav_cny": 1012407.86,
+      "benchmark_nav_cny": 1178991.69,
+      "strategy_cash_position_pct": 99.54,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-16",
+      "strategy_nav_cny": 1012477.91,
+      "benchmark_nav_cny": 1175403.37,
+      "strategy_cash_position_pct": 99.54,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-19",
+      "strategy_nav_cny": 1012569.22,
+      "benchmark_nav_cny": 1177331.37,
+      "strategy_cash_position_pct": 99.64,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-20",
+      "strategy_nav_cny": 1012654.64,
+      "benchmark_nav_cny": 1175422.81,
+      "strategy_cash_position_pct": 99.67,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-21",
+      "strategy_nav_cny": 1012776.92,
+      "benchmark_nav_cny": 1186363.57,
+      "strategy_cash_position_pct": 99.64,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-22",
+      "strategy_nav_cny": 1012853.77,
+      "benchmark_nav_cny": 1187832.29,
+      "strategy_cash_position_pct": 99.67,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-23",
+      "strategy_nav_cny": 1012960.4,
+      "benchmark_nav_cny": 1194127.07,
+      "strategy_cash_position_pct": 99.54,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-26",
+      "strategy_nav_cny": 1013086.8,
+      "benchmark_nav_cny": 1203681.32,
+      "strategy_cash_position_pct": 99.72,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-27",
+      "strategy_nav_cny": 1013179.22,
+      "benchmark_nav_cny": 1205403.9,
+      "strategy_cash_position_pct": 99.7,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-28",
+      "strategy_nav_cny": 1013324.02,
+      "benchmark_nav_cny": 1219505.63,
+      "strategy_cash_position_pct": 99.69,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-29",
+      "strategy_nav_cny": 1013472.12,
+      "benchmark_nav_cny": 1237522.48,
+      "strategy_cash_position_pct": 99.72,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-01-30",
+      "strategy_nav_cny": 1013451.71,
+      "benchmark_nav_cny": 1209708.4,
+      "strategy_cash_position_pct": 99.48,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-02",
+      "strategy_nav_cny": 1013318.24,
+      "benchmark_nav_cny": 1164133.63,
+      "strategy_cash_position_pct": 99.69,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-03",
+      "strategy_nav_cny": 1013470.68,
+      "benchmark_nav_cny": 1179810.83,
+      "strategy_cash_position_pct": 99.68,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-04",
+      "strategy_nav_cny": 1013599.4,
+      "benchmark_nav_cny": 1189578.6,
+      "strategy_cash_position_pct": 99.77,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-05",
+      "strategy_nav_cny": 1013641.57,
+      "benchmark_nav_cny": 1178817.36,
+      "strategy_cash_position_pct": 99.81,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-06",
+      "strategy_nav_cny": 1013706.78,
+      "benchmark_nav_cny": 1176195.49,
+      "strategy_cash_position_pct": 99.78,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-09",
+      "strategy_nav_cny": 1013822.06,
+      "benchmark_nav_cny": 1191462.21,
+      "strategy_cash_position_pct": 99.77,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-10",
+      "strategy_nav_cny": 1013905.26,
+      "benchmark_nav_cny": 1191827.86,
+      "strategy_cash_position_pct": 99.65,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-11",
+      "strategy_nav_cny": 1013990.96,
+      "benchmark_nav_cny": 1194569.09,
+      "strategy_cash_position_pct": 99.62,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-12",
+      "strategy_nav_cny": 1014066.26,
+      "benchmark_nav_cny": 1186922.47,
+      "strategy_cash_position_pct": 99.65,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-13",
+      "strategy_nav_cny": 1014105.34,
+      "benchmark_nav_cny": 1176160.72,
+      "strategy_cash_position_pct": 99.63,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-17",
+      "strategy_nav_cny": 1014185.52,
+      "benchmark_nav_cny": 1175927.49,
+      "strategy_cash_position_pct": 99.93,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-18",
+      "strategy_nav_cny": 1014265.96,
+      "benchmark_nav_cny": 1177616.57,
+      "strategy_cash_position_pct": 99.93,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-19",
+      "strategy_nav_cny": 1014346.39,
+      "benchmark_nav_cny": 1176743.81,
+      "strategy_cash_position_pct": 99.93,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-20",
+      "strategy_nav_cny": 1014426.84,
+      "benchmark_nav_cny": 1178752.66,
+      "strategy_cash_position_pct": 100.0,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-23",
+      "strategy_nav_cny": 1014507.35,
+      "benchmark_nav_cny": 1175968.86,
+      "strategy_cash_position_pct": 100.0,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-24",
+      "strategy_nav_cny": 1014587.86,
+      "benchmark_nav_cny": 1189968.46,
+      "strategy_cash_position_pct": 100.0,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-25",
+      "strategy_nav_cny": 1014668.38,
+      "benchmark_nav_cny": 1194258.69,
+      "strategy_cash_position_pct": 99.7,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-26",
+      "strategy_nav_cny": 1014743.75,
+      "benchmark_nav_cny": 1187469.34,
+      "strategy_cash_position_pct": 99.6,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-02-27",
+      "strategy_nav_cny": 1014817.07,
+      "benchmark_nav_cny": 1186253.89,
+      "strategy_cash_position_pct": 99.68,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-02",
+      "strategy_nav_cny": 1014940.47,
+      "benchmark_nav_cny": 1200251.27,
+      "strategy_cash_position_pct": 99.6,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-03",
+      "strategy_nav_cny": 1014982.41,
+      "benchmark_nav_cny": 1188057.79,
+      "strategy_cash_position_pct": 99.6,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-04",
+      "strategy_nav_cny": 1015033.61,
+      "benchmark_nav_cny": 1177201.71,
+      "strategy_cash_position_pct": 99.6,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-05",
+      "strategy_nav_cny": 1015124.5,
+      "benchmark_nav_cny": 1178679.25,
+      "strategy_cash_position_pct": 99.75,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-06",
+      "strategy_nav_cny": 1015186.8,
+      "benchmark_nav_cny": 1177500.36,
+      "strategy_cash_position_pct": 99.75,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-09",
+      "strategy_nav_cny": 1015281.24,
+      "benchmark_nav_cny": 1177071.62,
+      "strategy_cash_position_pct": 99.72,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-10",
+      "strategy_nav_cny": 1015370.09,
+      "benchmark_nav_cny": 1184438.6,
+      "strategy_cash_position_pct": 99.72,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-11",
+      "strategy_nav_cny": 1015459.86,
+      "benchmark_nav_cny": 1189459.56,
+      "strategy_cash_position_pct": 99.72,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-12",
+      "strategy_nav_cny": 1015520.85,
+      "benchmark_nav_cny": 1183273.96,
+      "strategy_cash_position_pct": 99.57,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-13",
+      "strategy_nav_cny": 1015578.7,
+      "benchmark_nav_cny": 1176453.43,
+      "strategy_cash_position_pct": 99.67,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-16",
+      "strategy_nav_cny": 1015655.14,
+      "benchmark_nav_cny": 1176900.77,
+      "strategy_cash_position_pct": 99.74,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-17",
+      "strategy_nav_cny": 1015725.79,
+      "benchmark_nav_cny": 1175895.24,
+      "strategy_cash_position_pct": 99.74,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-18",
+      "strategy_nav_cny": 1015812.2,
+      "benchmark_nav_cny": 1173210.95,
+      "strategy_cash_position_pct": 99.89,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-19",
+      "strategy_nav_cny": 1015880.97,
+      "benchmark_nav_cny": 1150714.31,
+      "strategy_cash_position_pct": 99.89,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-20",
+      "strategy_nav_cny": 1015949.59,
+      "benchmark_nav_cny": 1136595.87,
+      "strategy_cash_position_pct": 99.89,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-23",
+      "strategy_nav_cny": 1015996.38,
+      "benchmark_nav_cny": 1089009.15,
+      "strategy_cash_position_pct": 99.9,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-24",
+      "strategy_nav_cny": 1016097.5,
+      "benchmark_nav_cny": 1110918.77,
+      "strategy_cash_position_pct": 100.0,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-25",
+      "strategy_nav_cny": 1016178.15,
+      "benchmark_nav_cny": 1129766.78,
+      "strategy_cash_position_pct": 100.0,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-26",
+      "strategy_nav_cny": 1016258.8,
+      "benchmark_nav_cny": 1111387.47,
+      "strategy_cash_position_pct": 99.97,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-27",
+      "strategy_nav_cny": 1016339.34,
+      "benchmark_nav_cny": 1108722.24,
+      "strategy_cash_position_pct": 100.0,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-30",
+      "strategy_nav_cny": 1016420.0,
+      "benchmark_nav_cny": 1110071.25,
+      "strategy_cash_position_pct": 100.0,
+      "benchmark_cash_position_pct": 0.0
+    },
+    {
+      "date": "2026-03-31",
+      "strategy_nav_cny": 1016500.67,
+      "benchmark_nav_cny": 1109198.3,
+      "strategy_cash_position_pct": 99.93,
+      "benchmark_cash_position_pct": 0.0
+    }
+  ]
+}

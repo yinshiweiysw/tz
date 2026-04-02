@@ -1,0 +1,339 @@
+{
+  "account_id": "wenge",
+  "as_of": "2026-04-01",
+  "snapshot_date": "2026-04-01",
+  "currency": "CNY",
+  "source_files": {
+    "latest_snapshot": "/Users/yinshiwei/codex/tz/portfolio_users/wenge/latest.json",
+    "quant_metrics_engine": "/Users/yinshiwei/codex/tz/portfolio_users/wenge/data/quant_metrics_engine.json"
+  },
+  "methodology": {
+    "attribution_model": "Brinson-Fachler",
+    "portfolio_return_source": "latest.json holding_pnl / estimated_cost (cross-sectional snapshot)",
+    "benchmark_return_source": "market_lake adj_close trailing 60d",
+    "notes": [
+      "Allocation Effect = (Wp - Wb) * (Rb - Rb_total)",
+      "Selection Effect = Wb * (Rp - Rb)",
+      "Interaction Effect = (Wp - Wb) * (Rp - Rb)"
+    ]
+  },
+  "portfolio_summary": {
+    "active_position_count": 4,
+    "market_value_cny": 75212,
+    "snapshot_date": "2026-04-01",
+    "portfolio_annualized_volatility_pct": 36.962133
+  },
+  "brinson_summary": {
+    "benchmark_total_return_pct": -4.13579,
+    "total_allocation_effect_pct": 1.368755,
+    "total_selection_effect_pct": 4.626787,
+    "total_interaction_effect_pct": -0.223095,
+    "total_active_effect_pct": 5.772447
+  },
+  "bucket_attribution": [
+    {
+      "bucket_key": "A_CORE",
+      "bucket_label": "A股核心",
+      "benchmark_symbol": "007339",
+      "portfolio_weight_pct": 100,
+      "benchmark_weight_pct": 30,
+      "weight_gap_pct": 70,
+      "portfolio_return_pct": 1.6367,
+      "benchmark_return_pct": -2.767,
+      "allocation_effect_pct": 0.958128,
+      "selection_effect_pct": 1.321108,
+      "interaction_effect_pct": 3.082584,
+      "active_contribution_pct": 5.36182
+    },
+    {
+      "bucket_key": "GLB_MOM",
+      "bucket_label": "全球动量",
+      "benchmark_symbol": "QQQ",
+      "portfolio_weight_pct": 0,
+      "benchmark_weight_pct": 20,
+      "weight_gap_pct": -20,
+      "portfolio_return_pct": null,
+      "benchmark_return_pct": -9.0062,
+      "allocation_effect_pct": 0.974083,
+      "selection_effect_pct": 1.801241,
+      "interaction_effect_pct": -1.801241,
+      "active_contribution_pct": 0.974083
+    },
+    {
+      "bucket_key": "INCOME",
+      "bucket_label": "红利收息",
+      "benchmark_symbol": "021482",
+      "portfolio_weight_pct": 0,
+      "benchmark_weight_pct": 20,
+      "weight_gap_pct": -20,
+      "portfolio_return_pct": null,
+      "benchmark_return_pct": 1.7794,
+      "allocation_effect_pct": -1.183036,
+      "selection_effect_pct": -0.355878,
+      "interaction_effect_pct": 0.355878,
+      "active_contribution_pct": -1.183036
+    },
+    {
+      "bucket_key": "HEDGE",
+      "bucket_label": "黄金避险",
+      "benchmark_symbol": "022502",
+      "portfolio_weight_pct": 0,
+      "benchmark_weight_pct": 20,
+      "weight_gap_pct": -20,
+      "portfolio_return_pct": null,
+      "benchmark_return_pct": 0.2178,
+      "allocation_effect_pct": -0.870709,
+      "selection_effect_pct": -0.043551,
+      "interaction_effect_pct": 0.043551,
+      "active_contribution_pct": -0.870709
+    },
+    {
+      "bucket_key": "TACTICAL",
+      "bucket_label": "战术刺客",
+      "benchmark_symbol": "013172",
+      "portfolio_weight_pct": 0,
+      "benchmark_weight_pct": 10,
+      "weight_gap_pct": -10,
+      "portfolio_return_pct": null,
+      "benchmark_return_pct": -19.0387,
+      "allocation_effect_pct": 1.490289,
+      "selection_effect_pct": 1.903868,
+      "interaction_effect_pct": -1.903868,
+      "active_contribution_pct": 1.490289
+    },
+    {
+      "bucket_key": "CASH",
+      "bucket_label": "现金防线",
+      "benchmark_symbol": "CASH_CNY",
+      "portfolio_weight_pct": 0,
+      "benchmark_weight_pct": 0,
+      "weight_gap_pct": 0,
+      "portfolio_return_pct": null,
+      "benchmark_return_pct": 0.4773,
+      "allocation_effect_pct": 0,
+      "selection_effect_pct": 0,
+      "interaction_effect_pct": 0,
+      "active_contribution_pct": 0
+    }
+  ],
+  "allocation_ranking": {
+    "laggards": [
+      {
+        "bucket_key": "INCOME",
+        "bucket_label": "红利收息",
+        "benchmark_symbol": "021482",
+        "portfolio_weight_pct": 0,
+        "benchmark_weight_pct": 20,
+        "weight_gap_pct": -20,
+        "portfolio_return_pct": null,
+        "benchmark_return_pct": 1.7794,
+        "allocation_effect_pct": -1.183036,
+        "selection_effect_pct": -0.355878,
+        "interaction_effect_pct": 0.355878,
+        "active_contribution_pct": -1.183036
+      },
+      {
+        "bucket_key": "HEDGE",
+        "bucket_label": "黄金避险",
+        "benchmark_symbol": "022502",
+        "portfolio_weight_pct": 0,
+        "benchmark_weight_pct": 20,
+        "weight_gap_pct": -20,
+        "portfolio_return_pct": null,
+        "benchmark_return_pct": 0.2178,
+        "allocation_effect_pct": -0.870709,
+        "selection_effect_pct": -0.043551,
+        "interaction_effect_pct": 0.043551,
+        "active_contribution_pct": -0.870709
+      },
+      {
+        "bucket_key": "CASH",
+        "bucket_label": "现金防线",
+        "benchmark_symbol": "CASH_CNY",
+        "portfolio_weight_pct": 0,
+        "benchmark_weight_pct": 0,
+        "weight_gap_pct": 0,
+        "portfolio_return_pct": null,
+        "benchmark_return_pct": 0.4773,
+        "allocation_effect_pct": 0,
+        "selection_effect_pct": 0,
+        "interaction_effect_pct": 0,
+        "active_contribution_pct": 0
+      }
+    ],
+    "leaders": [
+      {
+        "bucket_key": "TACTICAL",
+        "bucket_label": "战术刺客",
+        "benchmark_symbol": "013172",
+        "portfolio_weight_pct": 0,
+        "benchmark_weight_pct": 10,
+        "weight_gap_pct": -10,
+        "portfolio_return_pct": null,
+        "benchmark_return_pct": -19.0387,
+        "allocation_effect_pct": 1.490289,
+        "selection_effect_pct": 1.903868,
+        "interaction_effect_pct": -1.903868,
+        "active_contribution_pct": 1.490289
+      },
+      {
+        "bucket_key": "GLB_MOM",
+        "bucket_label": "全球动量",
+        "benchmark_symbol": "QQQ",
+        "portfolio_weight_pct": 0,
+        "benchmark_weight_pct": 20,
+        "weight_gap_pct": -20,
+        "portfolio_return_pct": null,
+        "benchmark_return_pct": -9.0062,
+        "allocation_effect_pct": 0.974083,
+        "selection_effect_pct": 1.801241,
+        "interaction_effect_pct": -1.801241,
+        "active_contribution_pct": 0.974083
+      },
+      {
+        "bucket_key": "A_CORE",
+        "bucket_label": "A股核心",
+        "benchmark_symbol": "007339",
+        "portfolio_weight_pct": 100,
+        "benchmark_weight_pct": 30,
+        "weight_gap_pct": 70,
+        "portfolio_return_pct": 1.6367,
+        "benchmark_return_pct": -2.767,
+        "allocation_effect_pct": 0.958128,
+        "selection_effect_pct": 1.321108,
+        "interaction_effect_pct": 3.082584,
+        "active_contribution_pct": 5.36182
+      }
+    ]
+  },
+  "selection_ranking": {
+    "champions": [
+      {
+        "bucket_key": "A_CORE",
+        "bucket_label": "A股核心",
+        "benchmark_symbol": "007339",
+        "portfolio_weight_pct": 100,
+        "benchmark_weight_pct": 30,
+        "weight_gap_pct": 70,
+        "portfolio_return_pct": 1.6367,
+        "benchmark_return_pct": -2.767,
+        "allocation_effect_pct": 0.958128,
+        "selection_effect_pct": 1.321108,
+        "interaction_effect_pct": 3.082584,
+        "active_contribution_pct": 5.36182
+      }
+    ],
+    "laggards": [],
+    "invested_champions": [
+      {
+        "bucket_key": "A_CORE",
+        "bucket_label": "A股核心",
+        "benchmark_symbol": "007339",
+        "portfolio_weight_pct": 100,
+        "benchmark_weight_pct": 30,
+        "weight_gap_pct": 70,
+        "portfolio_return_pct": 1.6367,
+        "benchmark_return_pct": -2.767,
+        "allocation_effect_pct": 0.958128,
+        "selection_effect_pct": 1.321108,
+        "interaction_effect_pct": 3.082584,
+        "active_contribution_pct": 5.36182
+      }
+    ],
+    "invested_laggards": [],
+    "unheld_opportunity_costs": [
+      {
+        "bucket_key": "INCOME",
+        "bucket_label": "红利收息",
+        "benchmark_symbol": "021482",
+        "portfolio_weight_pct": 0,
+        "benchmark_weight_pct": 20,
+        "weight_gap_pct": -20,
+        "portfolio_return_pct": null,
+        "benchmark_return_pct": 1.7794,
+        "allocation_effect_pct": -1.183036,
+        "selection_effect_pct": -0.355878,
+        "interaction_effect_pct": 0.355878,
+        "active_contribution_pct": -1.183036
+      },
+      {
+        "bucket_key": "HEDGE",
+        "bucket_label": "黄金避险",
+        "benchmark_symbol": "022502",
+        "portfolio_weight_pct": 0,
+        "benchmark_weight_pct": 20,
+        "weight_gap_pct": -20,
+        "portfolio_return_pct": null,
+        "benchmark_return_pct": 0.2178,
+        "allocation_effect_pct": -0.870709,
+        "selection_effect_pct": -0.043551,
+        "interaction_effect_pct": 0.043551,
+        "active_contribution_pct": -0.870709
+      }
+    ],
+    "unheld_avoided_drawdowns": [
+      {
+        "bucket_key": "TACTICAL",
+        "bucket_label": "战术刺客",
+        "benchmark_symbol": "013172",
+        "portfolio_weight_pct": 0,
+        "benchmark_weight_pct": 10,
+        "weight_gap_pct": -10,
+        "portfolio_return_pct": null,
+        "benchmark_return_pct": -19.0387,
+        "allocation_effect_pct": 1.490289,
+        "selection_effect_pct": 1.903868,
+        "interaction_effect_pct": -1.903868,
+        "active_contribution_pct": 1.490289
+      },
+      {
+        "bucket_key": "GLB_MOM",
+        "bucket_label": "全球动量",
+        "benchmark_symbol": "QQQ",
+        "portfolio_weight_pct": 0,
+        "benchmark_weight_pct": 20,
+        "weight_gap_pct": -20,
+        "portfolio_return_pct": null,
+        "benchmark_return_pct": -9.0062,
+        "allocation_effect_pct": 0.974083,
+        "selection_effect_pct": 1.801241,
+        "interaction_effect_pct": -1.801241,
+        "active_contribution_pct": 0.974083
+      }
+    ]
+  },
+  "leaders": {
+    "allocation_culprit": {
+      "bucket_key": "INCOME",
+      "bucket_label": "红利收息",
+      "allocation_effect_pct": -1.183036,
+      "commentary": "红利收息 的配置超额为 -1.183%，是当前最明显的配置失误来源。"
+    },
+    "selection_champion": {
+      "bucket_key": "A_CORE",
+      "bucket_label": "A股核心",
+      "selection_effect_pct": 1.321108,
+      "commentary": "A股核心 的选股超额为 +1.3211%，是当前已持有仓位中最强的选股/结构质量贡献来源。"
+    },
+    "selection_dragger": null
+  },
+  "markdown_lines": [
+    "- Brinson 摘要：组合 Active Effect +5.7724%，其中 Allocation +1.3688%，Selection +4.6268%，Interaction -0.2231%。",
+    "- 配置超额拖累榜：",
+    "- 红利收息：Allocation -1.183%，当前权重 0%，基准 20%。",
+    "- 黄金避险：Allocation -0.8707%，当前权重 0%，基准 20%。",
+    "- 现金防线：Allocation 0%，当前权重 0%，基准 0%。",
+    "- 选股超额冠军榜（仅统计已持有仓位桶）：",
+    "- A股核心：Selection +1.3211%，组合收益 +1.6367%，基准收益 -2.767%。",
+    "- 选股超额拖油瓶（仅统计已持有仓位桶）：暂无已持有仓位桶明显跑输各自基准。",
+    "- 未持有桶机会成本提示：",
+    "- 红利收息：当前未持有，但其基准收益 +1.7794%，相对形成 -0.3559% 的缺席拖累。此项属于机会成本，不视为真实选股失误。",
+    "- 黄金避险：当前未持有，但其基准收益 +0.2178%，相对形成 -0.0436% 的缺席拖累。此项属于机会成本，不视为真实选股失误。",
+    "- 未持有桶回避效果：",
+    "- 战术刺客：当前未持有，其基准收益 -19.0387%，因此相对获得 +1.9039% 的回避收益。此项属于缺席收益，不视为真实选股 Alpha。",
+    "- 全球动量：当前未持有，其基准收益 -9.0062%，因此相对获得 +1.8012% 的回避收益。此项属于缺席收益，不视为真实选股 Alpha。",
+    "- 配置失误罪魁：红利收息 的配置超额为 -1.183%，是当前最明显的配置失误来源。",
+    "- 选股冠军：A股核心 的选股超额为 +1.3211%，是当前已持有仓位中最强的选股/结构质量贡献来源。",
+    "- 选股拖油瓶：暂无已持有仓位桶形成明显负向选股拖累。"
+  ]
+}

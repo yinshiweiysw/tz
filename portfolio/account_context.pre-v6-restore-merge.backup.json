@@ -1,0 +1,47 @@
+{
+  "template_status": "TODO_FILL_BEFORE_LIVE_USE",
+  "_todo_notes": [
+    "reported_total_assets_range_cny.min / max 请填写今日真实总资产范围；trade_generator.py 会优先用 min 作为组合总资产口径。",
+    "reported_cash_estimate_cny 是现金兜底口径；建议与 latest.json.summary.available_cash_cny 保持一致。",
+    "如果同时有券商场内账户和基金平台场外账户，请分别回填 broker_accounts，便于后续人工核对。"
+  ],
+  "as_of": "2026-03-31",
+  "status": "v6_dual_track_cold_start_template",
+  "reported_cash_estimate_cny": 0.0,
+  "reported_total_assets_range_cny": {
+    "min": 0.0,
+    "max": 0.0
+  },
+  "broker_accounts": [
+    {
+      "account_id": "TODO_BROKER_EXCHANGE_ACCOUNT",
+      "channel": "broker_exchange",
+      "base_currency": "CNY",
+      "cash_cny": 0.0,
+      "market_value_cny": 0.0,
+      "_todo": "填写券商场内账户：可用现金与证券市值。"
+    },
+    {
+      "account_id": "TODO_FUND_OTC_ACCOUNT",
+      "channel": "fund_otc",
+      "base_currency": "CNY",
+      "cash_cny": 0.0,
+      "market_value_cny": 0.0,
+      "_todo": "填写基金平台 / 场外账户：可用现金与基金持仓市值。"
+    }
+  ],
+  "user_reported_profit_snapshot": {
+    "as_of": "2026-03-31",
+    "holding_profit_cny": 0.0,
+    "cumulative_profit_cny": 0.0,
+    "source": "TODO_FILL_FROM_BROKER_OR_PLATFORM"
+  },
+  "notes": [
+    "V6.0 实盘冷启动模板已生成。",
+    "完成真实资产与现金回填后，再运行 generate_signals.py、trade_generator.py 与 scripts/ledger_sync.py。"
+  ],
+  "related_files": {
+    "latest_snapshot": "/Users/yinshiwei/codex/tz/portfolio/latest.json",
+    "previous_account_context_backup": "/Users/yinshiwei/codex/tz/portfolio/account_context.pre-v6-cold-start.backup.json"
+  }
+}

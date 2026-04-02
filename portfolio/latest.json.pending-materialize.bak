@@ -1,0 +1,331 @@
+{
+  "snapshot_date": "2026-03-30",
+  "currency": "CNY",
+  "source_images": [
+    "IMG_0896.PNG",
+    "IMG_0897.PNG",
+    "IMG_0898.PNG",
+    "IMG_0899.PNG",
+    "IMG_0900.PNG",
+    "IMG_0901.PNG",
+    "IMG_0902.PNG",
+    "IMG_0903.PNG"
+  ],
+  "summary": {
+    "basis": "only_current_holdings",
+    "total_fund_assets": 208383.7,
+    "pending_buy_confirm": 54000,
+    "pending_sell_to_arrive": 0,
+    "effective_exposure_after_pending_sell": 208383.7,
+    "yesterday_profit": 2136.12,
+    "holding_profit": -18891.1,
+    "cumulative_profit": -12436.91,
+    "performance_precision": "approximate_after_dialogue_merge_until_platform_refresh",
+    "dialogue_adjusted_since_last_platform_snapshot": true,
+    "last_dialogue_merge_at": "2026-03-30T06:54:19.849Z",
+    "last_user_reported_profit_update_at": "2026-03-27T15:16:00+08:00"
+  },
+  "raw_account_snapshot": {
+    "total_fund_assets": 242451.52,
+    "pending_buy_confirm": 3000,
+    "pending_sell_to_arrive": 76058.86,
+    "effective_exposure_after_pending_sell": 166392.66
+  },
+  "performance_snapshot": {
+    "as_of": "2026-03-25",
+    "current_year_profit": -40538.22,
+    "current_year_return_pct": -5.9,
+    "comparison_benchmark": "沪深300",
+    "comparison_benchmark_return_pct": -3.35,
+    "relative_underperformance_pct": -2.57,
+    "peer_percentile_beaten_pct": 5.17
+  },
+  "positions": [
+    {
+      "name": "博时标普500ETF联接(QDII)C",
+      "amount": 1019.07,
+      "daily_pnl": 13.28,
+      "holding_pnl": 19.07,
+      "holding_pnl_rate_pct": 1.91,
+      "category": "美股指数/QDII",
+      "status": "active"
+    },
+    {
+      "name": "景顺长城宁景6个月持有期混合A",
+      "amount": 15132.56,
+      "daily_pnl": 52.66,
+      "holding_pnl": 132.56,
+      "holding_pnl_rate_pct": 0.88,
+      "category": "偏债混合",
+      "status": "active"
+    },
+    {
+      "name": "景顺长城纳斯达克科技市值加权ETF联接(QDII)E",
+      "amount": 862.09,
+      "daily_pnl": 10.64,
+      "holding_pnl": -37.91,
+      "holding_pnl_rate_pct": -4.21,
+      "category": "美股科技/QDII",
+      "status": "active"
+    },
+    {
+      "name": "易方达沪深300ETF联接C",
+      "amount": 17000.01,
+      "daily_pnl": 0,
+      "holding_pnl": 0.01,
+      "holding_pnl_rate_pct": 0,
+      "category": "A股宽基",
+      "status": "active",
+      "dialogue_merge_status": "approximate_until_platform_refresh"
+    },
+    {
+      "name": "易方达港股通互联网ETF联接C",
+      "amount": 0,
+      "daily_pnl": 0,
+      "holding_pnl": 0,
+      "holding_pnl_rate_pct": 0,
+      "category": "港股互联网/QDII",
+      "status": "user_confirmed_sold",
+      "last_seen_amount": 20199.78,
+      "sold_confirmed_by_user_on": "2026-03-25"
+    },
+    {
+      "name": "鹏华香港银行指数C",
+      "amount": 0,
+      "daily_pnl": 0,
+      "holding_pnl": 0,
+      "holding_pnl_rate_pct": 0,
+      "category": "港股银行/QDII",
+      "status": "user_confirmed_sold",
+      "last_seen_amount": 37312.14,
+      "sold_confirmed_by_user_on": "2026-03-25"
+    },
+    {
+      "name": "广发恒生科技ETF联接(QDII)C",
+      "amount": 0,
+      "daily_pnl": 0,
+      "holding_pnl": 0,
+      "holding_pnl_rate_pct": 0,
+      "category": "港股科技/QDII",
+      "status": "user_confirmed_sold",
+      "last_seen_amount": 4470,
+      "sold_confirmed_by_user_on": "2026-03-25"
+    },
+    {
+      "name": "广发恒生科技ETF联接(QDII)A",
+      "amount": 0,
+      "daily_pnl": 0,
+      "holding_pnl": 0,
+      "holding_pnl_rate_pct": 0,
+      "category": "港股科技/QDII",
+      "status": "user_confirmed_sold",
+      "last_seen_amount": 14076.94,
+      "sold_confirmed_by_user_on": "2026-03-25"
+    },
+    {
+      "name": "国泰黄金ETF联接E",
+      "amount": 36320.63,
+      "daily_pnl": 0,
+      "holding_pnl": 0,
+      "holding_pnl_rate_pct": 0,
+      "category": "黄金",
+      "status": "active",
+      "dialogue_merge_status": "approximate_until_platform_refresh"
+    },
+    {
+      "name": "国泰大宗商品配置(QDII-LOF-FOF)D",
+      "amount": 8176.16,
+      "daily_pnl": -260.85,
+      "holding_pnl": -365.63,
+      "holding_pnl_rate_pct": -4.28,
+      "category": "大宗商品/QDII",
+      "status": "active",
+      "dialogue_merge_status": "approximate_until_platform_refresh"
+    },
+    {
+      "name": "国金量化多因子股票A",
+      "amount": 0,
+      "daily_pnl": -30.5,
+      "holding_pnl": 0,
+      "holding_pnl_rate_pct": 0,
+      "category": "A股主动",
+      "status": "sell_pending"
+    },
+    {
+      "name": "摩根纳斯达克100指数(QDII)A",
+      "amount": 3206.74,
+      "daily_pnl": 43.17,
+      "holding_pnl": -133.26,
+      "holding_pnl_rate_pct": -3.99,
+      "category": "美股科技/QDII",
+      "status": "active"
+    },
+    {
+      "name": "摩根标普500指数(QDII)A",
+      "amount": 665.95,
+      "daily_pnl": -8.3,
+      "holding_pnl": -34.05,
+      "holding_pnl_rate_pct": -4.86,
+      "category": "美股指数/QDII",
+      "status": "active"
+    },
+    {
+      "name": "工银瑞信黄金ETF联接C",
+      "amount": 0,
+      "daily_pnl": 0,
+      "holding_pnl": 0,
+      "holding_pnl_rate_pct": 0,
+      "category": "黄金",
+      "status": "user_confirmed_sold",
+      "dialogue_merge_status": "approximate_until_platform_refresh",
+      "last_seen_amount": 29320.63,
+      "sold_confirmed_by_user_on": "2026-03-25"
+    },
+    {
+      "name": "华宝海外科技股票(QDII-FOF-LOF)C",
+      "amount": 11224.96,
+      "daily_pnl": 213.21,
+      "holding_pnl": -600.51,
+      "holding_pnl_rate_pct": -5.08,
+      "category": "海外科技/QDII",
+      "status": "active"
+    },
+    {
+      "name": "招商量化精选股票A",
+      "amount": 18648.66,
+      "daily_pnl": 538.1,
+      "holding_pnl": -1551.34,
+      "holding_pnl_rate_pct": -7.68,
+      "category": "A股主动",
+      "status": "active"
+    },
+    {
+      "name": "嘉实纳斯达克100ETF联接(QDII)A",
+      "amount": 3058.61,
+      "daily_pnl": 40.87,
+      "holding_pnl": -313.49,
+      "holding_pnl_rate_pct": -9.3,
+      "category": "美股科技/QDII",
+      "status": "active"
+    },
+    {
+      "name": "华安三菱日联日经225ETF联接(QDII)A",
+      "amount": 0,
+      "daily_pnl": 0,
+      "holding_pnl": 0,
+      "holding_pnl_rate_pct": 0,
+      "category": "日本股市/QDII",
+      "status": "user_confirmed_sold",
+      "last_seen_amount": 8.96,
+      "sold_confirmed_by_user_on": "2026-03-30"
+    },
+    {
+      "name": "华夏恒生互联网科技业ETF联接(QDII)C",
+      "amount": 72068.26,
+      "daily_pnl": 1493.34,
+      "holding_pnl": -16006.55,
+      "holding_pnl_rate_pct": -18.17,
+      "category": "港股互联网/QDII",
+      "status": "active"
+    },
+    {
+      "name": "华夏中证红利低波动ETF发起式联接A",
+      "amount": 18000,
+      "daily_pnl": 0,
+      "holding_pnl": 0,
+      "holding_pnl_rate_pct": 0,
+      "category": "A股红利低波",
+      "status": "active",
+      "dialogue_merge_status": "approximate_until_platform_refresh"
+    },
+    {
+      "name": "永赢先锋半导体智选混合C",
+      "amount": 3000,
+      "daily_pnl": 0,
+      "holding_pnl": 0,
+      "holding_pnl_rate_pct": 0,
+      "category": "A股主动",
+      "status": "active",
+      "dialogue_merge_status": "approximate_until_platform_refresh"
+    }
+  ],
+  "pending_profit_effective_positions": [
+    {
+      "name": "兴全恒信债券C",
+      "amount": 50000,
+      "category": "偏债混合",
+      "status": "pending_profit_effective",
+      "trade_date": "2026-03-30",
+      "submitted_before_cutoff": true,
+      "cutoff_time_local": "15:00",
+      "profit_effective_on": "2026-03-31",
+      "source": "user_reported_manual_execution",
+      "source_files": [
+        "/Users/yinshiwei/codex/tz/portfolio/transactions/2026-03-30-manual-buys.json"
+      ],
+      "interpretation_basis": "User explicitly confirmed adding 50000 CNY to 016482 before 15:00 on 2026-03-30."
+    },
+    {
+      "name": "易方达沪深300ETF联接C",
+      "amount": 4000,
+      "category": "A股宽基",
+      "status": "pending_profit_effective",
+      "trade_date": "2026-03-30",
+      "submitted_before_cutoff": true,
+      "cutoff_time_local": "15:00",
+      "profit_effective_on": "2026-03-31",
+      "source": "user_reported_manual_execution",
+      "source_files": [
+        "/Users/yinshiwei/codex/tz/portfolio/transactions/2026-03-30-manual-buys.json"
+      ],
+      "interpretation_basis": "User explicitly confirmed adding 4000 CNY to 007339 before 15:00 on 2026-03-30."
+    }
+  ],
+  "exposure_summary": {
+    "qdii_amount": 100281.84,
+    "qdii_weight_pct": 48.12,
+    "hong_kong_related_amount": 72068.26,
+    "hong_kong_related_weight_pct": 34.58,
+    "us_related_amount": 20037.42,
+    "us_related_weight_pct": 9.62,
+    "a_share_amount": 56648.67,
+    "a_share_weight_pct": 27.18,
+    "gold_amount": 36320.63,
+    "gold_weight_pct": 17.43,
+    "bond_mixed_amount": 15132.56,
+    "bond_mixed_weight_pct": 7.26,
+    "commodity_amount": 8176.16,
+    "commodity_weight_pct": 3.92
+  },
+  "recognition_notes": [
+    "本快照根据 8 张截图人工识别整理。",
+    "其中 5 张为持仓页，2 张为最近卖出记录，1 张为收益分析页。",
+    "默认假设持仓截图已覆盖当日主要持仓列表。",
+    "截图中显示 0.00 持有收益的基金，可能为新近建仓或净值未更新，后续可继续校正。",
+    "国金量化多因子股票A 显示为卖出金额已到账、手续费 30.50 元计入昨日收益，因此视为已结算卖出。",
+    "卖出将到账 76,058.86 元以账户总览为准；部分交易明细存在撤销单、不同份额类别和部分赎回，暂不直接逐笔冲减当前持仓。",
+    "最近卖出明细已单独记录到 transactions 文件中，用于后续对账。",
+    "2026-03-25 用户再次确认：鹏华香港银行指数C、易方达港股通互联网ETF联接C、广发恒生科技ETF联接(QDII)A、广发恒生科技ETF联接(QDII)C 已卖出。",
+    "2026-03-25 用户计划在 15:00 前将工银瑞信黄金ETF联接C 转换到国泰黄金ETF联接E，作为同主题合并；在转换确认前，当前持仓仍保留原始截图金额。",
+    "2026-03-25 用户口头确认首笔重配已执行：易方达沪深300ETF联接C 15000 元、华夏中证红利低波动ETF发起式联接A 10000 元、黄金 5000 元；当前已按对话确认并回 latest.json，收益字段待下次平台刷新进一步校准。",
+    "自 2026-03-25 起，summary 和 exposure_summary 采用仅当前持有仓位口径，不再将未到账卖出纳入分析基础。",
+    "2026-03-25T11:59:40.980Z 已按对话确认将 1 个手工交易文件并入 latest.json；仓位金额已更新，收益字段在下次平台刷新前按近似值维护。",
+    "2026-03-26T01:40:08.213Z 已按对话确认将 1 个手工交易文件并入 latest.json；仓位金额已更新，收益字段在下次平台刷新前按近似值维护。",
+    "2026-03-26 用户补充平台流水截图并明确确认：2026-03-25 15:00 前提交的红利低波买入、国泰黄金买入、工银黄金转国泰黄金，以及永赢半导体 3000 元买入，均按 2026-03-26 开始计入收益口径；华安日经225卖出单单独记录为待到账备注。",
+    "2026-03-27 用户口头更新当前收益口径：累计收益 -12436.91 元，持有收益 -20347.37 元；该收益快照已并回 summary，作为下一次平台精确对账前的最新主状态。",
+    "2026-03-27T07:05:19.021Z 已按对话确认将 1 个手工交易文件并入 latest.json；仓位金额已更新，收益字段在下次平台刷新前按近似值维护。",
+    "2026-03-30 用户补充确认：016482 50000 元与 007339 4000 元均在 15:00 前下单，但按基金口径应自 2026-03-31 起开始计收益；因此这两笔仅登记到 pending_profit_effective_positions，不提前并入 2026-03-30 的 active 持仓与当日收益。",
+    "2026-03-30 用户再次确认：华安三菱日联日经225ETF联接(QDII)A 此前已卖出，当前残留 8.96 元不再视为 active 持仓，已从主状态剔除。"
+  ],
+  "related_files": {
+    "daily_archive": "portfolio/holdings/2026-03-25.json",
+    "recent_transactions": "portfolio/transactions/2026-03-25-recent-sells.json",
+    "manual_buy_transactions": "portfolio/transactions/2026-03-27-manual-buys.json",
+    "latest_platform_operation_confirmation": "/Users/yinshiwei/codex/tz/portfolio/transactions/2026-03-25-manual-platform-confirmation.json",
+    "analysis_report": "portfolio/reports/2026-03-25-initial-analysis.md",
+    "last_dialogue_merge_sources": [
+      "/Users/yinshiwei/codex/tz/portfolio/transactions/2026-03-30-manual-buys.json"
+    ],
+    "latest_snapshot": "/Users/yinshiwei/codex/tz/portfolio/latest.json"
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "version": "v1",
+  "updated_at": "2026-03-31",
+  "notes": [
+    "Backtest mode prefers long-history local proxies so the vectorized engine can cover 2018-01-01 onward.",
+    "Live trading symbols remain unchanged; this file only affects research/backtest resolution and proxy backfill.",
+    "Dividend low-vol uses 512890 as the preferred style-nearest proxy, with 510880 as the long-history fallback to restore the 2018 window."
+  ],
+  "asset_proxy_mapping": {
+    "hs300": {
+      "live_symbol": "007339",
+      "display_name": "易方达沪深300ETF联接C",
+      "reference_targets": [
+        "000300.SH",
+        "510300.SH"
+      ],
+      "local_candidates": [
+        "510300",
+        "007339"
+      ],
+      "selection_note": "Prefer the long-history domestic HS300 ETF for backtests; fall back to the feeder fund only if the ETF is unavailable locally."
+    },
+    "dividend": {
+      "live_symbol": "021482",
+      "display_name": "华夏中证红利低波动ETF发起式联接A",
+      "reference_targets": [
+        "H30269.CSI",
+        "512890.SH"
+      ],
+      "local_candidates": [
+        "512890",
+        "510880",
+        "021482"
+      ],
+      "selection_note": "Prefer the closer red-dividend-low-vol ETF when available; use 510880 as the long-history fallback to preserve the full 2018 stress window."
+    },
+    "nasdaq100": {
+      "live_symbol": "015299",
+      "display_name": "华夏纳斯达克100ETF联接A",
+      "reference_targets": [
+        "NDX.GI",
+        "513100.SH"
+      ],
+      "local_candidates": [
+        "513100",
+        "QQQ",
+        "015299"
+      ],
+      "selection_note": "Prefer the domestic exchange ETF proxy for A-share account consistency; use QQQ only as a secondary fallback."
+    },
+    "gold": {
+      "live_symbol": "000216",
+      "display_name": "华安黄金ETF联接A",
+      "reference_targets": [
+        "AU9999.SGE",
+        "518880.SH"
+      ],
+      "local_candidates": [
+        "518880",
+        "GC=F",
+        "000216"
+      ],
+      "selection_note": "Prefer the domestic gold ETF for RMB-denominated backtests; use COMEX gold only when the local ETF is unavailable."
+    }
+  },
+  "exchange_backfill_universe": [
+    {
+      "symbol": "510300",
+      "name": "华泰柏瑞沪深300ETF",
+      "asset_key": "hs300"
+    },
+    {
+      "symbol": "510880",
+      "name": "红利ETF",
+      "asset_key": "dividend"
+    },
+    {
+      "symbol": "512890",
+      "name": "红利低波ETF",
+      "asset_key": "dividend"
+    },
+    {
+      "symbol": "513100",
+      "name": "国泰纳斯达克100ETF",
+      "asset_key": "nasdaq100"
+    },
+    {
+      "symbol": "518880",
+      "name": "黄金ETF",
+      "asset_key": "gold"
+    }
+  ]
+}

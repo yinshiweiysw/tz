@@ -1,0 +1,40 @@
+{
+  "snapshot_date": "2026-03-31",
+  "currency": "CNY",
+  "summary": {
+    "basis": "positions_plus_exchange_demo",
+    "total_fund_assets": 13366.0,
+    "pending_buy_confirm": 0.0,
+    "pending_sell_to_arrive": 0.0,
+    "effective_exposure_after_pending_sell": 13366.0,
+    "available_cash_cny": 100000.0
+  },
+  "positions": [
+    {
+      "name": "易方达沪深300ETF联接C",
+      "symbol": "007339",
+      "amount": 10000.0,
+      "daily_pnl": 0.0,
+      "holding_pnl": 0.0,
+      "holding_pnl_rate_pct": 0.0,
+      "category": "A股宽基",
+      "status": "active",
+      "execution_type": "OTC"
+    },
+    {
+      "name": "国泰纳斯达克100ETF",
+      "symbol": "513100",
+      "code": "513100",
+      "ticker": "513100",
+      "amount": 3366.0,
+      "shares": 2000,
+      "sellable_shares": 2000,
+      "cost_price": 1.65,
+      "category": "美股场内代理",
+      "status": "active",
+      "execution_type": "EXCHANGE",
+      "settlement_rule": "T+0"
+    }
+  ],
+  "pending_profit_effective_positions": []
+}

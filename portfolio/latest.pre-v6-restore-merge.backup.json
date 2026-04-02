@@ -1,0 +1,119 @@
+{
+  "template_status": "TODO_FILL_BEFORE_LIVE_USE",
+  "_todo_notes": [
+    "这是一份 V6.0 场外基金 + 场内证券双轨冷启动模板；正式实盘前请先完成所有 TODO 字段回填。",
+    "summary.available_cash_cny 与 cash_ledger.available_cash_cny 应与真实可用现金保持一致；trade_generator.py 会优先读取这里。",
+    "OTC 基金仓位请填写 amount（当前确认金额，单位 CNY）；EXCHANGE 证券仓位请填写 shares、sellable_shares、cost_price，并同步 amount。",
+    "若某个策略资产当前没有持仓，可保留 amount/shares 为 0，但建议保留 status=active，便于后续统一生成交易计划。"
+  ],
+  "snapshot_date": "2026-03-31",
+  "currency": "CNY",
+  "source_images": [],
+  "summary": {
+    "basis": "v6_dual_track_cold_start_template",
+    "total_fund_assets": 0.0,
+    "pending_buy_confirm": 0.0,
+    "pending_sell_to_arrive": 0.0,
+    "effective_exposure_after_pending_sell": 0.0,
+    "available_cash_cny": 0.0,
+    "yesterday_profit": 0.0,
+    "holding_profit": 0.0,
+    "cumulative_profit": 0.0,
+    "performance_precision": "manual_seed_pending_first_real_reconciliation",
+    "_todo": "用真实券商 + 基金平台持仓汇总回填 total_fund_assets、available_cash_cny 和收益字段。"
+  },
+  "cash_ledger": {
+    "available_cash_cny": 0.0,
+    "frozen_cash_cny": 0.0,
+    "pending_buy_confirm_cny": 0.0,
+    "pending_sell_to_arrive_cny": 0.0,
+    "cash_reserve_override_cny": null,
+    "_todo": "若券商或基金平台存在冻结资金、在途申购或待到账赎回，请在这里回填。"
+  },
+  "positions": [
+    {
+      "name": "易方达沪深300ETF联接C",
+      "symbol": "007339",
+      "amount": 0.0,
+      "daily_pnl": 0.0,
+      "holding_pnl": 0.0,
+      "holding_pnl_rate_pct": 0.0,
+      "category": "A股宽基",
+      "bucket": "CN_CORE",
+      "market": "CN",
+      "status": "active",
+      "execution_type": "OTC",
+      "_todo": "如有实际持仓，请填写最新确认金额 amount；没有则保持 0。"
+    },
+    {
+      "name": "华夏中证红利低波动ETF发起式联接A",
+      "symbol": "021482",
+      "amount": 0.0,
+      "daily_pnl": 0.0,
+      "holding_pnl": 0.0,
+      "holding_pnl_rate_pct": 0.0,
+      "category": "A股红利低波",
+      "bucket": "INCOME",
+      "market": "CN",
+      "status": "active",
+      "execution_type": "OTC",
+      "_todo": "如有实际持仓，请填写最新确认金额 amount；没有则保持 0。"
+    },
+    {
+      "name": "国泰纳斯达克100ETF",
+      "symbol": "513100",
+      "code": "513100",
+      "ticker": "513100",
+      "amount": 0.0,
+      "shares": 0,
+      "sellable_shares": 0,
+      "cost_price": 0.0,
+      "daily_pnl": 0.0,
+      "holding_pnl": 0.0,
+      "holding_pnl_rate_pct": 0.0,
+      "category": "美股场内代理",
+      "bucket": "GLB_MOM",
+      "market": "CN",
+      "status": "active",
+      "execution_type": "EXCHANGE",
+      "settlement_rule": "T+0",
+      "lot_size": 100,
+      "slippage_buffer": 0.002,
+      "_todo": "填写真实券商仓位：shares、sellable_shares、cost_price；amount 建议按 shares * 当前市价回填。"
+    },
+    {
+      "name": "华夏恒生互联网科技业ETF联接(QDII)C",
+      "symbol": "013172",
+      "amount": 0.0,
+      "daily_pnl": 0.0,
+      "holding_pnl": 0.0,
+      "holding_pnl_rate_pct": 0.0,
+      "category": "港股互联网/QDII",
+      "bucket": "TACTICAL",
+      "market": "HK",
+      "status": "active",
+      "execution_type": "OTC",
+      "_todo": "如有实际持仓，请填写最新确认金额 amount；没有则保持 0。"
+    }
+  ],
+  "pending_profit_effective_positions": [],
+  "exposure_summary": {
+    "otc_amount": 0.0,
+    "exchange_amount": 0.0,
+    "cn_core_amount": 0.0,
+    "glb_mom_amount": 0.0,
+    "income_amount": 0.0,
+    "tactical_amount": 0.0,
+    "_todo": "完成持仓回填后，可按 bucket 或执行通道汇总更新；不更新也不会阻塞交易生成。"
+  },
+  "recognition_notes": [
+    "2026-03-31 已切换到 V6.0 实盘冷启动模板。",
+    "请先回填真实持仓、可用现金、可卖股数与成本价，再运行 trade_generator.py / ledger_sync.py。"
+  ],
+  "related_files": {
+    "latest_snapshot": "/Users/yinshiwei/codex/tz/portfolio/latest.json",
+    "account_context": "/Users/yinshiwei/codex/tz/portfolio/account_context.json",
+    "asset_master": "/Users/yinshiwei/codex/tz/portfolio/config/asset_master.json",
+    "previous_latest_backup": "/Users/yinshiwei/codex/tz/portfolio/latest.pre-v6-cold-start.backup.json"
+  }
+}
