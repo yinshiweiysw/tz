@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import {
   buildPortfolioPath,
@@ -7,6 +7,8 @@ import {
   resolveAccountId,
   workspaceRoot
 } from "./account_root.mjs";
+import { updateManifestCanonicalEntrypoints } from "./manifest_state.mjs";
+import { classifyResearchSession } from "./research_session.mjs";
 import { buildPortfolioStatePaths } from "./portfolio_state_view.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -16,6 +18,21 @@ const shanghaiDateFormatter = new Intl.DateTimeFormat("en-CA", {
   month: "2-digit",
   day: "2-digit"
 });
+const DEFAULT_REFRESH_TIMEOUT_MS = 120_000;
+const REFRESH_TIMEOUT_BY_STEP_MS = {
+  cn_market_snapshot: 180_000,
+  macro_radar: 180_000,
+  macro_state: 180_000,
+  signals_matrix: 180_000,
+  regime_router_signals: 120_000,
+  quant_metrics_engine: 180_000,
+  risk_dashboard: 120_000,
+  performance_attribution: 120_000,
+  opportunity_pool: 120_000,
+  research_brain: 120_000,
+  speculative_plan: 120_000,
+  trade_plan: 120_000
+};
 
 async function readJsonOrNull(path) {
   if (!path) {
@@ -186,6 +203,14 @@ function extractSpeculativePlanAsOf(speculativePlan) {
   return (
     String(speculativePlan?.as_of ?? "").slice(0, 10) ||
     shanghaiDateFromTimestamp(speculativePlan?.generated_at) ||
+    null
+  );
+}
+
+function extractResearchBrainAsOf(researchBrain) {
+  return (
+    String(researchBrain?.meta?.trade_date ?? "").slice(0, 10) ||
+    shanghaiDateFromTimestamp(researchBrain?.generated_at) ||
     null
   );
 }
@@ -391,8 +416,22 @@ function buildEntry({ key, label, asOf, generatedAt, anchorDate }) {
   };
 }
 
-function buildDependencyRefreshHints(payloads = {}) {
+function buildDependencyRefreshHints(payloads = {}, { includePerformanceAttribution = false } = {}) {
   const hints = new Map();
+
+  if (
+    isGeneratedAfter(payloads.latest, payloads.researchBrain) ||
+    isGeneratedAfter(payloads.cnMarketSnapshot, payloads.researchBrain) ||
+    isGeneratedAfter(payloads.riskDashboard, payloads.researchBrain) ||
+    isGeneratedAfter(payloads.macroState, payloads.researchBrain) ||
+    isGeneratedAfter(payloads.macroRadar, payloads.researchBrain) ||
+    isGeneratedAfter(payloads.regimeSignals, payloads.researchBrain) ||
+    isGeneratedAfter(payloads.opportunityPool, payloads.researchBrain) ||
+    (includePerformanceAttribution &&
+      isGeneratedAfter(payloads.performanceAttribution, payloads.researchBrain))
+  ) {
+    hints.set("research_brain", "上游风险/宏观/主脑或机会池链路较当前研究主脑更新。");
+  }
 
   if (
     isGeneratedAfter(payloads.signalMatrix, payloads.speculativePlan) ||
@@ -414,9 +453,15 @@ function buildDependencyRefreshHints(payloads = {}) {
   return hints;
 }
 
-export function buildAnalyticsFreshness({ anchorDate, payloads }) {
+export function buildAnalyticsFreshness({
+  anchorDate,
+  payloads,
+  includePerformanceAttribution = false
+}) {
   const qualityIssues = buildQualityIssueMap(payloads);
-  const dependencyHints = buildDependencyRefreshHints(payloads);
+  const dependencyHints = buildDependencyRefreshHints(payloads, {
+    includePerformanceAttribution
+  });
   const baseEntries = [
     buildEntry({
       key: "latest_snapshot",
@@ -474,18 +519,31 @@ export function buildAnalyticsFreshness({ anchorDate, payloads }) {
       generatedAt: payloads.riskDashboard?.generated_at ?? null,
       anchorDate
     }),
-    buildEntry({
-      key: "performance_attribution",
-      label: "业绩归因",
-      asOf: extractPerformanceAsOf(payloads.performanceAttribution),
-      generatedAt: payloads.performanceAttribution?.generated_at ?? null,
-      anchorDate
-    }),
+    ...(
+      includePerformanceAttribution
+        ? [
+            buildEntry({
+              key: "performance_attribution",
+              label: "业绩归因",
+              asOf: extractPerformanceAsOf(payloads.performanceAttribution),
+              generatedAt: payloads.performanceAttribution?.generated_at ?? null,
+              anchorDate
+            })
+          ]
+        : []
+    ),
     buildEntry({
       key: "opportunity_pool",
       label: "机会池研究发现",
       asOf: extractOpportunityPoolAsOf(payloads.opportunityPool),
       generatedAt: payloads.opportunityPool?.generated_at ?? null,
+      anchorDate
+    }),
+    buildEntry({
+      key: "research_brain",
+      label: "机构研究就绪度",
+      asOf: extractResearchBrainAsOf(payloads.researchBrain),
+      generatedAt: payloads.researchBrain?.generated_at ?? null,
       anchorDate
     }),
     buildEntry({
@@ -583,6 +641,30 @@ export function buildAnalyticsPaths(portfolioRoot, manifest, sharedManifest = nu
     opportunityPoolJsonPath:
       canonical.latest_opportunity_pool_json ??
       buildPortfolioPath(portfolioRoot, "data", "opportunity_pool.json"),
+    marketDataQualityPath:
+      canonical.latest_market_data_quality ??
+      canonical.market_data_quality ??
+      buildPortfolioPath(portfolioRoot, "data", "market_data_quality.json"),
+    marketFlowMatrixPath:
+      canonical.latest_market_flow_matrix ??
+      canonical.market_flow_matrix ??
+      buildPortfolioPath(portfolioRoot, "data", "market_flow_matrix.json"),
+    driverExpectationMatrixPath:
+      canonical.latest_driver_expectation_matrix ??
+      canonical.driver_expectation_matrix ??
+      buildPortfolioPath(portfolioRoot, "data", "driver_expectation_matrix.json"),
+    researchBrainPath:
+      canonical.latest_research_brain ??
+      buildPortfolioPath(portfolioRoot, "data", "research_brain.json"),
+    reportSessionMemoryPath:
+      canonical.latest_report_session_memory ??
+      buildPortfolioPath(portfolioRoot, "data", "report_session_memory.json"),
+    reportQualityScorecardPath:
+      canonical.latest_report_quality_scorecard ??
+      buildPortfolioPath(portfolioRoot, "data", "report_quality_scorecard.json"),
+    analysisHitRatePath:
+      canonical.latest_analysis_hit_rate ??
+      buildPortfolioPath(portfolioRoot, "data", "analysis_hit_rate.json"),
     speculativePlanJsonPath:
       canonical.latest_speculative_plan_json ??
       buildPortfolioPath(portfolioRoot, "data", "speculative_plan.json"),
@@ -599,10 +681,22 @@ export function buildAnalyticsPaths(portfolioRoot, manifest, sharedManifest = nu
   };
 }
 
-async function loadPayloads(paths) {
+export function resolveScopedResearchBrainPath({ portfolioRoot, options = {}, anchorDate = null } = {}) {
+  const session = String(options?.session ?? "").trim();
+  if (!session) {
+    return null;
+  }
+
+  const dateText = String(anchorDate ?? "").trim();
+  const suffix = dateText ? `${dateText}.${session}` : session;
+  return buildPortfolioPath(portfolioRoot, "data", `research_brain.${suffix}.json`);
+}
+
+async function loadPayloads(paths, overrides = {}) {
   const preferredLatest = await readJsonOrNull(paths.latestPath);
   const latest = preferredLatest ?? (await readJsonOrNull(paths.latestCompatPath));
   const latestSourcePath = preferredLatest ? paths.latestPath : latest ? paths.latestCompatPath : null;
+  const researchBrainPath = overrides?.researchBrainPath ?? paths.researchBrainPath;
   const [
     cnMarketSnapshot,
     signalMatrix,
@@ -613,6 +707,7 @@ async function loadPayloads(paths) {
     riskDashboard,
     performanceAttribution,
     opportunityPool,
+    researchBrain,
     speculativePlan,
     tradePlan
   ] =
@@ -626,6 +721,7 @@ async function loadPayloads(paths) {
       readJsonOrNull(paths.riskDashboardPath),
       readJsonOrNull(paths.performanceAttributionPath),
       readJsonOrNull(paths.opportunityPoolJsonPath),
+      readJsonOrNull(researchBrainPath),
       readJsonOrNull(paths.speculativePlanJsonPath),
       readJsonOrNull(paths.tradePlanJsonPath)
     ]);
@@ -642,9 +738,76 @@ async function loadPayloads(paths) {
     riskDashboard,
     performanceAttribution,
     opportunityPool,
+    researchBrain,
     speculativePlan,
     tradePlan
   };
+}
+
+export function shouldRefreshResearchBrain({
+  refreshMode,
+  refreshedKeys = new Set(),
+  payloads = {},
+  freshness = {},
+  includePerformanceAttribution = false,
+  referenceNow = null
+}) {
+  if (refreshMode === "force") {
+    return true;
+  }
+
+  if (
+    refreshedKeys.has("cn_market_snapshot") ||
+    refreshedKeys.has("latest_snapshot") ||
+    refreshedKeys.has("risk_dashboard") ||
+    refreshedKeys.has("macro_state") ||
+    refreshedKeys.has("macro_radar") ||
+    refreshedKeys.has("regime_router_signals") ||
+    refreshedKeys.has("opportunity_pool") ||
+    (includePerformanceAttribution && refreshedKeys.has("performance_attribution"))
+  ) {
+    return true;
+  }
+
+  if (
+    isGeneratedAfter(payloads.latest, payloads.researchBrain) ||
+    isGeneratedAfter(payloads.cnMarketSnapshot, payloads.researchBrain) ||
+    isGeneratedAfter(payloads.riskDashboard, payloads.researchBrain) ||
+    isGeneratedAfter(payloads.macroState, payloads.researchBrain) ||
+    isGeneratedAfter(payloads.macroRadar, payloads.researchBrain) ||
+    isGeneratedAfter(payloads.regimeSignals, payloads.researchBrain) ||
+    isGeneratedAfter(payloads.opportunityPool, payloads.researchBrain) ||
+    (includePerformanceAttribution &&
+      isGeneratedAfter(payloads.performanceAttribution, payloads.researchBrain))
+  ) {
+    return true;
+  }
+
+  const expectedSession =
+    referenceNow !== null && referenceNow !== undefined
+      ? classifyResearchSession(
+          referenceNow instanceof Date ? referenceNow : new Date(referenceNow)
+        )
+      : null;
+  const actualSession = String(payloads?.researchBrain?.meta?.market_session ?? "").trim() || null;
+  const actualTradeDate = String(payloads?.researchBrain?.meta?.trade_date ?? "").trim() || null;
+  if (
+    expectedSession &&
+    ((actualSession && actualSession !== expectedSession.session) ||
+      (actualTradeDate && actualTradeDate !== expectedSession.tradeDate))
+  ) {
+    return true;
+  }
+
+  const stale = Array.isArray(freshness?.staleKeys) ? freshness.staleKeys.includes("research_brain") : false;
+  const missing = Array.isArray(freshness?.missingKeys)
+    ? freshness.missingKeys.includes("research_brain")
+    : false;
+  const recommended = Array.isArray(freshness?.refreshRecommendedKeys)
+    ? freshness.refreshRecommendedKeys.includes("research_brain")
+    : false;
+
+  return stale || missing || recommended;
 }
 
 export function shouldRefreshSpeculativePlan({
@@ -716,34 +879,60 @@ export function shouldRefreshTradePlan({
 
 export function shouldBlockTradePlanRefresh({
   speculativeRefreshRequested = false,
+  opportunityPoolRefreshRequested = false,
   refreshErrors = []
 }) {
-  if (!speculativeRefreshRequested) {
+  if (!speculativeRefreshRequested && !opportunityPoolRefreshRequested) {
     return false;
   }
 
   return Array.isArray(refreshErrors)
-    ? refreshErrors.some((error) => error?.step === "speculative_plan")
+    ? refreshErrors.some(
+        (error) =>
+          (speculativeRefreshRequested && error?.step === "speculative_plan") ||
+          (opportunityPoolRefreshRequested && error?.step === "opportunity_pool")
+      )
     : false;
 }
 
-async function runRefreshStep(step, command, args) {
+function resolveRefreshTimeoutMs(step, timeoutMs) {
+  if (Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0) {
+    return Number(timeoutMs);
+  }
+
+  return REFRESH_TIMEOUT_BY_STEP_MS[step] ?? DEFAULT_REFRESH_TIMEOUT_MS;
+}
+
+export async function runRefreshStep(step, command, args, options = {}) {
+  const timeoutMs = resolveRefreshTimeoutMs(step, options?.timeoutMs);
+  const startedAt = Date.now();
+
   try {
     const { stdout, stderr } = await execFileAsync(command, args, {
       cwd: workspaceRoot,
-      maxBuffer: 1024 * 1024 * 8
+      maxBuffer: 1024 * 1024 * 8,
+      timeout: timeoutMs,
+      killSignal: "SIGKILL"
     });
     return {
       step,
       ok: true,
+      timedOut: false,
+      durationMs: Date.now() - startedAt,
       stdout: String(stdout ?? "").trim(),
       stderr: String(stderr ?? "").trim()
     };
   } catch (error) {
+    const timedOut = error?.killed === true && error?.signal === "SIGKILL";
+    const baseMessage = error?.message ?? String(error);
     return {
       step,
       ok: false,
-      message: error?.message ?? String(error),
+      timedOut,
+      durationMs: Date.now() - startedAt,
+      message: timedOut
+        ? `Refresh step '${step}' timed out after ${timeoutMs}ms`
+        : baseMessage,
       stdout: String(error?.stdout ?? "").trim(),
       stderr: String(error?.stderr ?? "").trim()
     };
@@ -769,8 +958,13 @@ async function syncSharedCanonicalPointers({
     nextCnSnapshot &&
     manifest.canonical_entrypoints.latest_cn_market_snapshot !== nextCnSnapshot
   ) {
-    manifest.canonical_entrypoints.latest_cn_market_snapshot = nextCnSnapshot;
-    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    await updateManifestCanonicalEntrypoints({
+      manifestPath,
+      baseManifest: manifest,
+      entries: {
+        latest_cn_market_snapshot: nextCnSnapshot
+      }
+    });
   }
 
   return manifest;
@@ -789,7 +983,21 @@ export async function ensureReportContext({
   let payloads = await loadPayloads(paths);
   const accountId = resolveAccountId(options);
   const anchorDate = extractLatestAsOf(payloads.latest);
-  let freshness = buildAnalyticsFreshness({ anchorDate, payloads });
+  const scopedResearchBrainPath = resolveScopedResearchBrainPath({
+    portfolioRoot,
+    options,
+    anchorDate
+  });
+  if (scopedResearchBrainPath) {
+    payloads = await loadPayloads(paths, {
+      researchBrainPath: scopedResearchBrainPath
+    });
+  }
+  let freshness = buildAnalyticsFreshness({
+    anchorDate,
+    payloads,
+    includePerformanceAttribution
+  });
   const refresh = {
     mode: refreshMode,
     triggered: false,
@@ -820,7 +1028,20 @@ export async function ensureReportContext({
     return { manifest, paths, payloads, freshness, refresh };
   }
 
-  if (!freshness.needsRefresh && refreshMode !== "force") {
+  const shouldRefreshResearchBrainOnExistingPayloads = shouldRefreshResearchBrain({
+    refreshMode,
+    refreshedKeys: new Set(),
+    payloads,
+    freshness,
+    includePerformanceAttribution,
+    referenceNow: options?.now ?? null
+  });
+
+  if (
+    !freshness.needsRefresh &&
+    refreshMode !== "force" &&
+    !shouldRefreshResearchBrainOnExistingPayloads
+  ) {
     return { manifest, paths, payloads, freshness, refresh };
   }
 
@@ -996,6 +1217,37 @@ export async function ensureReportContext({
     }
   }
 
+  const shouldRefreshResearch = shouldRefreshResearchBrain({
+    refreshMode,
+    refreshedKeys,
+    payloads,
+    freshness,
+    includePerformanceAttribution,
+    referenceNow: options?.now ?? null
+  });
+
+  if (shouldRefreshResearch) {
+    const args = [
+      buildPortfolioPath(workspaceRoot, "portfolio", "scripts", "generate_research_brain.mjs"),
+      ...userArgs,
+      "--portfolio-root",
+      portfolioRoot
+    ];
+    if (options?.now) {
+      args.push("--now", String(options.now));
+    }
+    if (scopedResearchBrainPath) {
+      args.push("--output", scopedResearchBrainPath);
+    }
+    const result = await runRefreshStep("research_brain", "node", args);
+    if (result.ok) {
+      refreshedKeys.add("research_brain");
+      refresh.refreshedTargets.push("research_brain");
+    } else {
+      refresh.errors.push(result);
+    }
+  }
+
   const shouldRefreshSpeculative =
     refreshMode === "force" ||
     shouldRefreshSpeculativePlan({
@@ -1038,6 +1290,7 @@ export async function ensureReportContext({
 
   const blockTradePlanRefresh = shouldBlockTradePlanRefresh({
     speculativeRefreshRequested: shouldRefreshSpeculative,
+    opportunityPoolRefreshRequested: shouldRefreshOpportunityPool,
     refreshErrors: refresh.errors
   });
 
@@ -1070,8 +1323,14 @@ export async function ensureReportContext({
     sharedManifest
   });
   paths = buildAnalyticsPaths(portfolioRoot, manifest, sharedManifest);
-  payloads = await loadPayloads(paths);
-  freshness = buildAnalyticsFreshness({ anchorDate, payloads });
+  payloads = await loadPayloads(paths, {
+    researchBrainPath: scopedResearchBrainPath ?? undefined
+  });
+  freshness = buildAnalyticsFreshness({
+    anchorDate,
+    payloads,
+    includePerformanceAttribution
+  });
 
   return { manifest, paths, payloads, freshness, refresh };
 }
