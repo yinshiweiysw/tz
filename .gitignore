@@ -45,3 +45,5 @@ portfolio_users/*
 # Local scratch areas
 tmp_trade_guard_test/
 .worktrees/
+portfolio/latest.json.bak-*
+portfolio_users_invalid_backups/
