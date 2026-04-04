@@ -3,6 +3,23 @@ import { readFile } from "node:fs/promises";
 import { http, parsePossiblyWrappedJson } from "./http.js";
 
 const deviceId = randomUUID();
+const FUND_PRIMARY_TIMEOUT_MS = 5000;
+const FUND_FALLBACK_TIMEOUT_MS = 3000;
+
+export function buildFundPrimaryRequestOptions(params = {}) {
+  return {
+    params,
+    timeout: FUND_PRIMARY_TIMEOUT_MS
+  };
+}
+
+export function buildFundFallbackRequestOptions(params = {}, responseType = "text") {
+  return {
+    params,
+    responseType,
+    timeout: FUND_FALLBACK_TIMEOUT_MS
+  };
+}
 
 function resolveDefaultWatchlistPath() {
   const portfolioRoot = String(process.env.PORTFOLIO_ROOT ?? "/Users/yinshiwei/codex/tz/portfolio").trim();
@@ -112,12 +129,12 @@ function mapPrimaryFundQuote(item) {
 
 async function fetchLegacyRealtimeQuote(code) {
   try {
-    const response = await http.get(`https://fundgz.1234567.com.cn/js/${code}.js`, {
-      params: {
+    const response = await http.get(
+      `https://fundgz.1234567.com.cn/js/${code}.js`,
+      buildFundFallbackRequestOptions({
         rt: Date.now()
-      },
-      responseType: "text"
-    });
+      })
+    );
 
     const payload = String(response.data ?? "").trim();
     if (!payload || payload === "jsonpgz();" || payload === "jsonpgz(null);") {
@@ -141,12 +158,12 @@ async function fetchLegacyRealtimeQuote(code) {
 
 async function fetchPingzhongdataFallback(code) {
   try {
-    const response = await http.get(`https://fund.eastmoney.com/pingzhongdata/${code}.js`, {
-      params: {
+    const response = await http.get(
+      `https://fund.eastmoney.com/pingzhongdata/${code}.js`,
+      buildFundFallbackRequestOptions({
         v: Date.now()
-      },
-      responseType: "text"
-    });
+      })
+    );
 
     const payload = String(response.data ?? "");
     const nameMatch = payload.match(/var\s+fS_name\s*=\s*"([^"]*)"/);
@@ -267,18 +284,16 @@ export async function getFundQuotes(fundCodes) {
   try {
     const { data } = await http.get(
       "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo",
-      {
-        params: {
-          pageIndex: 1,
-          pageSize: 200,
-          plat: "Android",
-          appType: "ttjj",
-          product: "EFund",
-          Version: 1,
-          deviceid: deviceId,
-          Fcodes: codes.join(",")
-        }
-      }
+      buildFundPrimaryRequestOptions({
+        pageIndex: 1,
+        pageSize: 200,
+        plat: "Android",
+        appType: "ttjj",
+        product: "EFund",
+        Version: 1,
+        deviceid: deviceId,
+        Fcodes: codes.join(",")
+      })
     );
     primaryQuotes = (data?.Datas ?? []).map(mapPrimaryFundQuote).filter(Boolean);
   } catch {}

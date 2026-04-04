@@ -8,7 +8,7 @@ import {
   buildOpportunitySummary,
   renderDualTradePlanMarkdown
 } from "./lib/dual_trade_plan_render.mjs";
-import { buildPortfolioStatePaths, loadPreferredPortfolioState } from "./lib/portfolio_state_view.mjs";
+import { buildPortfolioStatePaths, loadCanonicalPortfolioState } from "./lib/portfolio_state_view.mjs";
 
 const execFileAsync = promisify(execFile);
 const args = process.argv.slice(2);
@@ -188,7 +188,7 @@ async function main() {
   const manifestPath = buildPortfolioPath(portfolioRoot, "state-manifest.json");
   const manifest = await readJsonOrNull(manifestPath);
   const paths = buildCanonicalPaths(portfolioRoot, manifest);
-  const portfolioStateView = await loadPreferredPortfolioState({ portfolioRoot, manifest });
+  const portfolioStateView = await loadCanonicalPortfolioState({ portfolioRoot, manifest });
 
   const [portfolioState, assetMaster, macroState, regimeSignals, opportunityPool, speculativePlan] = await Promise.all([
     Promise.resolve(portfolioStateView.payload),
@@ -282,7 +282,7 @@ async function main() {
     "--date",
     planDate,
     "--portfolio-state",
-    portfolioStateView.sourcePath ?? paths.latestCompatPath,
+    portfolioStateView.sourcePath ?? paths.portfolioStatePath,
     "--account-context",
     paths.accountContextPath,
     "--watchlist",

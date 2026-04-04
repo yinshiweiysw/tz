@@ -155,12 +155,25 @@ export function buildInstitutionalActionLines({
   thesis = "",
   expectationGap = "",
   allowedActions = [],
-  blockedActions = []
+  blockedActions = [],
+  tradePermission = "",
+  blockedOrder = ""
 } = {}) {
   const thesisLine =
     String(thesis ?? "").trim() || "暂无清晰主线，先以风险控制和跟踪观察为主。";
   const expectationGapLine =
     String(expectationGap ?? "").trim() || "暂无显著预期差，保持耐心等待错配信号。";
+  const normalizedTradePermission = String(tradePermission ?? "").trim();
+
+  if (normalizedTradePermission === "blocked" || normalizedTradePermission === "research_invalid") {
+    return [
+      `- 今日主线：${thesisLine}`,
+      `- 当前预期差：${expectationGapLine}`,
+      "- 允许动作：仅允许观察与记录，不生成交易指令",
+      `- 禁止动作：${String(blockedOrder ?? "").trim() || "研究闸门未通过，当前禁止生成交易指令。"}`
+    ];
+  }
+
   const allowedLine = formatActionCollection(
     allowedActions,
     "仅允许按既定计划小步执行，默认先观察后行动。"

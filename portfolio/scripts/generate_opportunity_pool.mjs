@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { buildPortfolioPath, resolveAccountId, resolvePortfolioRoot } from "./lib/account_root.mjs";
+import { updateManifestCanonicalEntrypoints } from "./lib/manifest_state.mjs";
 import { loadOpportunityMaster } from "./lib/opportunity_master.mjs";
 import { buildOpportunityCandidate, rankOpportunityCandidates } from "./lib/opportunity_pool.mjs";
 import { readJsonOrNull } from "./lib/portfolio_state_view.mjs";
@@ -250,12 +251,14 @@ await writeFile(outputJsonPath, `${JSON.stringify(opportunityPool, null, 2)}\n`,
 await writeFile(outputReportPath, `${reportLines.join("\n")}\n`, "utf8");
 
 if (manifest) {
-  manifest.canonical_entrypoints = {
-    ...(manifest.canonical_entrypoints ?? {}),
-    latest_opportunity_pool_json: outputJsonPath,
-    latest_opportunity_pool_report: outputReportPath
-  };
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await updateManifestCanonicalEntrypoints({
+    manifestPath,
+    baseManifest: manifest,
+    entries: {
+      latest_opportunity_pool_json: outputJsonPath,
+      latest_opportunity_pool_report: outputReportPath
+    }
+  });
 }
 
 console.log(

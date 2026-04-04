@@ -4,7 +4,8 @@ import {
   resolveAccountId,
   resolvePortfolioRoot
 } from "./lib/account_root.mjs";
-import { loadPreferredPortfolioState, readJsonOrNull } from "./lib/portfolio_state_view.mjs";
+import { updateJsonFileAtomically } from "./lib/atomic_json_state.mjs";
+import { loadCanonicalPortfolioState, readJsonOrNull } from "./lib/portfolio_state_view.mjs";
 
 function parseArgs(argv) {
   const result = {};
@@ -109,15 +110,20 @@ try {
 } catch {}
 
 const manifest = await readJsonOrNull(manifestPath);
-const portfolioStateView = await loadPreferredPortfolioState({ portfolioRoot, manifest });
+const portfolioStateView = await loadCanonicalPortfolioState({ portfolioRoot, manifest });
 const summary = portfolioStateView.payload?.summary ?? {};
 const content = `${buildJournalSkeleton({ journalDate, summary, accountId }).join("\n")}\n`;
 
 await writeFile(journalPath, content, "utf8");
 
 if (manifest?.canonical_entrypoints) {
-  manifest.canonical_entrypoints.latest_daily_journal = journalPath;
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await updateJsonFileAtomically(manifestPath, (current) => ({
+    ...(current ?? {}),
+    canonical_entrypoints: {
+      ...((current ?? {}).canonical_entrypoints ?? {}),
+      latest_daily_journal: journalPath
+    }
+  }));
 }
 
 console.log(JSON.stringify({ created: true, accountId, path: journalPath }, null, 2));

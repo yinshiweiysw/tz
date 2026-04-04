@@ -257,6 +257,30 @@ function parseTencentQuotePayload(text) {
   return fields;
 }
 
+function parseTencentQuoteDateTime(rawValue) {
+  const raw = String(rawValue ?? "").trim();
+  const compact = raw.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/);
+  if (compact) {
+    return {
+      quoteDate: `${compact[1]}-${compact[2]}-${compact[3]}`,
+      quoteTime: `${compact[4]}:${compact[5]}:${compact[6]}`
+    };
+  }
+
+  const slash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}:\d{2}:\d{2})$/);
+  if (slash) {
+    return {
+      quoteDate: `${slash[1]}-${slash[2]}-${slash[3]}`,
+      quoteTime: slash[4]
+    };
+  }
+
+  return {
+    quoteDate: null,
+    quoteTime: null
+  };
+}
+
 function parseTencentFuturesPayload(text) {
   const input = String(text ?? "").trim();
   const start = input.indexOf('="');
@@ -301,6 +325,7 @@ async function getTencentQuote(stockCode) {
 
   const text = new TextDecoder("gbk").decode(data);
   const fields = parseTencentQuotePayload(text);
+  const dateTime = parseTencentQuoteDateTime(fields[30]);
 
   return compactObject({
     stockCode: normalized.normalized,
@@ -316,7 +341,12 @@ async function getTencentQuote(stockCode) {
     high: toNumber(fields[33]),
     low: toNumber(fields[34]),
     amplitude: null,
-    source: "tencent"
+    source: "tencent",
+    quoteDate: dateTime.quoteDate,
+    quoteTime:
+      dateTime.quoteDate && dateTime.quoteTime
+        ? `${dateTime.quoteDate} ${dateTime.quoteTime}`
+        : null
   });
 }
 

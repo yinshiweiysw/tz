@@ -123,10 +123,6 @@ def ensure_runtime() -> None:
             env["AKSHARE_VENV_REEXEC"] = "1"
             os.execve(str(VENV_PYTHON), [str(VENV_PYTHON), *sys.argv], env)
 
-
-ensure_runtime()
-
-
 def resolve_date(date_arg: str | None) -> str:
     if date_arg:
         return date_arg
@@ -163,6 +159,61 @@ def amount_to_100m(value):
     if value is None:
         return None
     return round_or_none(float(value) / 100000000)
+
+
+def normalize_connect_intraday_100m(value):
+    numeric = safe_float(value)
+    if numeric is None:
+        return None
+
+    # AkShare intraday connect endpoints may return already-normalized "亿元"
+    # or raw "万元"-style magnitudes. Large values are scaled down to 100m units.
+    if abs(numeric) >= 10000:
+        numeric = numeric / 10000
+    return round_or_none(numeric)
+
+
+def frame_has_rows(frame) -> bool:
+    if frame is None:
+        return False
+
+    empty = getattr(frame, "empty", None)
+    if empty is not None:
+        return not bool(empty)
+
+    try:
+        return len(frame) > 0
+    except Exception:
+        return True
+
+
+def iter_frame_rows(frame):
+    if frame is None:
+        return
+
+    if hasattr(frame, "iterrows"):
+        for _, row in frame.iterrows():
+            yield row
+        return
+
+    if isinstance(frame, list):
+        for row in frame:
+            yield row
+
+
+def filter_rows_equals(frame, column: str, expected: str):
+    return [
+        row
+        for row in iter_frame_rows(frame)
+        if str(getattr(row, "get", lambda *_: None)(column, "")) == expected
+    ]
+
+
+def column_values(frame, column: str):
+    values = frame[column]
+    if hasattr(values, "tolist"):
+        return values.tolist()
+    return list(values)
 
 
 def guardrails():
@@ -287,13 +338,13 @@ def fetch_northbound_flow(ak) -> dict:
     except Exception as exc:
         result["summary_error"] = str(exc)
 
-    if summary is not None and not summary.empty:
-        north_rows = summary[summary["资金方向"] == "北向"]
-        if not north_rows.empty:
+    if frame_has_rows(summary):
+        north_rows = filter_rows_equals(summary, "资金方向", "北向")
+        if north_rows:
             channels = []
             net_buy_values = []
             latest_date = None
-            for _, row in north_rows.iterrows():
+            for row in north_rows:
                 latest_date = str(row.get("交易日", latest_date))
                 net_buy = safe_float(row.get("成交净买额"))
                 net_buy_values.append(net_buy)
@@ -321,12 +372,14 @@ def fetch_northbound_flow(ak) -> dict:
     except Exception as exc:
         result["intraday_error"] = str(exc)
 
-    if intraday is not None and not intraday.empty:
+    if frame_has_rows(intraday):
         recent = intraday.tail(20)
         last_row = recent.iloc[-1]
-        series = [safe_float(item) for item in recent["北向资金"].tolist()]
+        series = [safe_float(item) for item in column_values(recent, "北向资金")]
         result["latest_intraday_time"] = str(last_row.get("时间", ""))
-        result["latest_intraday_net_inflow_100m_cny"] = round_or_none(safe_float(last_row.get("北向资金")))
+        result["latest_intraday_net_inflow_100m_cny"] = normalize_connect_intraday_100m(
+            last_row.get("北向资金")
+        )
         result["intraday_trend_label"] = direction_label(series, lookback=10)
 
     summary_value = result.get("latest_summary_net_buy_100m_cny")
@@ -342,6 +395,87 @@ def fetch_northbound_flow(ak) -> dict:
     else:
         result["status"] = "unavailable"
         result["message"] = "未获取到可用的北向资金补充数据"
+
+    return result
+
+
+def fetch_southbound_flow(ak) -> dict:
+    result = {
+        "status": "partial",
+        "channels": [],
+    }
+
+    summary = None
+    intraday = None
+
+    try:
+        summary = ak.stock_hsgt_fund_flow_summary_em()
+    except Exception as exc:
+        result["summary_error"] = str(exc)
+
+    if frame_has_rows(summary):
+        south_rows = filter_rows_equals(summary, "资金方向", "南向")
+        if south_rows:
+            channels = []
+            net_buy_values = []
+            latest_date = None
+            for row in south_rows:
+                latest_date = str(row.get("交易日", latest_date))
+                net_buy = safe_float(row.get("成交净买额"))
+                net_buy_values.append(net_buy)
+                channels.append(
+                    {
+                        "channel": str(row.get("板块", "")),
+                        "related_index": str(row.get("相关指数", "")),
+                        "index_change_pct": round_or_none(safe_float(row.get("指数涨跌幅"))),
+                        "up_count": int(safe_float(row.get("上涨数")) or 0),
+                        "flat_count": int(safe_float(row.get("持平数")) or 0),
+                        "down_count": int(safe_float(row.get("下跌数")) or 0),
+                        "net_buy_100m_hkd": round_or_none(net_buy),
+                        "trading_status": str(row.get("交易状态", "")),
+                    }
+                )
+
+            result["channels"] = channels
+            result["latest_date"] = latest_date
+            valid_summary = [value for value in net_buy_values if value is not None]
+            if valid_summary:
+                result["latest_summary_net_buy_100m_hkd"] = round_or_none(sum(valid_summary))
+
+    try:
+        intraday = ak.stock_hsgt_fund_min_em(symbol="南向资金")
+    except Exception as exc:
+        result["intraday_error"] = str(exc)
+
+    if frame_has_rows(intraday):
+        recent = intraday.tail(20)
+        last_row = recent.iloc[-1]
+        series = [safe_float(item) for item in column_values(recent, "南向资金")]
+        result["latest_intraday_time"] = str(last_row.get("时间", ""))
+        result["latest_intraday_net_inflow_100m_hkd"] = normalize_connect_intraday_100m(
+            last_row.get("南向资金")
+        )
+        result["intraday_trend_label"] = direction_label(series, lookback=10)
+        result["sh_connect_net_inflow_100m_hkd"] = normalize_connect_intraday_100m(
+            last_row.get("港股通(沪)")
+        )
+        result["sz_connect_net_inflow_100m_hkd"] = normalize_connect_intraday_100m(
+            last_row.get("港股通(深)")
+        )
+
+    summary_value = result.get("latest_summary_net_buy_100m_hkd")
+    intraday_value = result.get("latest_intraday_net_inflow_100m_hkd")
+    has_nonzero_signal = any(
+        value is not None and abs(value) > 0.01 for value in [summary_value, intraday_value]
+    )
+
+    if result.get("channels") and has_nonzero_signal:
+        result["status"] = "ok"
+    elif result.get("channels"):
+        result["note"] = "当前南向端点可返回通道状态，但当日净流入数值回零，暂不做强解释。"
+    else:
+        result["status"] = "unavailable"
+        result["message"] = "未获取到可用的南向资金补充数据"
 
     return result
 
@@ -592,6 +726,7 @@ def build_notes(snapshot: dict) -> list[str]:
     macro_cycle = snapshot.get("sections", {}).get("macro_cycle", {})
     rotation = snapshot.get("sections", {}).get("sector_rotation_validation", {})
     northbound = snapshot.get("sections", {}).get("northbound_flow", {})
+    southbound = snapshot.get("sections", {}).get("southbound_flow", {})
 
     up_ratio = safe_float(breadth.get("up_ratio_pct"))
     phase = macro_cycle.get("phase")
@@ -610,6 +745,8 @@ def build_notes(snapshot: dict) -> list[str]:
 
     if northbound.get("note"):
         notes.append("北向资金当日净流入端点回零，当前只保留其为辅助核验，不把它作为单独拍板依据。")
+    if southbound.get("note"):
+        notes.append("南向资金当日净流入端点回零，当前只把它作为港股风险偏好的辅助核验。")
 
     if not notes:
         notes.append("当前 AkShare 补充层更适合做中国市场线索核验，而不是替代主链。")
@@ -629,6 +766,7 @@ def generate_snapshot(trade_date: str) -> dict:
     for name, loader in {
         "market_breadth": fetch_market_breadth,
         "northbound_flow": fetch_northbound_flow,
+        "southbound_flow": fetch_southbound_flow,
         "macro_cycle": fetch_macro_cycle,
         "sector_fund_flow": fetch_sector_fund_flow,
     }.items():
@@ -684,6 +822,7 @@ def write_manifest(manifest_path: Path, output_path: Path):
 
 
 def main():
+    ensure_runtime()
     parser = argparse.ArgumentParser(description="Generate AkShare-based China market supplement snapshot")
     parser.add_argument("--date", help="Trade date in YYYY-MM-DD")
     parser.add_argument("--portfolio-root", default="", help="Override portfolio root")

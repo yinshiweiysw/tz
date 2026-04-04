@@ -28,6 +28,25 @@ test("buildInstitutionalActionLines renders action memo lines without mixing spe
   assert.equal(lines.some((line) => line.includes("博弈系统纪律")), false);
 });
 
+test("buildInstitutionalActionLines suppresses executable wording when trade permission is blocked", () => {
+  const lines = buildInstitutionalActionLines({
+    thesis: "中东地缘升级推动油价再定价",
+    expectationGap: "风险溢价仍在抬升",
+    allowedActions: ["主系统优先处理 核心仓 / 招商量化精选股票A / 5,000.00 元，状态：可执行"],
+    blockedActions: ["禁止跳过 trade card / journal 直接下单"],
+    tradePermission: "blocked",
+    blockedOrder: "研究闸门未通过，当前禁止生成交易指令。"
+  });
+
+  assert.deepEqual(lines, [
+    "- 今日主线：中东地缘升级推动油价再定价",
+    "- 当前预期差：风险溢价仍在抬升",
+    "- 允许动作：仅允许观察与记录，不生成交易指令",
+    "- 禁止动作：研究闸门未通过，当前禁止生成交易指令。"
+  ]);
+  assert.equal(lines.some((line) => line.includes("可执行")), false);
+});
+
 test("buildSpeculativeDisciplineBlock renders standalone speculative discipline section lines", () => {
   const lines = buildSpeculativeDisciplineBlock("博弈仓允许试单但必须先设证伪");
   assert.deepEqual(lines, ["- 博弈系统纪律：博弈仓允许试单但必须先设证伪"]);

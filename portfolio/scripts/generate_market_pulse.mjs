@@ -11,6 +11,31 @@ import {
   buildInstitutionalActionLines,
   buildSpeculativeDisciplineBlock
 } from "./lib/dual_trade_plan_render.mjs";
+import {
+  buildUnifiedResearchSections,
+  flattenResearchSections
+} from "./lib/research_brain_render.mjs";
+import {
+  buildReportSessionInheritanceLines,
+  buildReportSessionRecord,
+  readReportSessionMemory,
+  updateReportSessionMemory,
+  writeReportSessionMemory
+} from "./lib/report_session_memory.mjs";
+import { selectInstitutionalStories } from "./lib/research_story_filter.mjs";
+import { buildMarketPulseSessionContext } from "./lib/report_session_context.mjs";
+import {
+  annotateMarketQuote,
+  formatMarketQuoteLine,
+  getComparableChangePercent
+} from "./lib/market_schedule_guard.mjs";
+import {
+  buildExternalSourceStatusLines,
+  resolveQuoteFetchTimeoutMs,
+  runGuardedFetch,
+  summarizeGuardedBatch
+} from "./lib/report_market_fetch_guard.mjs";
+import { updateManifestCanonicalEntrypoints } from "./lib/manifest_state.mjs";
 import { ensureReportContext } from "./lib/report_context.mjs";
 
 const args = process.argv.slice(2);
@@ -118,23 +143,8 @@ const noisyHeadlineKeywords = [
   "资金流向"
 ];
 
-const sessionConfig = {
-  morning: {
-    title: "金融早报",
-    actionLabel: "开盘前计划",
-    hint: "先看隔夜风险资产、期货和黄金，再决定今天是否允许按计划执行基金交易。"
-  },
-  noon: {
-    title: "金融午报",
-    actionLabel: "午间观察",
-    hint: "先看指数跌幅是否收敛、热点是否扩散；午间默认只观察，不把短线波动直接转化成交易动作。"
-  },
-  close: {
-    title: "金融晚报",
-    actionLabel: "次日判断",
-    hint: "先看收盘结构和晚间外盘，再判断次日是否允许开下一笔。"
-  }
-};
+const QUOTE_FETCH_TIMEOUT_MS = 5_000;
+const AUX_FETCH_TIMEOUT_MS = 6_000;
 
 function parseArgs(argv) {
   const result = {};
@@ -145,7 +155,14 @@ function parseArgs(argv) {
       continue;
     }
 
-    result[token.slice(2)] = argv[index + 1] ?? "";
+    const key = token.slice(2);
+    const next = argv[index + 1];
+    if (!next || next.startsWith("--")) {
+      result[key] = true;
+      continue;
+    }
+
+    result[key] = next;
     index += 1;
   }
 
@@ -167,7 +184,7 @@ function resolveDate(dateArg) {
 
 function normalizeSession(raw) {
   const session = String(raw ?? "close").trim().toLowerCase();
-  return sessionConfig[session] ? session : "close";
+  return ["morning", "noon", "close"].includes(session) ? session : "close";
 }
 
 function round(value, digits = 2) {
@@ -200,11 +217,7 @@ function findQuote(quotes, code) {
 }
 
 function formatQuoteLine(label, quote) {
-  if (!quote) {
-    return `- ${label}：暂无数据`;
-  }
-
-  return `- ${label}：${quote.latestPrice}（${formatSigned(quote.changePercent, "%")}）`;
+  return formatMarketQuoteLine(label, quote);
 }
 
 function average(values) {
@@ -262,22 +275,21 @@ function scoreHeadline(item) {
 }
 
 function selectTelegraphs(items, limit = 6) {
-  return items
-    .map((item, index) => ({ ...item, score: scoreTelegraph(item), originalIndex: index }))
-    .sort((left, right) => right.score - left.score || left.originalIndex - right.originalIndex)
-    .slice(0, limit);
+  return selectInstitutionalStories(items, {
+    limit,
+    focusKeywords: telegraphKeywords,
+    authoritativeKeywords: authoritativeHeadlineKeywords,
+    minScore: 1
+  });
 }
 
 function selectHeadlines(items, limit = 4) {
-  return items
-    .map((item, index) => ({ ...item, score: scoreHeadline(item), originalIndex: index }))
-    .filter((item) => {
-      const text = `${item.title ?? ""} ${item.content ?? ""} ${(item.subjects ?? []).join(" ")}`;
-      return !noisyHeadlineKeywords.some((keyword) => text.includes(keyword));
-    })
-    .filter((item) => item.score >= 40)
-    .sort((left, right) => right.score - left.score || left.originalIndex - right.originalIndex)
-    .slice(0, limit);
+  return selectInstitutionalStories(items, {
+    limit,
+    focusKeywords: headlineKeywords,
+    authoritativeKeywords: authoritativeHeadlineKeywords,
+    minScore: 24
+  });
 }
 
 function buildTone(quotes, boards, session) {
@@ -289,14 +301,17 @@ function buildTone(quotes, boards, session) {
   const nq = findQuote(quotes, "hf_NQ");
   const londonGold = findQuote(quotes, "hf_XAU");
   const gold = findQuote(quotes, "AU9999.SGE");
-  const averageA = average([sh?.changePercent, hs300?.changePercent]);
+  const averageA = average([
+    getComparableChangePercent(sh, { includeReferenceClose: true }),
+    getComparableChangePercent(hs300, { includeReferenceClose: true })
+  ]);
   const boardAverage = average((boards ?? []).slice(0, 3).map((item) => Number(item.bd_zdf)));
   const parts = [];
 
   if (session === "morning") {
-    if ((es?.changePercent ?? 0) > 0.3 || (nq?.changePercent ?? 0) > 0.3) {
+    if ((getComparableChangePercent(es, { includeReferenceClose: true }) ?? 0) > 0.3 || (getComparableChangePercent(nq, { includeReferenceClose: true }) ?? 0) > 0.3) {
       parts.push("隔夜外盘偏强");
-    } else if ((es?.changePercent ?? 0) < -0.3 || (nq?.changePercent ?? 0) < -0.3) {
+    } else if ((getComparableChangePercent(es, { includeReferenceClose: true }) ?? 0) < -0.3 || (getComparableChangePercent(nq, { includeReferenceClose: true }) ?? 0) < -0.3) {
       parts.push("隔夜外盘偏弱");
     } else {
       parts.push("隔夜外盘震荡");
@@ -313,11 +328,16 @@ function buildTone(quotes, boards, session) {
     }
   }
 
-  if ((hsTech?.changePercent ?? 0) <= -2 || ((hsi?.changePercent ?? 0) < 0 && (hsTech?.changePercent ?? 0) < 0)) {
+  const hsiMove = getComparableChangePercent(hsi);
+  const hsTechMove = getComparableChangePercent(hsTech);
+  if ((hsTechMove ?? 0) <= -2 || ((hsiMove ?? 0) < 0 && (hsTechMove ?? 0) < 0)) {
     parts.push("港股高波偏弱");
   }
 
-  const goldSignal = londonGold?.changePercent ?? gold?.changePercent ?? 0;
+  const goldSignal =
+    getComparableChangePercent(londonGold, { includeReferenceClose: true }) ??
+    getComparableChangePercent(gold, { includeReferenceClose: true }) ??
+    0;
 
   if (goldSignal >= 1) {
     parts.push("黄金偏强");
@@ -339,16 +359,23 @@ function evaluateRiskState(quotes) {
   const nq = findQuote(quotes, "hf_NQ");
   const londonGold = findQuote(quotes, "hf_XAU");
   const gold = findQuote(quotes, "AU9999.SGE");
-  const goldSignal = londonGold?.changePercent ?? gold?.changePercent ?? 0;
+  const hs300Move = getComparableChangePercent(hs300, { includeReferenceClose: true });
+  const hsTechMove = getComparableChangePercent(hsTech);
+  const esMove = getComparableChangePercent(es, { includeReferenceClose: true });
+  const nqMove = getComparableChangePercent(nq, { includeReferenceClose: true });
+  const goldSignal =
+    getComparableChangePercent(londonGold, { includeReferenceClose: true }) ??
+    getComparableChangePercent(gold, { includeReferenceClose: true }) ??
+    0;
 
-  const onshoreWeak = (hs300?.changePercent ?? 0) <= -1 || (hsTech?.changePercent ?? 0) <= -2;
-  const offshoreWeak = (es?.changePercent ?? 0) <= -0.3 || (nq?.changePercent ?? 0) <= -0.3;
+  const onshoreWeak = (hs300Move ?? 0) <= -1 || (hsTechMove ?? 0) <= -2;
+  const offshoreWeak = (esMove ?? 0) <= -0.3 || (nqMove ?? 0) <= -0.3;
   const riskOff = onshoreWeak || offshoreWeak;
   const stabilization =
-    (hs300?.changePercent ?? 0) > -0.5 &&
-    (hsTech?.changePercent ?? 0) > -1 &&
-    (es?.changePercent ?? 0) > -0.2 &&
-    (nq?.changePercent ?? 0) > -0.2;
+    (hs300Move ?? 0) > -0.5 &&
+    (hsTechMove ?? 0) > -1 &&
+    (esMove ?? 0) > -0.2 &&
+    (nqMove ?? 0) > -0.2;
 
   return {
     riskOff,
@@ -378,10 +405,10 @@ function buildExpectationGap(quotes, boards, session) {
   return "当前主线尚未形成一致预期，需等待指数与板块扩散同步确认。";
 }
 
-function buildAllowedActions(quotes, { session, staleExecutionContext = false } = {}) {
+function buildAllowedActions(quotes, { session, decisionContract } = {}) {
   const riskState = evaluateRiskState(quotes);
 
-  if (staleExecutionContext) {
+  if (decisionContract && !decisionContract.tradingAllowed) {
     return ["仅允许观察与复盘，不新增实盘交易", "如必须处理风险，仅限缩小既有高波暴露"];
   }
 
@@ -397,7 +424,7 @@ function buildAllowedActions(quotes, { session, staleExecutionContext = false } 
   ];
 }
 
-function buildBlockedActions(quotes, { staleExecutionContext = false } = {}) {
+function buildBlockedActions(quotes, { decisionContract } = {}) {
   const riskState = evaluateRiskState(quotes);
   const blocked = [
     "禁止盘中追涨杀跌",
@@ -408,16 +435,16 @@ function buildBlockedActions(quotes, { staleExecutionContext = false } = {}) {
     blocked.push("禁止左侧硬接高波主题与重仓抄底");
   }
 
-  if (staleExecutionContext) {
-    blocked.push("禁止在量化链路滞后时下达新增交易");
+  if (decisionContract && !decisionContract.tradingAllowed) {
+    blocked.push("禁止在研究主脑门禁未放行时下达新增交易");
   }
 
   return blocked;
 }
 
-function buildSpeculativeDiscipline(quotes, { staleExecutionContext = false } = {}) {
-  if (staleExecutionContext) {
-    return "底层链路滞后期间，博弈仓仅允许纸面推演，不执行新增实盘试单。";
+function buildSpeculativeDiscipline(quotes, { decisionContract } = {}) {
+  if (decisionContract && !decisionContract.tradingAllowed) {
+    return "研究主脑未放行前，博弈仓仅允许纸面推演，不执行新增实盘试单。";
   }
 
   const riskState = evaluateRiskState(quotes);
@@ -426,6 +453,16 @@ function buildSpeculativeDiscipline(quotes, { staleExecutionContext = false } = 
   }
 
   return "博弈仓允许试单但必须遵守仓位上限，触发失败时优先减仓而非补仓。";
+}
+
+function normalizeResearchDecisionContract(researchBrain) {
+  const readiness = researchBrain?.decision_readiness ?? {};
+  return {
+    level: String(readiness?.level ?? "unknown").trim() || "unknown",
+    analysisAllowed: readiness?.analysis_allowed === true,
+    tradingAllowed: readiness?.trading_allowed === true,
+    reasons: Array.isArray(readiness?.reasons) ? readiness.reasons.filter(Boolean) : []
+  };
 }
 
 function buildPortfolioMap(riskDashboard, quotes, freshness, bucketConfigMap = {}) {
@@ -465,21 +502,32 @@ function buildPortfolioMap(riskDashboard, quotes, freshness, bucketConfigMap = {
   for (const bucket of dominantBuckets) {
     if (bucket.bucketKey === "A_CORE") {
       lines.push(
-        `- ${bucket.label}占已投资仓位 ${bucket.weightPct}%，沪深300 ${formatSigned(hs300?.changePercent, "%")}，创业板指 ${formatSigned(chinext?.changePercent, "%")}；这部分是当前账户最核心的骨架与主要方向仓。`
+        `- ${bucket.label}占已投资仓位 ${bucket.weightPct}%，沪深300 ${formatSigned(getComparableChangePercent(hs300, { includeReferenceClose: true }), "%")}，创业板指 ${formatSigned(getComparableChangePercent(chinext, { includeReferenceClose: true }), "%")}；这部分是当前账户最核心的骨架与主要方向仓。`
       );
       continue;
     }
 
     if (bucket.bucketKey === "GLB_MOM" || bucket.bucketKey === "TACTICAL") {
+      const hkMoveText =
+        hsTech?.quote_usage === "previous_close_reference" ||
+        hsTech?.quote_usage === "closed_market_reference"
+          ? `港股休市，上一交易日恒生科技指数 ${formatSigned(
+              getComparableChangePercent(hsTech, { includeReferenceClose: true }),
+              "%"
+            )}`
+          : `恒生科技指数 ${formatSigned(
+              getComparableChangePercent(hsTech, { includeReferenceClose: true }),
+              "%"
+            )}`;
       lines.push(
-        `- ${bucket.label}占已投资仓位 ${bucket.weightPct}%，恒生科技指数 ${formatSigned(hsTech?.changePercent, "%")}；这是当前账户里弹性最高、也最需要单独盯住的风险腿。`
+        `- ${bucket.label}占已投资仓位 ${bucket.weightPct}%，${hkMoveText}；这是当前账户里弹性最高、也最需要单独盯住的风险腿。`
       );
       continue;
     }
 
     if (bucket.bucketKey === "HEDGE") {
       lines.push(
-        `- ${bucket.label}占已投资仓位 ${bucket.weightPct}%，伦敦金 ${formatSigned(londonGold?.changePercent, "%")} / 上金所Au99.99 ${formatSigned(gold?.changePercent, "%")}；黄金更偏对冲腿。`
+        `- ${bucket.label}占已投资仓位 ${bucket.weightPct}%，伦敦金 ${formatSigned(getComparableChangePercent(londonGold, { includeReferenceClose: true }), "%")} / 上金所Au99.99 ${formatSigned(getComparableChangePercent(gold, { includeReferenceClose: true }), "%")}；黄金更偏对冲腿。`
       );
       continue;
     }
@@ -555,7 +603,86 @@ function formatTelegraphHeadlineLine(item) {
   return `- ${timePrefix}${label}${shortText(item.title || item.content, 96)}`;
 }
 
+function buildResearchGuardLines(researchBrain) {
+  if (!researchBrain) {
+    return [
+      "- 研究会话：--。",
+      "- 决策状态：--。",
+      "- 风险说明：研究主脑缺失，当前仅可做低置信度观察。",
+      "- 覆盖降级：研究覆盖未知域不完整，以下结论仅作低置信度参考。",
+      "- 新鲜度/覆盖概览：freshness=--，coverage=--。"
+    ];
+  }
+
+  const freshnessStatus = String(researchBrain?.freshness_guard?.overall_status ?? "--").trim() || "--";
+  const coverageStatus = String(researchBrain?.coverage_guard?.overall_status ?? "--").trim() || "--";
+  const session = String(researchBrain?.meta?.market_session ?? "--").trim() || "--";
+  const decisionContract = normalizeResearchDecisionContract(researchBrain);
+  const staleDependencies = Array.isArray(researchBrain?.freshness_guard?.stale_dependencies)
+    ? researchBrain.freshness_guard.stale_dependencies
+        .map((item) => item?.label ?? item?.key ?? null)
+        .filter(Boolean)
+    : [];
+  const missingDependencies = Array.isArray(researchBrain?.freshness_guard?.missing_dependencies)
+    ? researchBrain.freshness_guard.missing_dependencies
+        .map((item) => item?.label ?? item?.key ?? null)
+        .filter(Boolean)
+    : [];
+  const weakCoverageDomains = Array.isArray(researchBrain?.coverage_guard?.weak_domains)
+    ? researchBrain.coverage_guard.weak_domains
+        .map((item) =>
+          typeof item === "string"
+            ? item
+            : item?.domain ?? item?.key ?? item?.label ?? null
+        )
+        .filter(Boolean)
+    : [];
+  const normalizeSentence = (value) => String(value ?? "").trim().replace(/[。.!?]+$/u, "");
+  const riskLines =
+    decisionContract.reasons.length > 0
+      ? decisionContract.reasons.map((reason) => `- 风险说明：${normalizeSentence(reason)}。`)
+      : ["- 风险说明：无显式门禁风险。"];
+  const coverageLines =
+    weakCoverageDomains.length > 0
+      ? weakCoverageDomains.map(
+          (domain) => `- 覆盖降级：${normalizeSentence(domain)} 域不完整，以下结论仅作低置信度参考。`
+        )
+      : ["- 覆盖降级：无。"];
+
+  return [
+    `- 研究会话：${session}。`,
+    `- 决策状态：${decisionContract.level}（分析${decisionContract.analysisAllowed ? "可用" : "受限"}，交易${
+      decisionContract.tradingAllowed ? "可执行" : "受限"
+    }）。`,
+    ...riskLines,
+    ...coverageLines,
+    `- 新鲜度/覆盖概览：freshness=${freshnessStatus}，coverage=${coverageStatus}。`,
+    `- 数据缺口：stale=${staleDependencies.length > 0 ? staleDependencies.join("、") : "无"}；missing=${
+      missingDependencies.length > 0 ? missingDependencies.join("、") : "无"
+    }。`
+  ];
+}
+
+function selectResearchBrainForRender(researchBrain, failedRefreshSteps) {
+  void failedRefreshSteps;
+  return researchBrain ?? null;
+}
+
+function selectResearchBrainForDecision(researchBrain, failedRefreshSteps) {
+  if (failedRefreshSteps?.has?.("research_brain")) {
+    return null;
+  }
+
+  return researchBrain ?? null;
+}
+
 function buildFreshnessLines({ portfolioState, freshness, refresh }) {
+  const refreshedTargets = (refresh.refreshedTargets ?? []).filter(
+    (target) => target !== "research_brain"
+  );
+  const skippedTargets = (refresh.skippedTargets ?? []).filter(
+    (target) => target !== "research_brain"
+  );
   const lines = [
     "- 实时行情层：本次生成时直接抓取 market-mcp 实时快照，属于当前时点数据。",
     `- 组合主状态：portfolio_state.json 当前锚定为 ${portfolioState?.snapshot_date ?? "未知日期"} 收盘快照；缺失时才回退到 latest.json 兼容视图。`
@@ -569,14 +696,14 @@ function buildFreshnessLines({ portfolioState, freshness, refresh }) {
     lines.push("- 刷新策略：当前为按需自动刷新模式，仅在滞后/缺失或关键质量告警时重跑。");
   }
 
-  if (refresh.triggered && refresh.refreshedTargets.length > 0) {
-    lines.push(`- 本次生成前已自动刷新：${refresh.refreshedTargets.join("、")}。`);
-  } else if (refresh.mode === "never" && (refresh.skippedTargets ?? []).length > 0) {
-    lines.push(`- 本次未自动刷新：${refresh.skippedTargets.join("、")} 仍按现有快照输出。`);
+  if (refresh.triggered && refreshedTargets.length > 0) {
+    lines.push(`- 本次生成前已自动刷新：${refreshedTargets.join("、")}。`);
+  } else if (refresh.mode === "never" && skippedTargets.length > 0) {
+    lines.push(`- 本次未自动刷新：${skippedTargets.join("、")} 仍按现有快照输出。`);
   }
 
   for (const entry of freshness?.entries ?? []) {
-    if (entry.key === "latest_snapshot") {
+    if (entry.key === "latest_snapshot" || entry.key === "research_brain") {
       continue;
     }
 
@@ -612,13 +739,25 @@ function buildFreshnessLines({ portfolioState, freshness, refresh }) {
 const options = parseArgs(args);
 const briefDate = resolveDate(options.date);
 const session = normalizeSession(options.session);
-const config = sessionConfig[session];
-const portfolioRoot = resolvePortfolioRoot(options);
-const { manifest, payloads, freshness, refresh } = await ensureReportContext({
-  portfolioRoot,
-  options
+const sessionContext = buildMarketPulseSessionContext({
+  session,
+  dateText: briefDate
 });
-const riskDashboard = payloads.riskDashboard ?? {};
+const config = sessionContext;
+const portfolioRoot = resolvePortfolioRoot(options);
+const reportOptions = {
+  ...options,
+  now: sessionContext.referenceNow.toISOString()
+};
+const { manifest, payloads, freshness, refresh, paths } = await ensureReportContext({
+  portfolioRoot,
+  options: reportOptions
+});
+const failedRefreshSteps = new Set(
+  (refresh?.errors ?? []).map((entry) => entry?.step).filter(Boolean)
+);
+const riskDashboardUsable = Boolean(payloads.riskDashboard) && !failedRefreshSteps.has("risk_dashboard");
+const riskDashboard = riskDashboardUsable ? payloads.riskDashboard : {};
 const portfolioState = payloads.latest ?? {};
 const assetMasterPath =
   manifest?.canonical_entrypoints?.asset_master ??
@@ -632,38 +771,103 @@ const outputPath = buildPortfolioPath(outputDir, `${briefDate}-${session}.md`);
 await mkdir(outputDir, { recursive: true });
 
 try {
-  const [quoteResults, boards, telegraphs] = await Promise.all([
-    Promise.allSettled(
+  const [quoteResults, boardsResult, telegraphsResult] = await Promise.all([
+    Promise.all(
       [...aShareIndexConfigs, ...hongKongIndexConfigs, ...asiaReferenceConfigs, ...globalConfigs].map((item) =>
-        getStockQuote(item.code)
+        runGuardedFetch({
+          source: `quote:${item.code}`,
+          label: item.label,
+          timeoutMs: resolveQuoteFetchTimeoutMs(item.code, QUOTE_FETCH_TIMEOUT_MS),
+          task: () => getStockQuote(item.code)
+        })
       )
     ),
-    getHotBoards({ boardType: "industry", limit: 5 }).catch(() => ({ items: [] })),
-    getMarketTelegraph(40).catch(() => [])
+    runGuardedFetch({
+      source: "boards",
+      label: "热点板块",
+      timeoutMs: AUX_FETCH_TIMEOUT_MS,
+      task: () => getHotBoards({ boardType: "industry", limit: 5 })
+    }),
+    runGuardedFetch({
+      source: "telegraphs",
+      label: "市场电报",
+      timeoutMs: AUX_FETCH_TIMEOUT_MS,
+      task: () => getMarketTelegraph(40)
+    })
   ]);
 
+  const now = sessionContext.referenceNow;
   const successfulQuotes = quoteResults
-    .filter((item) => item.status === "fulfilled")
-    .map((item) => item.value);
+    .filter((item) => item.ok)
+    .map((item) =>
+      annotateMarketQuote({
+        code: item.data?.stockCode,
+        quote: item.data,
+        now
+      })
+    );
+  const boards = boardsResult.ok ? boardsResult.data : { items: [] };
+  const telegraphs = telegraphsResult.ok ? telegraphsResult.data : [];
+  const externalSourceStatusLines = buildExternalSourceStatusLines([
+    summarizeGuardedBatch({
+      source: "quotes",
+      label: "行情报价",
+      results: quoteResults
+    }),
+    boardsResult,
+    telegraphsResult
+  ]);
   const selectedHeadlines = selectHeadlines(telegraphs ?? [], 4);
   const selectedTelegraphs = selectTelegraphs(telegraphs ?? [], 6);
   const portfolioMap = buildPortfolioMap(riskDashboard, successfulQuotes, freshness, bucketConfigMap);
   const freshnessLines = buildFreshnessLines({ portfolioState, freshness, refresh });
+  const activeResearchBrain = selectResearchBrainForRender(payloads.researchBrain, failedRefreshSteps);
+  const decisionResearchBrain = selectResearchBrainForDecision(
+    payloads.researchBrain,
+    failedRefreshSteps
+  );
+  const sessionMemory = await readReportSessionMemory(paths.reportSessionMemoryPath);
+  const currentSessionRecord = activeResearchBrain
+    ? buildReportSessionRecord({
+        tradeDate: briefDate,
+        session,
+        reportType: "market_pulse",
+        researchBrain: activeResearchBrain
+      })
+    : null;
+  const sessionTraceLines = currentSessionRecord
+    ? buildReportSessionInheritanceLines({
+        memory: sessionMemory,
+        tradeDate: briefDate,
+        session,
+        currentRecord: currentSessionRecord
+      })
+    : ["- 会话继承：研究主脑缺失，当前无法建立跨时段验证链。"];
+  const updatedSessionMemory = currentSessionRecord
+    ? updateReportSessionMemory(sessionMemory, currentSessionRecord)
+    : sessionMemory;
+  const researchGuardLines = buildResearchGuardLines(activeResearchBrain);
+  const decisionContract = normalizeResearchDecisionContract(decisionResearchBrain);
   const marketTone = buildTone(successfulQuotes, boards.items ?? [], session);
-  const staleExecutionContext =
-    freshness.entries?.some(
-      (entry) =>
-        ["signals_matrix", "macro_radar", "risk_dashboard"].includes(entry.key) &&
-        (entry.status !== "aligned" || entry.blocksTrade || entry.qualityStatus !== "ok")
-    ) ?? false;
-  const institutionalActionLines = buildInstitutionalActionLines({
-    thesis: `${marketTone}；${config.hint}`,
-    expectationGap: buildExpectationGap(successfulQuotes, boards.items ?? [], session),
-    allowedActions: buildAllowedActions(successfulQuotes, { session, staleExecutionContext }),
-    blockedActions: buildBlockedActions(successfulQuotes, { staleExecutionContext })
+  const renderResearchSections = buildUnifiedResearchSections({
+    researchBrain: activeResearchBrain,
+    cnMarketSnapshot: payloads.cnMarketSnapshot,
+    researchGuardLines
   });
+  const decisionDeskSection = buildUnifiedResearchSections({
+    researchBrain: decisionResearchBrain,
+    cnMarketSnapshot: payloads.cnMarketSnapshot,
+    researchGuardLines
+  }).find((item) => item.heading === "## Desk Action Conclusion");
+  const researchSectionLines = flattenResearchSections(
+    renderResearchSections.map((section) =>
+      section.heading === "## Desk Action Conclusion" && decisionDeskSection
+        ? { ...section, lines: decisionDeskSection.lines }
+        : section
+    )
+  );
   const speculativeDisciplineLines = buildSpeculativeDisciplineBlock(
-    buildSpeculativeDiscipline(successfulQuotes, { staleExecutionContext })
+    buildSpeculativeDiscipline(successfulQuotes, { decisionContract })
   );
   const riskState = evaluateRiskState(successfulQuotes);
 
@@ -674,15 +878,20 @@ try {
     "",
     `- ${marketTone}`,
     `- ${config.hint}`,
-    ...(staleExecutionContext
+    ...(!decisionContract.tradingAllowed
       ? [
-          "- ⚠️ 底层量化链路仍有滞后，本页先用于看盘和识别暴露，不直接作为今天的下单依据。"
+          `- ⚠️ 研究主脑决策门禁未放行（level=${decisionContract.level}${
+            decisionContract.reasons.length > 0 ? `；reasons=${decisionContract.reasons.join("、")}` : ""
+          }），本页仅用于看盘与复盘，不作为新增下单依据。`
         ]
       : []),
+    ...(externalSourceStatusLines.length > 0 ? ["", ...externalSourceStatusLines] : []),
     "",
-    "## 今日主线与操作纪律",
+    ...researchSectionLines,
     "",
-    ...institutionalActionLines,
+    "## 会话主线跟踪",
+    "",
+    ...sessionTraceLines,
     "",
     "## 博弈系统纪律",
     "",
@@ -725,25 +934,40 @@ try {
     "",
     "## 与当前组合的关系",
     "",
-    ...(portfolioMap.length > 0 ? portfolioMap : ["- 暂无组合映射数据"]),
+    ...(
+      riskDashboardUsable
+        ? portfolioMap.length > 0
+          ? portfolioMap
+          : ["- 暂无组合映射数据"]
+        : ["- ⚠️ 风险仪表盘当前缺失或本轮刷新失败，本节不沿用旧风控盘输出组合映射结论。"]
+    ),
     "",
     `## ${config.actionLabel}`,
     "",
-    `- 会话执行阈值：${riskState.stabilization ? "指数与外盘具备企稳条件，可按计划小步执行。" : "指数与外盘未形成共振企稳，默认维持观察与防守。"}`,
+    `- 会话执行阈值：${
+      !decisionContract.tradingAllowed
+        ? "研究主脑未放行，当前会话仅允许观察与计划更新。"
+        : riskState.stabilization
+          ? "指数与外盘具备企稳条件，可按计划小步执行。"
+          : "指数与外盘未形成共振企稳，默认维持观察与防守。"
+    }`,
     "- 若会话中出现新增风险警报，先更新日志与交易卡，再考虑动作。"
   ];
 
+  await writeReportSessionMemory(paths.reportSessionMemoryPath, updatedSessionMemory);
   await writeFile(outputPath, `${lines.join("\n")}\n`, "utf8");
 
   if (manifest?.canonical_entrypoints) {
-    if (session === "morning") {
-      manifest.canonical_entrypoints.latest_morning_market_pulse = outputPath;
-    } else if (session === "noon") {
-      manifest.canonical_entrypoints.latest_noon_market_pulse = outputPath;
-    } else {
-      manifest.canonical_entrypoints.latest_close_market_pulse = outputPath;
-    }
-    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    await updateManifestCanonicalEntrypoints({
+      manifestPath,
+      baseManifest: manifest,
+      entries:
+        session === "morning"
+          ? { latest_morning_market_pulse: outputPath }
+          : session === "noon"
+            ? { latest_noon_market_pulse: outputPath }
+            : { latest_close_market_pulse: outputPath }
+    });
   }
 
   console.log(

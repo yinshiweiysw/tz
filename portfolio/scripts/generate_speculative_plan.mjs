@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 
 import { buildPortfolioPath, resolveAccountId, resolvePortfolioRoot } from "./lib/account_root.mjs";
+import { updateManifestCanonicalEntrypoints } from "./lib/manifest_state.mjs";
 import { getSpeculativeSleeveConfig, loadAssetMaster } from "./lib/asset_master.mjs";
 import { readJsonOrNull } from "./lib/portfolio_state_view.mjs";
 import {
@@ -265,11 +266,13 @@ await mkdir(buildPortfolioPath(portfolioRoot, "data"), { recursive: true });
 await writeFile(outputPath, `${JSON.stringify(planPayload, null, 2)}\n`, "utf8");
 
 if (manifest) {
-  manifest.canonical_entrypoints = {
-    ...(manifest.canonical_entrypoints ?? {}),
-    latest_speculative_plan_json: outputPath
-  };
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await updateManifestCanonicalEntrypoints({
+    manifestPath,
+    baseManifest: manifest,
+    entries: {
+      latest_speculative_plan_json: outputPath
+    }
+  });
 }
 
 console.log(

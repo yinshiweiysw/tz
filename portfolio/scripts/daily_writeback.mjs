@@ -4,6 +4,7 @@ import {
   resolveAccountId,
   resolvePortfolioRoot
 } from "./lib/account_root.mjs";
+import { readJsonOrDefault, updateJsonFileAtomically } from "./lib/atomic_json_state.mjs";
 
 function parseArgs(argv) {
   const result = {};
@@ -235,13 +236,16 @@ const nextContent = `${withEventSection}${separator}${buildEntryBlock({
 
 await writeFile(journalPath, nextContent, "utf8");
 
-const manifest = await readFile(manifestPath, "utf8")
-  .then((raw) => JSON.parse(raw))
-  .catch(() => null);
+const manifest = await readJsonOrDefault(manifestPath, null);
 
 if (manifest?.canonical_entrypoints) {
-  manifest.canonical_entrypoints.latest_daily_journal = journalPath;
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await updateJsonFileAtomically(manifestPath, (current) => ({
+    ...(current ?? {}),
+    canonical_entrypoints: {
+      ...((current ?? {}).canonical_entrypoints ?? {}),
+      latest_daily_journal: journalPath
+    }
+  }));
 }
 
 console.log(

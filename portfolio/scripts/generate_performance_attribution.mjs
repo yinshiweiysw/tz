@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { buildPortfolioPath, resolveAccountId, resolvePortfolioRoot } from "./lib/account_root.mjs";
-import { loadPreferredPortfolioState, readJsonOrNull } from "./lib/portfolio_state_view.mjs";
+import { updateManifestCanonicalEntrypoints } from "./lib/manifest_state.mjs";
+import { loadCanonicalPortfolioState, readJsonOrNull } from "./lib/portfolio_state_view.mjs";
 
 const args = process.argv.slice(2);
 
@@ -178,7 +179,7 @@ const outputPath = buildPortfolioPath(outputDir, "performance_attribution.json")
 await mkdir(outputDir, { recursive: true });
 
 const manifest = await readJsonOrNull(manifestPath);
-const portfolioStateView = await loadPreferredPortfolioState({ portfolioRoot, manifest });
+const portfolioStateView = await loadCanonicalPortfolioState({ portfolioRoot, manifest });
 const [portfolioState, quantMetrics] = await Promise.all([
   Promise.resolve(portfolioStateView.payload ?? {}),
   JSON.parse(await readFile(quantMetricsPath, "utf8"))
@@ -301,8 +302,13 @@ performanceAttribution.markdown_lines = buildMarkdownLines(performanceAttributio
 await writeFile(outputPath, `${JSON.stringify(performanceAttribution, null, 2)}\n`, "utf8");
 
 if (manifest?.canonical_entrypoints) {
-  manifest.canonical_entrypoints.latest_performance_attribution = outputPath;
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await updateManifestCanonicalEntrypoints({
+    manifestPath,
+    baseManifest: manifest,
+    entries: {
+      latest_performance_attribution: outputPath
+    }
+  });
 }
 
 const terminalLines = [

@@ -58,6 +58,7 @@ export function buildCnMarketBriefLines(snapshot) {
 
   const breadth = snapshot.sections?.market_breadth ?? {};
   const northbound = snapshot.sections?.northbound_flow ?? {};
+  const southbound = snapshot.sections?.southbound_flow ?? {};
   const macroCycle = snapshot.sections?.macro_cycle ?? {};
   const sectorFlow = snapshot.sections?.sector_fund_flow ?? {};
   const rotation = snapshot.sections?.sector_rotation_validation ?? {};
@@ -81,6 +82,24 @@ export function buildCnMarketBriefLines(snapshot) {
     );
   } else if (northbound.note) {
     lines.push(`- 北向资金：${northbound.note}`);
+  }
+
+  const southboundLooksSuppressed =
+    southbound.note &&
+    Number(southbound.latest_summary_net_buy_100m_hkd ?? 0) === 0 &&
+    Number(southbound.latest_intraday_net_inflow_100m_hkd ?? 0) === 0;
+
+  if (
+    !southboundLooksSuppressed &&
+    southbound.latest_date &&
+    southbound.latest_summary_net_buy_100m_hkd !== null &&
+    southbound.latest_summary_net_buy_100m_hkd !== undefined
+  ) {
+    lines.push(
+      `- 南向资金：${southbound.latest_date} 净买额 ${formatSigned(southbound.latest_summary_net_buy_100m_hkd, " 亿元")}；盘中最新 ${southbound.latest_intraday_time ?? "--"} 为 ${formatSigned(southbound.latest_intraday_net_inflow_100m_hkd, " 亿元")}`
+    );
+  } else if (southbound.note) {
+    lines.push(`- 南向资金：${southbound.note}`);
   }
 
   if (macroCycle.phase_label) {
@@ -124,6 +143,7 @@ export function buildCnDailyBriefLines(snapshot) {
 
   const breadth = snapshot.sections?.market_breadth ?? {};
   const northbound = snapshot.sections?.northbound_flow ?? {};
+  const southbound = snapshot.sections?.southbound_flow ?? {};
   const macroCycle = snapshot.sections?.macro_cycle ?? {};
   const sectorFlow = snapshot.sections?.sector_fund_flow ?? {};
   const rotation = snapshot.sections?.sector_rotation_validation ?? {};
@@ -146,6 +166,23 @@ export function buildCnDailyBriefLines(snapshot) {
     );
   } else if (northbound.note) {
     lines.push("- 北向核验：当日净流入口径当前回零，仅作辅助参考");
+  }
+
+  const southboundLooksSuppressed =
+    southbound.note &&
+    Number(southbound.latest_summary_net_buy_100m_hkd ?? 0) === 0 &&
+    Number(southbound.latest_intraday_net_inflow_100m_hkd ?? 0) === 0;
+
+  if (
+    !southboundLooksSuppressed &&
+    southbound.latest_summary_net_buy_100m_hkd !== null &&
+    southbound.latest_summary_net_buy_100m_hkd !== undefined
+  ) {
+    lines.push(
+      `- 南向核验：当日净买额 ${formatSigned(southbound.latest_summary_net_buy_100m_hkd, " 亿元")}；盘中最新 ${formatSigned(southbound.latest_intraday_net_inflow_100m_hkd, " 亿元")}`
+    );
+  } else if (southbound.note) {
+    lines.push("- 南向核验：当日净流入口径当前回零，仅作辅助参考");
   }
 
   if (macroCycle.phase_label) {

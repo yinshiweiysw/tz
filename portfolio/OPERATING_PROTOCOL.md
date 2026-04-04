@@ -22,6 +22,7 @@
 10. 对重要市场判断，优先读取或更新 [hypotheses.md](/Users/yinshiwei/codex/tz/portfolio/hypotheses.md)
 11. 想快速了解当天全局时，优先读取 `daily_briefs`
 12. 若想快速了解市场驱动与板块风格，再读 `market_briefs`
+13. 若用户询问“分析当前行情 / 今天是否可以买卖 / A股港股黄金怎么看”，先运行 [generate_dialogue_analysis_contract.mjs](/Users/yinshiwei/codex/tz/portfolio/scripts/generate_dialogue_analysis_contract.mjs)，强制基于 `research_brain + cn_market_snapshot + opportunity_pool + speculative_plan + trade_plan` 生成对话分析合同，再结合当下需要的实时行情与新闻做最终结论
 
 ## 一致性规则
 
@@ -59,6 +60,7 @@
 8. 若出现短线非基金机会，可单独作为例外评估，但应与基金主骨架分开记录和复盘
 9. 收盘后优先读取 `market_pulses/YYYY-MM-DD-close.md` 与 `market_briefs/YYYY-MM-DD-market.md`，输出次日操作建议
 10. 如当天提供了截图或平台明细，再做校准性对账和修正
+11. 当用户直接发起对话式行情分析时，不要绕开结构化主脑；先运行 `generate_dialogue_analysis_contract.mjs` 生成 dialogue analysis contract，再补实时行情与新闻
 
 ## 截图使用规则
 

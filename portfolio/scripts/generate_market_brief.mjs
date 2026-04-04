@@ -14,6 +14,31 @@ import {
 } from "./lib/account_root.mjs";
 import { buildBucketConfigMap, loadAssetMaster } from "./lib/asset_master.mjs";
 import { buildInstitutionalActionLines } from "./lib/dual_trade_plan_render.mjs";
+import {
+  buildUnifiedResearchSections,
+  flattenResearchSections
+} from "./lib/research_brain_render.mjs";
+import {
+  buildReportSessionInheritanceLines,
+  buildReportSessionRecord,
+  resolveReportSessionSlot,
+  readReportSessionMemory,
+  updateReportSessionMemory,
+  writeReportSessionMemory
+} from "./lib/report_session_memory.mjs";
+import { selectInstitutionalStories } from "./lib/research_story_filter.mjs";
+import {
+  annotateMarketQuote,
+  formatMarketQuoteLine,
+  getComparableChangePercent
+} from "./lib/market_schedule_guard.mjs";
+import {
+  buildExternalSourceStatusLines,
+  resolveQuoteFetchTimeoutMs,
+  runGuardedFetch,
+  summarizeGuardedBatch
+} from "./lib/report_market_fetch_guard.mjs";
+import { updateManifestCanonicalEntrypoints } from "./lib/manifest_state.mjs";
 import { ensureReportContext } from "./lib/report_context.mjs";
 
 const args = process.argv.slice(2);
@@ -69,6 +94,8 @@ const telegraphKeywords = [
   "拼多多",
   "美团"
 ];
+const QUOTE_FETCH_TIMEOUT_MS = 5_000;
+const AUX_FETCH_TIMEOUT_MS = 6_000;
 
 function parseArgs(argv) {
   const result = {};
@@ -79,7 +106,14 @@ function parseArgs(argv) {
       continue;
     }
 
-    result[token.slice(2)] = argv[index + 1] ?? "";
+    const key = token.slice(2);
+    const next = argv[index + 1];
+    if (!next || next.startsWith("--")) {
+      result[key] = true;
+      continue;
+    }
+
+    result[key] = next;
     index += 1;
   }
 
@@ -129,11 +163,7 @@ function findQuote(quotes, code) {
 }
 
 function formatQuoteLine(label, quote) {
-  if (!quote) {
-    return `- ${label}：暂无数据`;
-  }
-
-  return `- ${label}：${quote.latestPrice}（${formatSigned(quote.changePercent, "%")}，振幅 ${quote.amplitude ?? "--"}%）`;
+  return formatMarketQuoteLine(label, quote, { includeAmplitude: true });
 }
 
 function average(values) {
@@ -147,6 +177,13 @@ function average(values) {
 function buildContextModeLines(reportContext) {
   const freshness = reportContext?.freshness ?? {};
   const refresh = reportContext?.refresh ?? {};
+  const skippedTargets = (refresh.skippedTargets ?? []).filter((target) => target !== "research_brain");
+  const refreshedTargets = (refresh.refreshedTargets ?? []).filter(
+    (target) => target !== "research_brain"
+  );
+  const degradedEntries = (freshness.degradedEntries ?? []).filter(
+    (entry) => entry?.key !== "research_brain"
+  );
   const lines = [];
 
   if (refresh.mode === "never") {
@@ -157,18 +194,118 @@ function buildContextModeLines(reportContext) {
     lines.push("- 数据模式：当前为按需自动刷新模式，仅在缺失/滞后或关键质量告警时重跑底层链路。");
   }
 
-  if ((refresh.skippedTargets ?? []).length > 0) {
-    lines.push(`- 未自动刷新的链路：${refresh.skippedTargets.join("、")}。`);
-  } else if (refresh.triggered && (refresh.refreshedTargets ?? []).length > 0) {
-    lines.push(`- 本次已自动刷新：${refresh.refreshedTargets.join("、")}。`);
+  if (skippedTargets.length > 0) {
+    lines.push(`- 未自动刷新的链路：${skippedTargets.join("、")}。`);
+  } else if (refresh.triggered && refreshedTargets.length > 0) {
+    lines.push(`- 本次已自动刷新：${refreshedTargets.join("、")}。`);
   }
 
-  if ((freshness.degradedEntries ?? []).length > 0) {
-    const labels = freshness.degradedEntries.map((entry) => entry.label).join("、");
+  if (degradedEntries.length > 0) {
+    const labels = degradedEntries.map((entry) => entry.label).join("、");
     lines.push(`- 质量提示：${labels} 存在 fallback / degraded 信号，解读时应降低置信度。`);
   }
 
+  if ((refresh.errors ?? []).length > 0) {
+    const failedSteps = refresh.errors
+      .map((entry) => entry?.step)
+      .filter(Boolean)
+      .join("、");
+    if (failedSteps) {
+      lines.push(`- ⚠️ 刷新失败：${failedSteps} 未能成功更新，本次报告按降级口径输出。`);
+    }
+  }
+
   return lines;
+}
+
+function buildResearchGuardLines(researchBrain) {
+  if (!researchBrain) {
+    return [
+      "- 研究会话：--。",
+      "- 决策状态：--。",
+      "- 风险说明：研究主脑缺失，当前仅可做低置信度观察。",
+      "- 覆盖降级：研究覆盖未知域不完整，以下结论仅作低置信度参考。",
+      "- 新鲜度/覆盖概览：freshness=--，coverage=--。"
+    ];
+  }
+
+  const freshnessStatus = String(researchBrain?.freshness_guard?.overall_status ?? "--").trim() || "--";
+  const coverageStatus = String(researchBrain?.coverage_guard?.overall_status ?? "--").trim() || "--";
+  const session = String(researchBrain?.meta?.market_session ?? "--").trim() || "--";
+  const readinessLevel = String(researchBrain?.decision_readiness?.level ?? "--").trim() || "--";
+  const analysisAllowed = researchBrain?.decision_readiness?.analysis_allowed === true;
+  const tradingAllowed = researchBrain?.decision_readiness?.trading_allowed === true;
+  const reasons = Array.isArray(researchBrain?.decision_readiness?.reasons)
+    ? researchBrain.decision_readiness.reasons.filter(Boolean)
+    : [];
+  const staleDependencies = Array.isArray(researchBrain?.freshness_guard?.stale_dependencies)
+    ? researchBrain.freshness_guard.stale_dependencies
+        .map((item) => item?.label ?? item?.key ?? null)
+        .filter(Boolean)
+    : [];
+  const missingDependencies = Array.isArray(researchBrain?.freshness_guard?.missing_dependencies)
+    ? researchBrain.freshness_guard.missing_dependencies
+        .map((item) => item?.label ?? item?.key ?? null)
+        .filter(Boolean)
+    : [];
+  const weakCoverageDomains = Array.isArray(researchBrain?.coverage_guard?.weak_domains)
+    ? researchBrain.coverage_guard.weak_domains
+        .map((item) =>
+          typeof item === "string"
+            ? item
+            : item?.domain ?? item?.key ?? item?.label ?? null
+        )
+        .filter(Boolean)
+    : [];
+  const normalizeSentence = (value) => String(value ?? "").trim().replace(/[。.!?]+$/u, "");
+  const riskLines =
+    reasons.length > 0
+      ? reasons.map((reason) => `- 风险说明：${normalizeSentence(reason)}。`)
+      : ["- 风险说明：无显式门禁风险。"];
+  const coverageLines =
+    weakCoverageDomains.length > 0
+      ? weakCoverageDomains.map(
+          (domain) => `- 覆盖降级：${normalizeSentence(domain)} 域不完整，以下结论仅作低置信度参考。`
+        )
+      : ["- 覆盖降级：无。"];
+
+  return [
+    `- 研究会话：${session}。`,
+    `- 决策状态：${readinessLevel}（分析${analysisAllowed ? "可用" : "受限"}，交易${
+      tradingAllowed ? "可执行" : "受限"
+    }）。`,
+    ...riskLines,
+    ...coverageLines,
+    `- 新鲜度/覆盖概览：freshness=${freshnessStatus}，coverage=${coverageStatus}。`,
+    `- 数据缺口：stale=${staleDependencies.length > 0 ? staleDependencies.join("、") : "无"}；missing=${
+      missingDependencies.length > 0 ? missingDependencies.join("、") : "无"
+    }。`
+  ];
+}
+
+function selectResearchBrainForRender(researchBrain, failedRefreshSteps) {
+  void failedRefreshSteps;
+  return researchBrain ?? null;
+}
+
+function selectResearchBrainForDecision(researchBrain, failedRefreshSteps) {
+  if (failedRefreshSteps?.has?.("research_brain")) {
+    return null;
+  }
+
+  return researchBrain ?? null;
+}
+
+function buildOpportunityPoolFallbackLines(opportunityPool, failedRefreshSteps) {
+  if (failedRefreshSteps?.has?.("opportunity_pool")) {
+    return ["- ⚠️ 机会池本轮刷新失败，本节不沿用旧候选池结论。"];
+  }
+
+  if (!opportunityPool) {
+    return ["- ⚠️ 机会池当前缺失，本节仅保留空白降级口径，不输出候选池结论。"];
+  }
+
+  return buildOpportunityPoolLines(opportunityPool, 5);
 }
 
 function describeMarketTone(quotes, boards) {
@@ -184,10 +321,10 @@ function describeMarketTone(quotes, boards) {
   const londonGold = findQuote(quotes, "hf_XAU");
   const gold = findQuote(quotes, "AU9999.SGE");
   const broadAverage = average([
-    sh?.changePercent,
-    hs300?.changePercent,
-    sz?.changePercent,
-    cyb?.changePercent
+    getComparableChangePercent(sh, { includeReferenceClose: true }),
+    getComparableChangePercent(hs300, { includeReferenceClose: true }),
+    getComparableChangePercent(sz, { includeReferenceClose: true }),
+    getComparableChangePercent(cyb, { includeReferenceClose: true })
   ]);
   const boardAverage = average((boards ?? []).slice(0, 5).map((item) => Number(item.bd_zdf)));
   const descriptors = [];
@@ -204,23 +341,30 @@ function describeMarketTone(quotes, boards) {
     }
   }
 
-  if ((hkTechIndex?.changePercent ?? 0) > 1 && (hsi?.changePercent ?? 0) > 0 && (hscei?.changePercent ?? 0) > 0) {
+  const hkTechMove = getComparableChangePercent(hkTechIndex);
+  const hsiMove = getComparableChangePercent(hsi);
+  const hsceiMove = getComparableChangePercent(hscei);
+  if ((hkTechMove ?? 0) > 1 && (hsiMove ?? 0) > 0 && (hsceiMove ?? 0) > 0) {
     descriptors.push("港股科技修复延续");
   } else if (
-    (hkTechIndex?.changePercent ?? 0) < 0 &&
-    (hsi?.changePercent ?? 0) < 0 &&
-    (hscei?.changePercent ?? 0) < 0
+    (hkTechMove ?? 0) < 0 &&
+    (hsiMove ?? 0) < 0 &&
+    (hsceiMove ?? 0) < 0
   ) {
     descriptors.push("港股高波资产仍偏弱");
   }
 
-  const goldSignal = londonGold?.changePercent ?? gold?.changePercent ?? 0;
+  const goldSignal =
+    getComparableChangePercent(londonGold, { includeReferenceClose: true }) ??
+    getComparableChangePercent(gold, { includeReferenceClose: true }) ??
+    0;
 
   if (goldSignal >= 1) {
     descriptors.push("避险资产仍强，说明风险并未完全出清");
   } else if (
     goldSignal <= -0.5 &&
-    ((spxFuture?.changePercent ?? 0) > 0.3 || (ndxFuture?.changePercent ?? 0) > 0.3)
+    ((getComparableChangePercent(spxFuture, { includeReferenceClose: true }) ?? 0) > 0.3 ||
+      (getComparableChangePercent(ndxFuture, { includeReferenceClose: true }) ?? 0) > 0.3)
   ) {
     descriptors.push("黄金回落而外盘期货偏强，风险偏好有所修复");
   }
@@ -248,7 +392,7 @@ function describeDrivers(telegraphs, boards) {
     lines.push("算力与 AI 主线继续提供情绪催化");
   }
   if (telegraphText.includes("美股") || telegraphText.includes("中概")) {
-    lines.push("外盘与中概情绪对次日港股开盘仍有传导意义");
+    lines.push("外盘与中概情绪对下一交易日港股开盘仍有传导意义");
   }
   if (telegraphText.includes("黄金") || telegraphText.includes("加息") || telegraphText.includes("通胀")) {
     lines.push("黄金、通胀与利率预期仍在影响避险和成长风格之间的切换");
@@ -279,20 +423,12 @@ function scoreTelegraph(item) {
 }
 
 function selectTelegraphs(items, limit = 5) {
-  const scored = items
-    .map((item, index) => ({ ...item, score: scoreTelegraph(item), originalIndex: index }))
-    .sort((left, right) => right.score - left.score || left.originalIndex - right.originalIndex);
-
-  const relevant = scored.filter((item) => item.score > 0).slice(0, limit);
-  if (relevant.length >= limit) {
-    return relevant;
-  }
-
-  const fillers = scored
-    .filter((item) => item.score <= 0)
-    .slice(0, Math.max(limit - relevant.length, 0));
-
-  return [...relevant, ...fillers].slice(0, limit);
+  return selectInstitutionalStories(items, {
+    limit,
+    focusKeywords: telegraphKeywords,
+    authoritativeKeywords: ["统计局", "央行", "美联储", "非农", "关税", "制裁"],
+    minScore: 1
+  });
 }
 
 function formatBoardLine(item) {
@@ -349,30 +485,46 @@ function buildOpportunityPoolLines(opportunityPool, limit = 5) {
   });
 }
 
-function buildOpportunityMemo(opportunityPool, marketTone, marketDrivers) {
+function buildOpportunityMemo(opportunityPool, marketTone, marketDrivers, researchBrain) {
   const candidates = listOpportunityCandidates(opportunityPool, 5);
   const actionable = candidates.filter((item) =>
     ["允许试单", "允许确认仓"].includes(String(item?.action_bias ?? ""))
   );
   const blocked = candidates.filter((item) => String(item?.action_bias ?? "") === "不做");
+  const readinessLevel = String(researchBrain?.decision_readiness?.level ?? "unknown").trim() || "unknown";
+  const readinessReasons = Array.isArray(researchBrain?.decision_readiness?.reasons)
+    ? researchBrain.decision_readiness.reasons.filter(Boolean)
+    : [];
+  const tradingAllowed = researchBrain?.decision_readiness?.trading_allowed === true;
   const leadCandidate = candidates[0];
-  const thesis =
-    leadCandidate
+  const thesis = !tradingAllowed
+    ? `${marketTone}；研究主脑当前为 ${readinessLevel}，本次仅保留研究观察与计划修订。`
+    : leadCandidate
       ? `${marketTone}；机会池当前主候选为 ${leadCandidate.theme_name}（${leadCandidate.action_bias}）。`
       : `${marketTone}；机会池暂无可执行候选，维持观察。`;
-  const expectationGap = leadCandidate
-    ? `${marketDrivers}；主题热度与可执行偏置仍存在分层，优先按候选分数执行。`
-    : `${marketDrivers}；主题线索不足，等待新的预期差触发。`;
-  const allowedActions =
-    actionable.length > 0
+  const expectationGap = !tradingAllowed
+    ? `${marketDrivers}；当前交易门禁原因：${
+        readinessReasons.length > 0 ? readinessReasons.join("、") : "readiness_not_ready"
+      }。`
+    : leadCandidate
+      ? `${marketDrivers}；主题热度与可执行偏置仍存在分层，优先按候选分数执行。`
+      : `${marketDrivers}；主题线索不足，等待新的预期差触发。`;
+  const allowedActions = !tradingAllowed
+    ? ["仅允许主题研究、更新交易卡与候选优先级，不执行新增实盘动作"]
+    : actionable.length > 0
       ? actionable.slice(0, 3).map((item) => `围绕 ${item.theme_name} 做小步执行，并优先使用候选代理`)
       : ["仅允许主题研究与计划更新，不进行主动试单"];
-  const blockedActions = [
-    ...(blocked.length > 0
-      ? blocked.slice(0, 3).map((item) => `禁止在 ${item.theme_name} 主题上逆偏置强行交易`)
-      : []),
-    "禁止脱离候选池清单临时追逐盘中热点"
-  ];
+  const blockedActions = !tradingAllowed
+    ? [
+        "禁止将机会池偏置直接转化为下单动作",
+        "禁止脱离研究主脑门禁在盘中新增高波主题暴露"
+      ]
+    : [
+        ...(blocked.length > 0
+          ? blocked.slice(0, 3).map((item) => `禁止在 ${item.theme_name} 主题上逆偏置强行交易`)
+          : []),
+        "禁止脱离候选池清单临时追逐盘中热点"
+      ];
 
   return buildInstitutionalActionLines({
     thesis,
@@ -407,21 +559,32 @@ function buildPortfolioImpactLines(riskDashboard, quotes, bucketConfigMap = {}) 
   for (const bucket of activeBuckets) {
     if (bucket.bucketKey === "A_CORE") {
       lines.push(
-        `- ${bucket.label} 当前占已投资仓位 ${round(bucket.weightPct)}%；今日沪深300 ${formatSigned(hs300?.changePercent, "%")}，这部分仍是你组合的主骨架与主要方向仓。`
+        `- ${bucket.label} 当前占已投资仓位 ${round(bucket.weightPct)}%；今日沪深300 ${formatSigned(getComparableChangePercent(hs300, { includeReferenceClose: true }), "%")}，这部分仍是你组合的主骨架与主要方向仓。`
       );
       continue;
     }
 
     if (bucket.bucketKey === "GLB_MOM" || bucket.bucketKey === "TACTICAL") {
+      const hkTechText =
+        hkTechIndex?.quote_usage === "previous_close_reference" ||
+        hkTechIndex?.quote_usage === "closed_market_reference"
+          ? `上一交易日恒生科技 ${formatSigned(
+              getComparableChangePercent(hkTechIndex, { includeReferenceClose: true }),
+              "%"
+            )}`
+          : `今日恒生科技 ${formatSigned(
+              getComparableChangePercent(hkTechIndex, { includeReferenceClose: true }),
+              "%"
+            )}`;
       lines.push(
-        `- ${bucket.label} 当前占已投资仓位 ${round(bucket.weightPct)}%；今日恒生科技 ${formatSigned(hkTechIndex?.changePercent, "%")} / 纳指期货 ${formatSigned(ndxFuture?.changePercent, "%")} / 标普期货 ${formatSigned(spxFuture?.changePercent, "%")}，这部分仍是你组合里弹性最高的风险来源。`
+        `- ${bucket.label} 当前占已投资仓位 ${round(bucket.weightPct)}%；${hkTechText} / 纳指期货 ${formatSigned(getComparableChangePercent(ndxFuture, { includeReferenceClose: true }), "%")} / 标普期货 ${formatSigned(getComparableChangePercent(spxFuture, { includeReferenceClose: true }), "%")}，这部分仍是你组合里弹性最高的风险来源。`
       );
       continue;
     }
 
     if (bucket.bucketKey === "HEDGE") {
       lines.push(
-        `- ${bucket.label} 当前占已投资仓位 ${round(bucket.weightPct)}%；今日上金所Au99.99 ${formatSigned(gold?.changePercent, "%")}，对冲腿仍在发挥保护作用。`
+        `- ${bucket.label} 当前占已投资仓位 ${round(bucket.weightPct)}%；今日上金所Au99.99 ${formatSigned(getComparableChangePercent(gold, { includeReferenceClose: true }), "%")}，对冲腿仍在发挥保护作用。`
       );
       continue;
     }
@@ -501,20 +664,43 @@ await mkdir(outputDir, { recursive: true });
 try {
   const reportContext = await ensureReportContext({
     portfolioRoot,
-    options
+    options: {
+      ...options,
+      session: "close"
+    }
   });
   const { manifest, payloads } = reportContext;
-  const [riskDashboard, hypothesesMarkdown, quoteResults, boards, telegraphs, hotStocks] = await Promise.all([
-    Promise.resolve(payloads.riskDashboard ?? JSON.parse(await readFile(riskDashboardPath, "utf8"))),
+  const [riskDashboard, hypothesesMarkdown, quoteResults, boardsResult, telegraphsResult, hotStocksResult] = await Promise.all([
+    Promise.resolve(payloads.riskDashboard ?? {}),
     readFile(hypothesesPath, "utf8").catch(() => ""),
-    Promise.allSettled(
+    Promise.all(
       [...aShareIndexConfigs, ...hongKongIndexConfigs, ...globalIndexConfigs, ...commodityConfigs].map((item) =>
-        getStockQuote(item.code)
+        runGuardedFetch({
+          source: `quote:${item.code}`,
+          label: item.label,
+          timeoutMs: resolveQuoteFetchTimeoutMs(item.code, QUOTE_FETCH_TIMEOUT_MS),
+          task: () => getStockQuote(item.code)
+        })
       )
     ),
-    getHotBoards({ boardType: "industry", limit: 5 }).catch(() => ({ items: [] })),
-    getMarketTelegraph(20).catch(() => []),
-    getHotStocks(5, "10").catch(() => [])
+    runGuardedFetch({
+      source: "boards",
+      label: "热点板块",
+      timeoutMs: AUX_FETCH_TIMEOUT_MS,
+      task: () => getHotBoards({ boardType: "industry", limit: 5 })
+    }),
+    runGuardedFetch({
+      source: "telegraphs",
+      label: "市场电报",
+      timeoutMs: AUX_FETCH_TIMEOUT_MS,
+      task: () => getMarketTelegraph(20)
+    }),
+    runGuardedFetch({
+      source: "hot_stocks",
+      label: "热门股票温度",
+      timeoutMs: AUX_FETCH_TIMEOUT_MS,
+      task: () => getHotStocks(5, "10")
+    })
   ]);
   const cnMarketSnapshot =
     payloads.cnMarketSnapshot ?? (await loadCnMarketSnapshotFromManifest(manifest));
@@ -523,19 +709,112 @@ try {
     buildPortfolioPath(portfolioRoot, "config", "asset_master.json");
   const assetMaster = await loadAssetMaster(assetMasterPath).catch(() => null);
   const bucketConfigMap = assetMaster ? buildBucketConfigMap(assetMaster) : {};
+  const failedRefreshSteps = new Set(
+    (reportContext?.refresh?.errors ?? []).map((entry) => entry?.step).filter(Boolean)
+  );
+  const riskDashboardUsable = Boolean(payloads.riskDashboard) && !failedRefreshSteps.has("risk_dashboard");
+  const opportunityPoolUsable = Boolean(payloads.opportunityPool) && !failedRefreshSteps.has("opportunity_pool");
 
+  const now = new Date();
   const successfulQuotes = quoteResults
-    .filter((item) => item.status === "fulfilled")
-    .map((item) => item.value);
+    .filter((item) => item.ok)
+    .map((item) =>
+      annotateMarketQuote({
+        code: item.data?.stockCode,
+        quote: item.data,
+        now
+      })
+    );
+  const boards = boardsResult.ok ? boardsResult.data : { items: [] };
+  const telegraphs = telegraphsResult.ok ? telegraphsResult.data : [];
+  const hotStocks = hotStocksResult.ok ? hotStocksResult.data : [];
+  const externalSourceStatusLines = buildExternalSourceStatusLines([
+    summarizeGuardedBatch({
+      source: "quotes",
+      label: "行情报价",
+      results: quoteResults
+    }),
+    boardsResult,
+    telegraphsResult,
+    hotStocksResult
+  ]);
   const selectedTelegraphs = selectTelegraphs(telegraphs ?? [], 5);
   const marketTone = describeMarketTone(successfulQuotes, boards.items ?? []);
   const marketDrivers = describeDrivers(selectedTelegraphs, boards.items ?? []);
-  const portfolioImpactLines = buildPortfolioImpactLines(riskDashboard, successfulQuotes, bucketConfigMap);
-  const nextDayWatchLines = buildNextDayWatchLines(riskDashboard, bucketConfigMap);
-  const cnMarketSupplementLines = buildCnMarketBriefLines(cnMarketSnapshot);
+  const activeRiskDashboard = riskDashboardUsable ? riskDashboard : {};
+  const activeResearchBrain = selectResearchBrainForRender(payloads.researchBrain, failedRefreshSteps);
+  const decisionResearchBrain = selectResearchBrainForDecision(
+    payloads.researchBrain,
+    failedRefreshSteps
+  );
+  const sessionMemory = await readReportSessionMemory(reportContext.paths.reportSessionMemoryPath);
+  const currentSessionSlot = resolveReportSessionSlot({
+    researchBrain: activeResearchBrain
+  });
+  const currentSessionRecord = activeResearchBrain
+    ? buildReportSessionRecord({
+        tradeDate: briefDate,
+        session: currentSessionSlot,
+        reportType: "market_brief",
+        researchBrain: activeResearchBrain
+      })
+    : null;
+  const sessionTraceLines = currentSessionRecord
+    ? buildReportSessionInheritanceLines({
+        memory: sessionMemory,
+        tradeDate: briefDate,
+        session: currentSessionSlot,
+        currentRecord: currentSessionRecord
+      })
+    : ["- 会话继承：研究主脑缺失，当前无法生成日内主线归因。"];
+  const updatedSessionMemory = currentSessionRecord
+    ? updateReportSessionMemory(sessionMemory, currentSessionRecord)
+    : sessionMemory;
+  const activeOpportunityPool = opportunityPoolUsable ? payloads.opportunityPool : null;
+  const portfolioImpactLines = buildPortfolioImpactLines(
+    activeRiskDashboard,
+    successfulQuotes,
+    bucketConfigMap
+  );
+  const nextDayWatchLines = buildNextDayWatchLines(activeRiskDashboard, bucketConfigMap);
+  const safePortfolioImpactLines = payloads.riskDashboard
+    ? riskDashboardUsable
+      ? portfolioImpactLines.length > 0
+        ? portfolioImpactLines
+        : ["- 暂无可映射的持仓代理数据"]
+      : ["- ⚠️ 风险仪表盘本轮刷新失败，本节不沿用旧风控盘输出结构性映射结论。"]
+    : ["- ⚠️ 风险仪表盘当前缺失或刷新失败，本节仅保留空白降级口径，不输出结构性映射结论。"];
+  const safeNextDayWatchLines = payloads.riskDashboard
+    ? riskDashboardUsable
+      ? nextDayWatchLines
+      : ["- ⚠️ 风险仪表盘本轮刷新失败，下一交易日观察清单仅保留研究层提示，不输出结构化动作偏置。"]
+    : ["- ⚠️ 风险仪表盘当前缺失或刷新失败，下一交易日观察清单仅保留研究层提示，不输出结构化动作偏置。"];
+  const cnMarketSupplementLines = buildCnMarketBriefLines(cnMarketSnapshot).filter(
+    (line) => !line.startsWith("- 北向资金：") && !line.startsWith("- 南向资金：")
+  );
   const contextModeLines = buildContextModeLines(reportContext);
-  const institutionalMemoLines = buildOpportunityMemo(payloads.opportunityPool, marketTone, marketDrivers);
-  const opportunityPoolLines = buildOpportunityPoolLines(payloads.opportunityPool, 5);
+  const researchGuardLines = buildResearchGuardLines(activeResearchBrain);
+  const renderResearchSections = buildUnifiedResearchSections({
+    researchBrain: activeResearchBrain,
+    cnMarketSnapshot,
+    researchGuardLines
+  });
+  const decisionDeskSection = buildUnifiedResearchSections({
+    researchBrain: decisionResearchBrain,
+    cnMarketSnapshot,
+    researchGuardLines
+  }).find((item) => item.heading === "## Desk Action Conclusion");
+  const researchSectionLines = flattenResearchSections(
+    renderResearchSections.map((section) =>
+      section.heading === "## Desk Action Conclusion" && decisionDeskSection
+        ? { ...section, lines: decisionDeskSection.lines }
+        : section
+    )
+  );
+  const opportunityPoolLines = buildOpportunityPoolFallbackLines(
+    activeOpportunityPool,
+    failedRefreshSteps
+  );
   const relevantHypotheses = [];
 
   if (String(hypothesesMarkdown).includes("中东局势缓和预期将继续推动港股科技修复")) {
@@ -551,9 +830,12 @@ try {
     `- 账户：${accountId}`,
     ...contextModeLines,
     "",
-    "## 今日主线与行动备忘录",
+    ...researchSectionLines,
     "",
-    ...institutionalMemoLines,
+    "## 日内会话继承",
+    "",
+    ...sessionTraceLines,
+    ...(externalSourceStatusLines.length > 0 ? ["", ...externalSourceStatusLines] : []),
     "",
     "## 市场温度补充",
     "",
@@ -613,19 +895,25 @@ try {
     "",
     "## 与当前持仓映射",
     "",
-    ...(portfolioImpactLines.length > 0 ? portfolioImpactLines : ["- 暂无可映射的持仓代理数据"]),
+    ...safePortfolioImpactLines,
     ...relevantHypotheses.map((item) => `- ${item}`),
     "",
-    "## 次日观察与行动偏置",
+    "## 下一交易日观察与行动偏置",
     "",
-    ...nextDayWatchLines
+    ...safeNextDayWatchLines
   ];
 
+  await writeReportSessionMemory(reportContext.paths.reportSessionMemoryPath, updatedSessionMemory);
   await writeFile(outputPath, `${lines.join("\n")}\n`, "utf8");
 
   if (manifest?.canonical_entrypoints) {
-    manifest.canonical_entrypoints.latest_market_brief = outputPath;
-    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    await updateManifestCanonicalEntrypoints({
+      manifestPath,
+      baseManifest: manifest,
+      entries: {
+        latest_market_brief: outputPath
+      }
+    });
   }
 
   console.log(

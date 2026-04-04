@@ -7,8 +7,26 @@ import {
   buildInstitutionalActionLines,
   extractSpeculativeConclusionLines
 } from "./lib/dual_trade_plan_render.mjs";
+import {
+  buildUnifiedResearchSections,
+  flattenResearchSections
+} from "./lib/research_brain_render.mjs";
+import {
+  buildReportSessionInheritanceLines,
+  buildReportSessionRecord,
+  isClosingSessionRecord,
+  isClosingSessionSlot,
+  resolveReportSessionSlot,
+  readReportSessionMemory
+} from "./lib/report_session_memory.mjs";
+import {
+  buildAnalysisHitRateSummary,
+  buildReportQualityScorecard
+} from "./lib/report_quality_scorecard.mjs";
+import { updateManifestCanonicalEntrypoints } from "./lib/manifest_state.mjs";
 import { ensureReportContext } from "./lib/report_context.mjs";
-import { loadPreferredPortfolioState } from "./lib/portfolio_state_view.mjs";
+import { loadCanonicalPortfolioState } from "./lib/portfolio_state_view.mjs";
+import { buildCanonicalPortfolioView } from "./lib/portfolio_canonical_view.mjs";
 
 const args = process.argv.slice(2);
 
@@ -43,6 +61,18 @@ function resolveDate(dateArg) {
 
 function round(value, digits = 2) {
   return Number(Number(value ?? 0).toFixed(digits));
+}
+
+async function readJsonOrNull(filePath) {
+  if (!filePath) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(await readFile(filePath, "utf8"));
+  } catch {
+    return null;
+  }
 }
 
 function pickWorkingView(riskDashboard) {
@@ -158,7 +188,8 @@ function buildDailyInstitutionalMemoLines({
   nextTradeCurrentConclusion = [],
   nextTradeFirstLeg = [],
   nextTradeSpeculativeConclusions = [],
-  hasBlockingQualityIssues = false
+  hasBlockingQualityIssues = false,
+  researchDeskConclusion = null
 } = {}) {
   const dominantBucket = Object.entries(bucketWeights)
     .map(([bucketKey, value]) => ({
@@ -208,7 +239,9 @@ function buildDailyInstitutionalMemoLines({
     thesis,
     expectationGap,
     allowedActions,
-    blockedActions
+    blockedActions,
+    tradePermission: researchDeskConclusion?.trade_permission,
+    blockedOrder: researchDeskConclusion?.one_sentence_order
   });
 }
 
@@ -229,6 +262,107 @@ async function resolveFirstExistingPath(candidates = []) {
     }
   }
   return normalized[0] ?? null;
+}
+
+function normalizeTimestamp(value) {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return null;
+  }
+
+  const parsed = new Date(text);
+  return Number.isFinite(parsed.getTime()) ? parsed.getTime() : null;
+}
+
+function isArtifactFreshEnough({ artifact, sessionMemoryUpdatedAt }) {
+  if (!artifact) {
+    return false;
+  }
+
+  const artifactGeneratedAt =
+    normalizeTimestamp(artifact?.generated_at) ?? normalizeTimestamp(artifact?.updated_at);
+  const sessionUpdatedAt = normalizeTimestamp(sessionMemoryUpdatedAt);
+
+  if (artifactGeneratedAt === null) {
+    return false;
+  }
+
+  if (sessionUpdatedAt === null) {
+    return true;
+  }
+
+  return artifactGeneratedAt >= sessionUpdatedAt;
+}
+
+function selectDailyBriefQualityArtifacts({
+  briefDate,
+  reportSessionMemory,
+  persistedReportQualityScorecard,
+  persistedAnalysisHitRate,
+  buildReportQualityScorecard: buildScorecard,
+  buildAnalysisHitRateSummary: buildHitRate
+}) {
+  const toTimestamp = (value) => {
+    const text = String(value ?? "").trim();
+    if (!text) {
+      return null;
+    }
+    const parsed = new Date(text);
+    return Number.isFinite(parsed.getTime()) ? parsed.getTime() : null;
+  };
+  const isFreshEnough = (artifact, sessionMemoryUpdatedAt) => {
+    if (!artifact) {
+      return false;
+    }
+    const artifactGeneratedAt =
+      toTimestamp(artifact?.generated_at) ?? toTimestamp(artifact?.updated_at);
+    const sessionUpdatedAt = toTimestamp(sessionMemoryUpdatedAt);
+    if (artifactGeneratedAt === null) {
+      return false;
+    }
+    if (sessionUpdatedAt === null) {
+      return true;
+    }
+    return artifactGeneratedAt >= sessionUpdatedAt;
+  };
+  const sessionMemoryUpdatedAt =
+    reportSessionMemory?.updated_at ??
+    reportSessionMemory?.generated_at ??
+    reportSessionMemory?.days?.[briefDate]?.close?.generated_at ??
+    null;
+  const canReusePersistedScorecard = isFreshEnough(
+    persistedReportQualityScorecard,
+    sessionMemoryUpdatedAt
+  );
+  const reportQualityScorecard = canReusePersistedScorecard
+    ? persistedReportQualityScorecard
+    : buildScorecard(reportSessionMemory, {
+        asOfDate: briefDate,
+        windowSize: 20
+      });
+  const canReusePersistedHitRate =
+    canReusePersistedScorecard &&
+    isFreshEnough(persistedAnalysisHitRate, sessionMemoryUpdatedAt);
+  const analysisHitRate = canReusePersistedHitRate
+    ? persistedAnalysisHitRate
+    : buildHitRate(reportQualityScorecard);
+
+  return {
+    reportQualityScorecard,
+    analysisHitRate
+  };
+}
+
+function buildDailyBriefTradePlanCandidates({ briefDate, portfolioRoot, manifest }) {
+  const sameDayPrimary = `${portfolioRoot}/reports/${briefDate}-next-trade-plan-regime-v4.md`;
+  const sameDayFallback = `${portfolioRoot}/reports/${briefDate}-next-trade-generator.md`;
+  const manifestCandidates = [
+    manifest?.canonical_entrypoints?.latest_trade_plan_v4_report,
+    manifest?.canonical_entrypoints?.latest_next_trade_generator
+  ]
+    .filter((candidate) => String(candidate ?? "").includes(briefDate));
+
+  return [...new Set([sameDayPrimary, sameDayFallback, ...manifestCandidates].filter(Boolean))];
 }
 
 function extractJournalHighlights(markdown) {
@@ -382,6 +516,39 @@ function buildPerformanceAttributionLines(performanceAttribution) {
   return lines;
 }
 
+function buildResearchQualityReviewLines(scorecard, hitRateSummary) {
+  if (!scorecard || !hitRateSummary) {
+    return ["- 评分状态：研究质量评分板尚未生成，当前仅保留会话主线继承。"];
+  }
+
+  const lines = [];
+  const summary = hitRateSummary ?? {};
+  const latestRecords = Array.isArray(scorecard?.daily_records)
+    ? scorecard.daily_records.slice(-3).reverse()
+    : [];
+
+  lines.push(
+    `- 统计窗口：最近 ${scorecard.window_size ?? "--"} 个交易日，已记录 ${scorecard.record_count ?? "--"} 条日度链路。`
+  );
+  lines.push(
+    `- 午间验证命中率：${summary.morning_to_noon?.hit_rate_pct ?? "--"}%（已结算 ${summary.morning_to_noon?.settled_count ?? 0} 条）。`
+  );
+  lines.push(
+    `- 收盘归因命中率：${summary.morning_to_close?.hit_rate_pct ?? "--"}%（已结算 ${summary.morning_to_close?.settled_count ?? 0} 条）。`
+  );
+  lines.push(
+    `- 次日偏置兑现率：${summary.next_day_bias?.hit_rate_pct ?? "--"}%（已结算 ${summary.next_day_bias?.settled_count ?? 0} 条）。`
+  );
+
+  for (const record of latestRecords) {
+    lines.push(
+      `- ${record.trade_date}：午间=${record.morning_to_noon?.status ?? "pending"}，收盘=${record.morning_to_close?.status ?? "pending"}，次日=${record.next_day_bias?.status ?? "pending"}。`
+    );
+  }
+
+  return lines;
+}
+
 function buildQuantRiskAlertLines(quantMetrics, riskDashboard = null) {
   if (!quantMetrics) {
     return ["- ⚠️ [核心风险雷达] quant_metrics_engine.json 尚未生成，当前无法渲染真实数学预警。"];
@@ -516,16 +683,26 @@ await mkdir(outputDir, { recursive: true });
 
 const reportContext = await ensureReportContext({
   portfolioRoot,
-  options,
+  options: {
+    ...options,
+    session: "close"
+  },
   includePerformanceAttribution: true
 });
 const { manifest, payloads, freshness, refresh } = reportContext;
-const latestView = await loadPreferredPortfolioState({ portfolioRoot, manifest });
-const latest = payloads.latest ?? latestView.payload;
+const latestView = await loadCanonicalPortfolioState({ portfolioRoot, manifest });
+const latest =
+  payloads.latest ??
+  buildCanonicalPortfolioView({
+    payload: latestView.payload,
+    sourceKind: latestView.sourceKind,
+    sourcePath: latestView.sourcePath
+  });
 const riskDashboard = payloads.riskDashboard ?? JSON.parse(await readFile(riskDashboardPath, "utf8"));
 const macroRadar = payloads.macroRadar ?? null;
 const performanceAttribution = payloads.performanceAttribution ?? null;
 const quantMetrics = payloads.quantMetrics ?? null;
+const researchBrain = payloads.researchBrain ?? null;
 
 const [hypothesesMarkdown, watchlistQuotes] = await Promise.all([
   readFile(hypothesesPath, "utf8"),
@@ -546,12 +723,13 @@ const resolvedJournalPath =
 const journalMarkdown = await readFile(resolvedJournalPath, "utf8").catch(() => "");
 const cnMarketSnapshot = payloads.cnMarketSnapshot ?? (await loadCnMarketSnapshotFromManifest(manifest));
 
-const nextTradePlanPath = await resolveFirstExistingPath([
-  manifest?.canonical_entrypoints?.latest_trade_plan_v4_report,
-  `${portfolioRoot}/reports/${briefDate}-next-trade-plan-regime-v4.md`,
-  manifest?.canonical_entrypoints?.latest_next_trade_generator,
-  `${portfolioRoot}/reports/${briefDate}-next-trade-generator.md`
-]);
+const nextTradePlanPath = await resolveFirstExistingPath(
+  buildDailyBriefTradePlanCandidates({
+    briefDate,
+    portfolioRoot,
+    manifest
+  })
+);
 const nextTradePlanMarkdown = await readFile(nextTradePlanPath, "utf8").catch(() => "");
 
 const summary = latest.summary ?? {};
@@ -569,11 +747,62 @@ const valuationAlerts = riskDashboard.valuation_alerts ?? [];
 const hypotheses = parseHypothesesMarkdown(hypothesesMarkdown);
 const inProgressHypotheses = hypotheses.filter((item) => item.status === "进行中");
 const movers = formatTopMovers(watchlistQuotes.items ?? [], briefDate);
-const cnDailyBriefLines = buildCnDailyBriefLines(cnMarketSnapshot);
+const cnDailyBriefLines = buildCnDailyBriefLines(cnMarketSnapshot).filter(
+  (line) => !line.startsWith("- 北向核验：") && !line.startsWith("- 南向核验：")
+);
+const dailyResearchLines = flattenResearchSections(
+  buildUnifiedResearchSections({
+    researchBrain,
+    cnMarketSnapshot,
+    researchGuardLines: []
+  }),
+  {
+    includeHeadings: ["## Active Market Driver", "## China / HK Flow Validation"]
+  }
+);
 const macroRadarLines = buildMacroRadarLines(macroRadar);
 const performanceAttributionLines = buildPerformanceAttributionLines(performanceAttribution);
 const quantRiskAlertLines = buildQuantRiskAlertLines(quantMetrics, riskDashboard);
 const dataFreshnessLines = buildDataFreshnessLines({ latest, freshness, refresh });
+const reportSessionMemory = await readReportSessionMemory(reportContext.paths.reportSessionMemoryPath);
+const persistedReportQualityScorecard = await readJsonOrNull(reportContext.paths.reportQualityScorecardPath);
+const persistedAnalysisHitRate = await readJsonOrNull(reportContext.paths.analysisHitRatePath);
+const { reportQualityScorecard, analysisHitRate } = selectDailyBriefQualityArtifacts({
+  briefDate,
+  reportSessionMemory,
+  persistedReportQualityScorecard,
+  persistedAnalysisHitRate,
+  buildReportQualityScorecard,
+  buildAnalysisHitRateSummary
+});
+const researchBrainSessionSlot = resolveReportSessionSlot({
+  researchBrain
+});
+const persistedCloseRecord = isClosingSessionRecord(reportSessionMemory?.days?.[briefDate]?.close)
+  ? reportSessionMemory.days[briefDate].close
+  : null;
+const derivedCloseRecord =
+  persistedCloseRecord ??
+  (researchBrain && isClosingSessionSlot(researchBrainSessionSlot)
+    ? buildReportSessionRecord({
+        tradeDate: briefDate,
+        session: researchBrainSessionSlot,
+        reportType: "daily_brief",
+        researchBrain
+      })
+    : null);
+const sessionInheritanceLines = derivedCloseRecord
+  ? buildReportSessionInheritanceLines({
+      memory: reportSessionMemory,
+      tradeDate: briefDate,
+      session: "close",
+      currentRecord: derivedCloseRecord
+    })
+  : ["- 会话继承：当前缺少早报/午报/收盘主线记录。"];
+const researchQualityReviewLines = buildResearchQualityReviewLines(
+  reportQualityScorecard,
+  analysisHitRate
+);
 const nextTradeCurrentConclusion = extractMarkdownSectionLines(nextTradePlanMarkdown, "当前结论");
 const nextTradeFirstLeg = extractMarkdownSectionLines(nextTradePlanMarkdown, "第一笔计划");
 const nextTradeSpeculativePlanLines = extractMarkdownSectionLines(nextTradePlanMarkdown, "博弈系统计划");
@@ -603,7 +832,8 @@ const institutionalMemoLines = buildDailyInstitutionalMemoLines({
   nextTradeCurrentConclusion,
   nextTradeFirstLeg,
   nextTradeSpeculativeConclusions,
-  hasBlockingQualityIssues: freshness?.hasBlockingQualityIssues
+  hasBlockingQualityIssues: freshness?.hasBlockingQualityIssues,
+  researchDeskConclusion: researchBrain?.actionable_decision?.desk_conclusion
 });
 
 const lines = [
@@ -672,9 +902,18 @@ const lines = [
   "",
   ...macroRadarLines,
   "",
+  "## 会话主线继承",
+  "",
+  ...sessionInheritanceLines,
+  "",
+  "## 研究质量回看",
+  "",
+  ...researchQualityReviewLines,
+  "",
   "## 🚨 核心风险雷达 (Quant Risk Alerts)",
   "",
   ...quantRiskAlertLines,
+  ...(dailyResearchLines.length > 0 ? ["", ...dailyResearchLines] : []),
   "",
   "## 当日摘要",
   "",
@@ -694,7 +933,7 @@ const lines = [
   `- 主档案持仓：${summary.total_fund_assets ?? "--"} 元`,
   `- 工作口径已投资资金：${workingView.invested_capital_cny ?? "--"} 元`,
   ...(Number(summary.pending_buy_confirm ?? 0) > 0
-    ? [`- 待次日计收益买入：${summary.pending_buy_confirm} 元`]
+    ? [`- 待下一交易日计收益买入：${summary.pending_buy_confirm} 元`]
     : []),
   `- 用户口头申报现金：${riskDashboard.capital_context?.reported_cash_estimate_cny ?? "--"} 元`,
   `- 持有收益：${summary.holding_profit ?? "--"} 元`,
@@ -765,8 +1004,13 @@ const lines = [
 await writeFile(outputPath, `${lines.join("\n")}\n`, "utf8");
 
 if (manifest && manifest.canonical_entrypoints) {
-  manifest.canonical_entrypoints.latest_daily_brief = outputPath;
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await updateManifestCanonicalEntrypoints({
+    manifestPath,
+    baseManifest: manifest,
+    entries: {
+      latest_daily_brief: outputPath
+    }
+  });
 }
 
 console.log(
