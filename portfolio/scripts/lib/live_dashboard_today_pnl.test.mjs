@@ -3,24 +3,218 @@ import assert from "node:assert/strict";
 
 import {
   applyTodayPnlToBaseValue,
+  deriveEstimatedPnlDisplay,
+  deriveOvernightCarryDisplay,
   deriveTodayPnlDisplay,
+  resolveLatestConfirmedLabel,
   resolveQuoteStatusDisplay,
   resolveValuationLabel,
   resolveDisplayedDailyChangePct,
+  shouldUseConfirmedSnapshotDisplay,
   shouldApplyEstimatedPnlOverlay,
   summarizeTodayPnl
 } from "./live_dashboard_today_pnl.mjs";
+
+test("deriveEstimatedPnlDisplay shows same-day intraday estimate", () => {
+  const displayed = deriveEstimatedPnlDisplay({
+    quoteDate: "2026-04-03",
+    today: "2026-04-03",
+    updateTime: "2026-04-03 14:36",
+    now: new Date("2026-04-03T14:36:00+08:00"),
+    intradayChangePct: 1.26,
+    estimatedDailyPnl: 318.55,
+    sessionPolicy: {
+      openTime: "09:30",
+      closeTime: "15:00"
+    }
+  });
+
+  assert.deepEqual(displayed, {
+    quoteFresh: true,
+    quoteCurrent: true,
+    quoteMode: "live_estimate",
+    displayedChangePct: 1.26,
+    displayedDailyPnl: 318.55
+  });
+});
+
+test("deriveEstimatedPnlDisplay hides stale estimates when quote date is old", () => {
+  const displayed = deriveEstimatedPnlDisplay({
+    quoteDate: "2026-04-02",
+    today: "2026-04-03",
+    updateTime: "2026-04-02 14:36",
+    now: new Date("2026-04-03T14:36:00+08:00"),
+    intradayChangePct: 1.26,
+    estimatedDailyPnl: 318.55,
+    sessionPolicy: {
+      openTime: "09:30",
+      closeTime: "15:00"
+    }
+  });
+
+  assert.deepEqual(displayed, {
+    quoteFresh: false,
+    quoteCurrent: false,
+    quoteMode: "confirmed_nav",
+    displayedChangePct: null,
+    displayedDailyPnl: null
+  });
+});
+
+test("deriveEstimatedPnlDisplay keeps same-day domestic quotes as close reference after 15:00", () => {
+  const displayed = deriveEstimatedPnlDisplay({
+    quoteDate: "2026-04-03",
+    today: "2026-04-03",
+    updateTime: "2026-04-03 14:58",
+    now: new Date("2026-04-03T15:05:00+08:00"),
+    intradayChangePct: 0.44,
+    estimatedDailyPnl: 88,
+    sessionPolicy: {
+      openTime: "09:30",
+      closeTime: "15:00"
+    }
+  });
+
+  assert.deepEqual(displayed, {
+    quoteFresh: false,
+    quoteCurrent: true,
+    quoteMode: "close_reference",
+    displayedChangePct: 0.44,
+    displayedDailyPnl: 88
+  });
+});
+
+test("deriveEstimatedPnlDisplay keeps gold funds live until 15:30", () => {
+  const displayed = deriveEstimatedPnlDisplay({
+    quoteDate: "2026-04-03",
+    today: "2026-04-03",
+    updateTime: "2026-04-03 15:18",
+    now: new Date("2026-04-03T15:20:00+08:00"),
+    intradayChangePct: 0.51,
+    estimatedDailyPnl: 51,
+    sessionPolicy: {
+      openTime: "09:30",
+      closeTime: "15:30"
+    }
+  });
+
+  assert.deepEqual(displayed, {
+    quoteFresh: true,
+    quoteCurrent: true,
+    quoteMode: "live_estimate",
+    displayedChangePct: 0.51,
+    displayedDailyPnl: 51
+  });
+});
+
+test("deriveEstimatedPnlDisplay keeps Hong Kong related funds live until 16:10", () => {
+  const displayed = deriveEstimatedPnlDisplay({
+    quoteDate: "2026-04-03",
+    today: "2026-04-03",
+    updateTime: "2026-04-03 16:05",
+    now: new Date("2026-04-03T16:06:00+08:00"),
+    intradayChangePct: 0.72,
+    estimatedDailyPnl: 72,
+    sessionPolicy: {
+      openTime: "09:30",
+      closeTime: "16:10"
+    }
+  });
+
+  assert.deepEqual(displayed, {
+    quoteFresh: true,
+    quoteCurrent: true,
+    quoteMode: "live_estimate",
+    displayedChangePct: 0.72,
+    displayedDailyPnl: 72
+  });
+});
+
+test("deriveEstimatedPnlDisplay hides overnight qdii carry from today's pnl", () => {
+  const displayed = deriveEstimatedPnlDisplay({
+    quoteDate: "2026-04-03",
+    today: "2026-04-03",
+    updateTime: "2026-04-03 04:00",
+    now: new Date("2026-04-03T13:56:00+08:00"),
+    intradayChangePct: 1.44,
+    estimatedDailyPnl: 152.74,
+    sessionPolicy: {
+      profile: "global_qdii",
+      openTime: "09:30",
+      closeTime: "15:00"
+    }
+  });
+
+  assert.deepEqual(displayed, {
+    quoteFresh: false,
+    quoteCurrent: false,
+    quoteMode: "confirmed_nav",
+    displayedChangePct: null,
+    displayedDailyPnl: null
+  });
+});
+
+test("deriveOvernightCarryDisplay extracts qdii overnight carry as pending confirmation", () => {
+  const displayed = deriveOvernightCarryDisplay({
+    quoteDate: "2026-04-03",
+    today: "2026-04-03",
+    updateTime: "2026-04-03 04:00",
+    now: new Date("2026-04-03T13:56:00+08:00"),
+    intradayChangePct: 1.44,
+    estimatedDailyPnl: 152.74,
+    pendingReferenceDate: "2026-04-02",
+    sessionPolicy: {
+      profile: "global_qdii",
+      openTime: "09:30",
+      closeTime: "15:00"
+    }
+  });
+
+  assert.deepEqual(displayed, {
+    overnightCarryChangePct: 1.44,
+    overnightCarryPnl: 152.74,
+    overnightCarryLabel: "待确认收益 对应 2026-04-02",
+    overnightCarryReferenceDate: "2026-04-02"
+  });
+});
+
+test("deriveOvernightCarryDisplay stays empty for domestic same-day estimates", () => {
+  const displayed = deriveOvernightCarryDisplay({
+    quoteDate: "2026-04-03",
+    today: "2026-04-03",
+    updateTime: "2026-04-03 13:56",
+    now: new Date("2026-04-03T13:56:00+08:00"),
+    intradayChangePct: -0.61,
+    estimatedDailyPnl: -173.22,
+    expectedConfirmedDate: "2026-04-03",
+    sessionPolicy: {
+      profile: "domestic",
+      openTime: "09:30",
+      closeTime: "15:00"
+    }
+  });
+
+  assert.deepEqual(displayed, {
+    overnightCarryChangePct: null,
+    overnightCarryPnl: null,
+    overnightCarryLabel: null,
+    overnightCarryReferenceDate: null
+  });
+});
 
 test("deriveTodayPnlDisplay hides stale quote metrics from today's pnl slots", () => {
   const displayed = deriveTodayPnlDisplay({
     quoteDate: "2026-04-01",
     today: "2026-04-02",
+    updateTime: "2026-04-01 净值",
     confirmedChangePct: 2.73,
     confirmedDailyPnl: 26.94
   });
 
   assert.deepEqual(displayed, {
     quoteFresh: false,
+    quoteCurrent: false,
+    quoteMode: "confirmed_nav",
     displayedChangePct: null,
     displayedDailyPnl: null
   });
@@ -30,14 +224,68 @@ test("deriveTodayPnlDisplay keeps same-day quote metrics visible", () => {
   const displayed = deriveTodayPnlDisplay({
     quoteDate: "2026-04-02",
     today: "2026-04-02",
+    updateTime: "2026-04-02 10:34",
+    now: new Date("2026-04-02T10:34:00+08:00"),
     confirmedChangePct: 2.08,
-    confirmedDailyPnl: 1446.95
+    confirmedDailyPnl: 1446.95,
+    sessionPolicy: {
+      openTime: "09:30",
+      closeTime: "15:00"
+    }
   });
 
   assert.deepEqual(displayed, {
     quoteFresh: true,
+    quoteCurrent: true,
+    quoteMode: "live_estimate",
     displayedChangePct: 2.08,
     displayedDailyPnl: 1446.95
+  });
+});
+
+test("deriveTodayPnlDisplay treats same-day close-like update as close reference", () => {
+  const displayed = deriveTodayPnlDisplay({
+    quoteDate: "2026-04-02",
+    today: "2026-04-02",
+    updateTime: "2026-04-02 净值",
+    now: new Date("2026-04-02T15:08:00+08:00"),
+    confirmedChangePct: -1,
+    confirmedDailyPnl: -286.83,
+    sessionPolicy: {
+      openTime: "09:30",
+      closeTime: "15:00"
+    }
+  });
+
+  assert.deepEqual(displayed, {
+    quoteFresh: false,
+    quoteCurrent: true,
+    quoteMode: "close_reference",
+    displayedChangePct: -1,
+    displayedDailyPnl: -286.83
+  });
+});
+
+test("deriveTodayPnlDisplay treats late same-day valuation snapshots as close_reference instead of live estimate", () => {
+  const displayed = deriveTodayPnlDisplay({
+    quoteDate: "2026-04-02",
+    today: "2026-04-02",
+    updateTime: "2026-04-02 22:27",
+    now: new Date("2026-04-02T22:27:00+08:00"),
+    confirmedChangePct: 0.83,
+    confirmedDailyPnl: 380.64,
+    sessionPolicy: {
+      openTime: "09:30",
+      closeTime: "15:00"
+    }
+  });
+
+  assert.deepEqual(displayed, {
+    quoteFresh: false,
+    quoteCurrent: true,
+    quoteMode: "close_reference",
+    displayedChangePct: 0.83,
+    displayedDailyPnl: 380.64
   });
 });
 
@@ -62,22 +310,42 @@ test("resolveDisplayedDailyChangePct falls back to growth rate when realtime val
 });
 
 test("resolveValuationLabel uses estimated label for fresh realtime quotes", () => {
-  assert.equal(resolveValuationLabel({ quoteFresh: true }), "估算净值");
+  assert.equal(resolveValuationLabel({ quoteFresh: true, quoteMode: "live_estimate" }), "盘中估值");
+});
+
+test("resolveValuationLabel uses close-reference label after market close", () => {
+  assert.equal(resolveValuationLabel({ quoteFresh: false, quoteMode: "close_reference" }), "收盘参考");
 });
 
 test("resolveValuationLabel uses confirmed label for stale close quotes", () => {
-  assert.equal(resolveValuationLabel({ quoteFresh: false }), "确认净值");
+  assert.equal(resolveValuationLabel({ quoteFresh: false, quoteMode: "confirmed_nav" }), "确认净值");
 });
 
 test("resolveQuoteStatusDisplay marks same-day quote as realtime estimate", () => {
   assert.deepEqual(
     resolveQuoteStatusDisplay({
       quoteFresh: true,
+      quoteMode: "live_estimate",
       quoteDate: "2026-04-02",
       updateTime: "2026-04-02 10:34"
     }),
     {
-      text: "实时估值",
+      text: "盘中估值",
+      tone: "flat"
+    }
+  );
+});
+
+test("resolveQuoteStatusDisplay reports close_reference as close reference", () => {
+  assert.deepEqual(
+    resolveQuoteStatusDisplay({
+      quoteFresh: false,
+      quoteMode: "close_reference",
+      quoteDate: "2026-04-02",
+      updateTime: "2026-04-02 净值"
+    }),
+    {
+      text: "收盘参考",
       tone: "flat"
     }
   );
@@ -87,6 +355,7 @@ test("resolveQuoteStatusDisplay marks stale quote as confirmed nav with date", (
   assert.deepEqual(
     resolveQuoteStatusDisplay({
       quoteFresh: false,
+      quoteMode: "confirmed_nav",
       quoteDate: "2026-03-31",
       updateTime: "2026-03-31 净值"
     }),
@@ -101,6 +370,7 @@ test("resolveQuoteStatusDisplay falls back to unavailable when quote is missing"
   assert.deepEqual(
     resolveQuoteStatusDisplay({
       quoteFresh: false,
+      quoteMode: "unavailable",
       quoteDate: null,
       updateTime: null
     }),
@@ -111,13 +381,39 @@ test("resolveQuoteStatusDisplay falls back to unavailable when quote is missing"
   );
 });
 
+test("resolveLatestConfirmedLabel shows latest confirmed date for confirmed-nav rows", () => {
+  assert.equal(
+    resolveLatestConfirmedLabel({
+      quoteMode: "confirmed_nav",
+      confirmedNavDate: "2026-04-01"
+    }),
+    "最近确认 2026-04-01"
+  );
+});
+
+test("resolveLatestConfirmedLabel stays empty for current-day estimate rows", () => {
+  assert.equal(
+    resolveLatestConfirmedLabel({
+      quoteMode: "live_estimate",
+      confirmedNavDate: "2026-04-01"
+    }),
+    null
+  );
+});
+
 test("applyTodayPnlToBaseValue lifts current amount when same-day pnl is available", () => {
   assert.equal(
     applyTodayPnlToBaseValue({
       quoteDate: "2026-04-02",
       today: "2026-04-02",
+      updateTime: "2026-04-02 10:34",
+      now: new Date("2026-04-02T10:34:00+08:00"),
       baseValue: 46724.87,
-      todayPnl: 1303.62
+      todayPnl: 1303.62,
+      sessionPolicy: {
+        openTime: "09:30",
+        closeTime: "15:00"
+      }
     }),
     48028.49
   );
@@ -128,39 +424,149 @@ test("applyTodayPnlToBaseValue keeps base amount when quote is stale", () => {
     applyTodayPnlToBaseValue({
       quoteDate: "2026-03-31",
       today: "2026-04-02",
+      updateTime: "2026-03-31 净值",
+      now: new Date("2026-04-02T10:34:00+08:00"),
       baseValue: 7466.46,
-      todayPnl: 9.71
+      todayPnl: 9.71,
+      sessionPolicy: {
+        openTime: "09:30",
+        closeTime: "15:00"
+      }
     }),
     7466.46
   );
 });
 
-test("shouldApplyEstimatedPnlOverlay still overlays same-day quotes even when snapshot date already equals today", () => {
+test("applyTodayPnlToBaseValue also updates amount for close reference after market close", () => {
   assert.equal(
-    shouldApplyEstimatedPnlOverlay("2026-04-02", "2026-04-02", "2026-04-02"),
+    applyTodayPnlToBaseValue({
+      quoteDate: "2026-04-02",
+      today: "2026-04-02",
+      updateTime: "2026-04-02 净值",
+      now: new Date("2026-04-02T15:08:00+08:00"),
+      baseValue: 28683.23,
+      todayPnl: -286.83,
+      sessionPolicy: {
+        openTime: "09:30",
+        closeTime: "15:00"
+      }
+    }),
+    28396.4
+  );
+});
+
+test("shouldUseConfirmedSnapshotDisplay returns true when confirmed snapshot matches latest ledger date", () => {
+  assert.equal(
+    shouldUseConfirmedSnapshotDisplay({
+      confirmedNavState: "confirmed_nav_ready",
+      confirmedTargetDate: "2026-04-02",
+      snapshotDate: "2026-04-02"
+    }),
     true
   );
 });
 
-test("shouldApplyEstimatedPnlOverlay overlays newer quotes beyond the ledger snapshot date", () => {
+test("shouldUseConfirmedSnapshotDisplay returns false when confirmed snapshot date does not match", () => {
   assert.equal(
-    shouldApplyEstimatedPnlOverlay("2026-04-01", "2026-04-02", "2026-04-02"),
+    shouldUseConfirmedSnapshotDisplay({
+      confirmedNavState: "confirmed_nav_ready",
+      confirmedTargetDate: "2026-04-01",
+      snapshotDate: "2026-04-02"
+    }),
+    false
+  );
+});
+
+test("shouldApplyEstimatedPnlOverlay keeps intraday live estimates during market hours", () => {
+  assert.equal(
+    shouldApplyEstimatedPnlOverlay("2026-04-01", "2026-04-02", "2026-04-02", "2026-04-02 10:34", {
+      now: new Date("2026-04-02T10:34:00+08:00"),
+      sessionPolicy: {
+        openTime: "09:30",
+        closeTime: "15:00"
+      }
+    }),
+    true
+  );
+});
+
+test("shouldApplyEstimatedPnlOverlay keeps same-day close-reference quotes on screen after market close", () => {
+  assert.equal(
+    shouldApplyEstimatedPnlOverlay("2026-04-02", "2026-04-02", "2026-04-02", "2026-04-02 净值", {
+      now: new Date("2026-04-02T15:08:00+08:00"),
+      sessionPolicy: {
+        openTime: "09:30",
+        closeTime: "15:00"
+      }
+    }),
+    true
+  );
+});
+
+test("shouldApplyEstimatedPnlOverlay keeps late same-day quotes as close reference after market close", () => {
+  assert.equal(
+    shouldApplyEstimatedPnlOverlay("2026-04-02", "2026-04-02", "2026-04-02", "2026-04-02 22:27", {
+      now: new Date("2026-04-02T22:27:00+08:00"),
+      sessionPolicy: {
+        openTime: "09:30",
+        closeTime: "15:00"
+      }
+    }),
+    true
+  );
+});
+
+test("shouldApplyEstimatedPnlOverlay disables overlay when confirmed snapshot is already ready", () => {
+  assert.equal(
+    shouldApplyEstimatedPnlOverlay(
+      "2026-04-02",
+      "2026-04-02",
+      "2026-04-02",
+      "2026-04-02 10:34",
+      {
+        now: new Date("2026-04-02T10:34:00+08:00"),
+        sessionPolicy: {
+          openTime: "09:30",
+          closeTime: "15:00"
+        },
+        useConfirmedSnapshotDisplay: true
+      }
+    ),
+    false
+  );
+});
+
+test("shouldApplyEstimatedPnlOverlay keeps newer same-day close-reference quotes on screen even if ledger date is older", () => {
+  assert.equal(
+    shouldApplyEstimatedPnlOverlay("2026-04-01", "2026-04-02", "2026-04-02", "2026-04-02 净值", {
+      now: new Date("2026-04-02T15:08:00+08:00"),
+      sessionPolicy: {
+        openTime: "09:30",
+        closeTime: "15:00"
+      }
+    }),
     true
   );
 });
 
 test("shouldApplyEstimatedPnlOverlay ignores stale quotes that are not newer than ledger snapshot", () => {
   assert.equal(
-    shouldApplyEstimatedPnlOverlay("2026-04-02", "2026-04-01", "2026-04-02"),
+    shouldApplyEstimatedPnlOverlay("2026-04-02", "2026-04-01", "2026-04-02", "2026-04-01 净值", {
+      now: new Date("2026-04-02T15:08:00+08:00"),
+      sessionPolicy: {
+        openTime: "09:30",
+        closeTime: "15:00"
+      }
+    }),
     false
   );
 });
 
 test("summarizeTodayPnl excludes stale rows from total today pnl", () => {
   const summary = summarizeTodayPnl([
-    { quoteFresh: true, estimatedPnl: 100 },
-    { quoteFresh: true, estimatedPnl: -30.25 },
-    { quoteFresh: false, estimatedPnl: 26.94 }
+    { quoteFresh: true, quoteCurrent: true, estimatedPnl: 100 },
+    { quoteFresh: false, quoteCurrent: true, estimatedPnl: -30.25 },
+    { quoteFresh: false, quoteCurrent: false, estimatedPnl: 26.94 }
   ], 10_000);
 
   assert.deepEqual(summary, {
@@ -171,8 +577,8 @@ test("summarizeTodayPnl excludes stale rows from total today pnl", () => {
 
 test("summarizeTodayPnl returns null summary when no same-day quotes exist", () => {
   const summary = summarizeTodayPnl([
-    { quoteFresh: false, estimatedPnl: 26.94 },
-    { quoteFresh: false, estimatedPnl: 9.71 }
+    { quoteFresh: false, quoteCurrent: false, estimatedPnl: 26.94 },
+    { quoteFresh: false, quoteCurrent: false, estimatedPnl: 9.71 }
   ], 10_000);
 
   assert.deepEqual(summary, {

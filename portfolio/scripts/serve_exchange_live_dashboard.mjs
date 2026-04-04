@@ -9,7 +9,8 @@ import {
   resolveAccountId,
   resolvePortfolioRoot
 } from "./lib/account_root.mjs";
-import { loadPreferredPortfolioState } from "./lib/portfolio_state_view.mjs";
+import { buildExchangeDashboardRow } from "./lib/exchange_dashboard_row.mjs";
+import { loadCanonicalPortfolioState } from "./lib/portfolio_state_view.mjs";
 
 const defaultHost = "127.0.0.1";
 const defaultPort = 8767;
@@ -136,73 +137,13 @@ function resolveAssetConfig(position, assetLookup) {
   return null;
 }
 
-function buildExchangeRow(position, assetConfig, quote) {
-  const ticker =
-    String(position?.ticker ?? assetConfig?.ticker ?? position?.symbol ?? assetConfig?.symbol ?? position?.code ?? "")
-      .trim()
-      .toUpperCase() || null;
-  const shares = Number(position?.shares ?? 0);
-  const sellableShares = Number(position?.sellable_shares ?? 0);
-  const costPrice = toNumberOrNull(position?.cost_price, 4);
-  const lastPrice = toNumberOrNull(quote?.latestPrice, 4);
-  const previousClose = toNumberOrNull(quote?.previousClose, 4);
-  const marketValue =
-    Number.isFinite(shares) && Number.isFinite(lastPrice)
-      ? toNumberOrNull(shares * lastPrice)
-      : toNumberOrNull(position?.amount);
-  const costBasis =
-    Number.isFinite(shares) && Number.isFinite(costPrice) ? toNumberOrNull(shares * costPrice) : null;
-  const unrealizedPnl =
-    Number.isFinite(marketValue) && Number.isFinite(costBasis)
-      ? toNumberOrNull(marketValue - costBasis)
-      : toNumberOrNull(position?.holding_pnl);
-  const unrealizedPnlPct =
-    Number.isFinite(unrealizedPnl) && Number.isFinite(costBasis) && costBasis > 0
-      ? toNumberOrNull((unrealizedPnl / costBasis) * 100)
-      : null;
-  const dailyPnl =
-    Number.isFinite(shares) && Number.isFinite(quote?.changeValue)
-      ? toNumberOrNull(shares * Number(quote.changeValue))
-      : null;
-  const quoteTimestamp =
-    quote?.quoteDate && quote?.quoteTime
-      ? `${quote.quoteDate} ${quote.quoteTime}`
-      : quote?.quoteDate ?? quote?.quoteTime ?? null;
-
-  return {
-    name: position?.name ?? assetConfig?.name ?? ticker ?? "未命名证券",
-    symbol: ticker,
-    exchangeQuoteCode: normalizeExchangeQuoteCode(ticker),
-    category: position?.category ?? assetConfig?.category ?? "--",
-    market: position?.market ?? assetConfig?.market ?? "CN",
-    shares: Number.isFinite(shares) ? shares : 0,
-    sellableShares: Number.isFinite(sellableShares) ? sellableShares : 0,
-    costPrice,
-    lastPrice,
-    previousClose,
-    marketValue,
-    unrealizedPnl,
-    unrealizedPnlPct,
-    dailyPnl,
-    changePercent: toNumberOrNull(quote?.changePercent),
-    settlementRule: position?.settlement_rule ?? assetConfig?.settlement_rule ?? "--",
-    lotSize: Number(position?.lot_size ?? assetConfig?.lot_size ?? 100),
-    signalProxySymbol: position?.signal_proxy_symbol ?? assetConfig?.signal_proxy_symbol ?? null,
-    slippageBuffer: toNumberOrNull(position?.slippage_buffer ?? assetConfig?.slippage_buffer, 4),
-    quoteTimestamp,
-    quoteSource: quote?.source ?? null,
-    quoteAvailable: Number.isFinite(Number(lastPrice)),
-    positionState: shares > 0 ? "invested" : "shell"
-  };
-}
-
 async function buildExchangePayload(refreshMs, requestedAccountId) {
   const availableAccounts = await listAvailableAccounts();
   const accountId = pickValidAccountId(requestedAccountId, availableAccounts, activeAccountId);
   const portfolioRoot = resolvePortfolioRoot({ user: accountId });
   const assetMasterPath = buildPortfolioPath(portfolioRoot, "config/asset_master.json");
   const [latestView, assetMaster] = await Promise.all([
-    loadPreferredPortfolioState({ portfolioRoot }),
+    loadCanonicalPortfolioState({ portfolioRoot }),
     readJson(assetMasterPath)
   ]);
   const latest = latestView.payload;
@@ -219,7 +160,7 @@ async function buildExchangePayload(refreshMs, requestedAccountId) {
   const rows = exchangePositions.map((position) => {
     const assetConfig = resolveAssetConfig(position, assetLookup);
     const quoteKey = normalizeExchangeQuoteCode(position?.ticker ?? position?.symbol ?? position?.code);
-    return buildExchangeRow(position, assetConfig, quoteMap.get(quoteKey) ?? null);
+    return buildExchangeDashboardRow(position, assetConfig, quoteMap.get(quoteKey) ?? null);
   });
 
   const investedRows = rows.filter((row) => row.positionState === "invested");
@@ -235,7 +176,11 @@ async function buildExchangePayload(refreshMs, requestedAccountId) {
     summary: {
       totalMarketValue: toNumberOrNull(rows.reduce((sum, row) => sum + Number(row?.marketValue ?? 0), 0)),
       totalUnrealizedPnl: toNumberOrNull(rows.reduce((sum, row) => sum + Number(row?.unrealizedPnl ?? 0), 0)),
-      estimatedDailyPnl: toNumberOrNull(rows.reduce((sum, row) => sum + Number(row?.dailyPnl ?? 0), 0)),
+      estimatedDailyPnl: toNumberOrNull(
+        rows
+          .filter((row) => row?.isComparableToday === true)
+          .reduce((sum, row) => sum + Number(row?.dailyPnl ?? 0), 0)
+      ),
       exchangeAssetCount: rows.length,
       investedAssetCount: investedRows.length,
       quoteAvailableCount: rows.filter((row) => row.quoteAvailable).length
@@ -602,7 +547,7 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         </div>
 
         <div class="empty" id="empty" hidden>正在加载场内行情...</div>
-        <div class="footer">默认每 ${Math.round(refreshMs / 1000)} 秒自动刷新一次；每次刷新都会优先读取 <code>state/portfolio_state.json</code> 的场内仓位，缺失时回退到兼容视图 <code>latest.json</code>，再拉取实时证券报价。</div>
+        <div class="footer">默认每 ${Math.round(refreshMs / 1000)} 秒自动刷新一次；每次刷新都会读取 <code>state/portfolio_state.json</code> 的场内仓位，再拉取实时证券报价；<code>latest.json</code> 仅保留兼容展示用途。</div>
       </div>
     </div>
 
@@ -769,6 +714,9 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
               '<div class="' + toneClass(row.changePercent) + '">' + escapeHtml(formatSignedPercent(row.changePercent)) + "</div>",
               '<div class="asset-sub ' + toneClass(row.dailyPnl) + '">' + escapeHtml(formatSignedCurrency(row.dailyPnl)) + "</div>"
             ].join("");
+            const quoteMeta = row?.marketNote
+              ? '<div class="asset-sub warn">' + escapeHtml(row.marketNote) + "</div>"
+              : "";
 
             return (
               "<tr>" +
@@ -786,7 +734,10 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
                   '<div class="asset-sub ' + toneClass(row.unrealizedPnlPct) + '">' + escapeHtml(formatSignedPercent(row.unrealizedPnlPct)) + "</div>" +
                 "</td>" +
                 "<td>" + dayCell + "</td>" +
-                '<td class="' + (row.quoteAvailable ? "flat" : "warn") + '">' + escapeHtml(row.quoteTimestamp ?? "无行情") + "</td>" +
+                '<td class="' + (row.quoteAvailable ? "flat" : "warn") + '">' +
+                  '<div>' + escapeHtml(row.quoteTimestamp ?? "无行情") + "</div>" +
+                  quoteMeta +
+                "</td>" +
               "</tr>"
             );
           })

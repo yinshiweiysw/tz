@@ -1,4 +1,8 @@
 import { applyCanonicalFundIdentity, getFundIdentityAliases, normalizeFundName } from "./fund_identity.mjs";
+import {
+  classifyFundConfirmation,
+  summarizeFundConfirmationStates
+} from "./fund_confirmation_policy.mjs";
 
 function round(value, digits = 2) {
   return Number(Number(value ?? 0).toFixed(digits));
@@ -63,6 +67,27 @@ function buildQuoteIndex(quotes = []) {
   };
 }
 
+function buildAssetIndex(assetMaster = null) {
+  const byCode = new Map();
+  const byName = new Map();
+
+  for (const asset of assetMaster?.assets ?? []) {
+    const code = normalizeCode(asset?.symbol ?? asset?.ticker);
+    const name = normalizeFundName(asset?.name);
+    if (code) {
+      byCode.set(code, asset);
+    }
+    if (name) {
+      byName.set(name, asset);
+    }
+  }
+
+  return {
+    byCode,
+    byName
+  };
+}
+
 function resolveQuote(index, target) {
   const identities = getFundIdentityAliases(target);
   for (const identity of identities) {
@@ -80,6 +105,29 @@ function resolveQuote(index, target) {
   }
 
   return null;
+}
+
+function resolveAsset(index, target) {
+  const identities = getFundIdentityAliases(target);
+  for (const identity of identities) {
+    const code = normalizeCode(identity?.code);
+    if (code && index.byCode.has(code)) {
+      return index.byCode.get(code);
+    }
+  }
+
+  for (const identity of identities) {
+    const normalizedName = normalizeFundName(identity?.name);
+    if (normalizedName && index.byName.has(normalizedName)) {
+      return index.byName.get(normalizedName);
+    }
+  }
+
+  return null;
+}
+
+function normalizeDateText(value) {
+  return String(value ?? "").trim() || null;
 }
 
 export function computeConfirmedDailyPnl({
@@ -164,15 +212,21 @@ export function reconcileRawSnapshotWithConfirmedQuotes({
   rawSnapshot,
   quotes,
   asOfDate = "",
-  watchlistConfig = null
+  watchlistConfig = null,
+  assetMaster = null
 }) {
   const nextRaw = clone(rawSnapshot ?? {});
   const nextWatchlist = clone(watchlistConfig);
   const quoteIndex = buildQuoteIndex(Array.isArray(quotes) ? quotes : []);
+  const assetIndex = buildAssetIndex(assetMaster);
   const positions = Array.isArray(nextRaw.positions) ? nextRaw.positions : [];
   const positionsByCode = new Map();
+  const asOfDateText = normalizeDateText(asOfDate);
   let updatedPositions = 0;
   let migratedPositions = 0;
+  const plannedUpdates = [];
+  const stalePositions = [];
+  const confirmationStates = [];
 
   for (const position of positions) {
     if (String(position?.execution_type ?? "OTC").toUpperCase() === "EXCHANGE") {
@@ -182,9 +236,49 @@ export function reconcileRawSnapshotWithConfirmedQuotes({
       continue;
     }
 
+    const canonicalPosition = applyCanonicalFundIdentity(position);
+    const asset = resolveAsset(assetIndex, canonicalPosition);
+    const quote = resolveQuote(quoteIndex, canonicalPosition);
+    const currentNetValue = resolveCurrentNetValue(quote);
+    const quoteDate = normalizeDateText(quote?.netValueDate);
+    const confirmation = classifyFundConfirmation({
+      targetDate: asOfDateText,
+      confirmedNavDate: quoteDate,
+      asset,
+      position: canonicalPosition
+    });
+    if (
+      !quote ||
+      currentNetValue === null ||
+      currentNetValue <= 0 ||
+      !confirmation.isWithinExpectedWindow
+    ) {
+      if (asOfDateText && ["late_missing", "source_missing"].includes(confirmation.state)) {
+        stalePositions.push({
+          code: normalizeCode(canonicalPosition?.code ?? position?.code),
+          name: String(canonicalPosition?.name ?? position?.name ?? "").trim() || null,
+          quoteDate,
+          state: confirmation.state,
+          expectedConfirmedDate: confirmation.expectedConfirmedDate
+        });
+      }
+      confirmationStates.push({ confirmationState: confirmation.state });
+      positionsByCode.set(normalizeCode(position?.code), position);
+      continue;
+    }
+
+    plannedUpdates.push({
+      position,
+      canonicalPosition,
+      quote,
+      confirmation
+    });
+  }
+
+  for (const { position, canonicalPosition, quote, confirmation } of plannedUpdates) {
+    const currentNetValue = resolveCurrentNetValue(quote);
     const originalCode = normalizeCode(position?.code ?? position?.symbol ?? position?.fund_code);
     const originalName = String(position?.name ?? "").trim();
-    const canonicalPosition = applyCanonicalFundIdentity(position);
     if (
       canonicalPosition.code !== originalCode ||
       canonicalPosition.name !== originalName
@@ -192,13 +286,6 @@ export function reconcileRawSnapshotWithConfirmedQuotes({
       migratedPositions += 1;
     }
     Object.assign(position, canonicalPosition);
-
-    const quote = resolveQuote(quoteIndex, position);
-    const currentNetValue = resolveCurrentNetValue(quote);
-    if (!quote || currentNetValue === null || currentNetValue <= 0) {
-      positionsByCode.set(normalizeCode(position?.code), position);
-      continue;
-    }
 
     const previousAmount = toFiniteNumber(position?.amount) ?? 0;
     const previousHoldingPnl = toFiniteNumber(position?.holding_pnl);
@@ -230,8 +317,11 @@ export function reconcileRawSnapshotWithConfirmedQuotes({
       String(quote?.netValueDate ?? "").trim() || String(asOfDate ?? "").trim() || null;
     position.last_confirmed_nav_time = String(quote?.valuationTime ?? "").trim() || null;
     position.dialogue_merge_status = "confirmed_nav_reconciled";
+    position.confirmation_state = confirmation.state;
+    position.expected_confirmed_nav_date = confirmation.expectedConfirmedDate;
 
     positionsByCode.set(normalizeCode(position?.code), position);
+    confirmationStates.push({ confirmationState: confirmation.state });
     updatedPositions += 1;
   }
 
@@ -268,7 +358,7 @@ export function reconcileRawSnapshotWithConfirmedQuotes({
   nextRaw.summary.performance_precision = "confirmed_nav_reconciled_close";
   nextRaw.summary.last_confirmed_nav_reconcile_at = new Date().toISOString();
   nextRaw.snapshot_date =
-    String(asOfDate ?? "").trim() ||
+    asOfDateText ||
     (positions
       .map((position) => String(position?.last_confirmed_nav_date ?? "").trim())
       .filter(Boolean)
@@ -287,6 +377,7 @@ export function reconcileRawSnapshotWithConfirmedQuotes({
   nextRaw.raw_account_snapshot = nextRaw.raw_account_snapshot ?? {};
   nextRaw.raw_account_snapshot.total_fund_assets = totalFundAssets;
   nextRaw.raw_account_snapshot.effective_exposure_after_pending_sell = totalFundAssets;
+  const confirmationSummary = summarizeFundConfirmationStates(confirmationStates);
 
   return {
     rawSnapshot: nextRaw,
@@ -296,7 +387,12 @@ export function reconcileRawSnapshotWithConfirmedQuotes({
       migratedPositions,
       totalFundAssets,
       totalDailyPnl,
-      totalHoldingPnl
+      totalHoldingPnl,
+      fullyConfirmedForDate:
+        confirmationSummary.totalFundCount > 0 &&
+        confirmationSummary.confirmedFundCount === confirmationSummary.totalFundCount,
+      stalePositions,
+      ...confirmationSummary
     }
   };
 }

@@ -2,10 +2,11 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { pathToFileURL } from "node:url";
 import { getFundQuotes } from "../../market-mcp/src/providers/fund.js";
 import {
   buildPortfolioPath,
-  portfolioUsersRoot,
+  listDiscoveredPortfolioAccounts,
   resolveAccountId,
   resolvePortfolioRoot
 } from "./lib/account_root.mjs";
@@ -19,15 +20,35 @@ import {
   getFundIdentityAliases,
   normalizeFundName
 } from "./lib/fund_identity.mjs";
+import { resolveFundMarketSessionPolicy } from "./lib/fund_market_session_policy.mjs";
 import {
   applyTodayPnlToBaseValue,
   coercePersistedTodayPnl,
+  deriveEstimatedPnlDisplay,
+  deriveOvernightCarryDisplay,
   deriveTodayPnlDisplay,
+  resolveLatestConfirmedLabel,
   resolveDisplayedDailyChangePct,
+  shouldUseConfirmedSnapshotDisplay,
   shouldApplyEstimatedPnlOverlay,
   summarizeTodayPnl
 } from "./lib/live_dashboard_today_pnl.mjs";
-import { loadPreferredPortfolioState } from "./lib/portfolio_state_view.mjs";
+import { deriveDashboardAccountingSummary } from "./lib/dashboard_accounting_summary.mjs";
+import {
+  classifyFundConfirmation,
+  summarizeFundConfirmationStates
+} from "./lib/fund_confirmation_policy.mjs";
+import { findPreviousTradingDateBefore } from "./lib/market_schedule_guard.mjs";
+import { loadCanonicalPortfolioState, readJsonOrNull } from "./lib/portfolio_state_view.mjs";
+import {
+  buildCanonicalPortfolioView,
+  selectCanonicalPortfolioPayload
+} from "./lib/portfolio_canonical_view.mjs";
+import {
+  readNightlyConfirmedNavStatus,
+  resolveNightlyConfirmedNavReadiness
+} from "./lib/nightly_confirmed_nav_status.mjs";
+import { runNightlyConfirmedNavBatch } from "./run_nightly_confirmed_nav.mjs";
 
 const defaultHost = "127.0.0.1";
 const defaultPort = 8766;
@@ -37,6 +58,7 @@ let activePortfolioRoot = resolvePortfolioRoot();
 let activeAccountId = resolveAccountId();
 const cachedPayloads = new Map();
 const inflightPayloadPromises = new Map();
+const inflightConfirmedNavSelfHealPromises = new Map();
 
 const manualFundCodeHints = {
   [normalizeName("景顺长城纳斯达克科技市值加权ETF联接(QDII)E")]: {
@@ -111,12 +133,12 @@ function toNumberOrNull(value, digits = 2) {
 function computeNetValueDriftPct(quote) {
   const valuation = Number(quote?.valuation);
   const netValue = Number(quote?.netValue);
-  const growthRate = Number(quote?.growthRate);
-  if (!Number.isFinite(valuation) || !Number.isFinite(netValue) || netValue <= 0) {
+  if (!Number.isFinite(valuation) || !Number.isFinite(netValue) || valuation <= 0 || netValue <= 0) {
     return null;
   }
 
-  if (!Number.isFinite(growthRate)) {
+  const valuationTime = String(quote?.valuationTime ?? "").trim();
+  if (!/\b\d{2}:\d{2}\b/.test(valuationTime)) {
     return null;
   }
 
@@ -470,18 +492,65 @@ function quoteDateFromItem(quote) {
   return String(quote?.netValueDate ?? "").trim() || null;
 }
 
-function buildRow(position, resolved, quote, today, profitLock = null) {
+function deriveLedgerDailyChangePct(position, amount) {
+  const explicitDailyReturnPct = toNumberOrNull(position?.daily_return_pct);
+  if (explicitDailyReturnPct !== null) {
+    return explicitDailyReturnPct;
+  }
+
+  const amountRaw = Number(amount ?? NaN);
+  const dailyPnlRaw = Number(position?.daily_pnl ?? NaN);
+  if (!Number.isFinite(amountRaw) || !Number.isFinite(dailyPnlRaw)) {
+    return null;
+  }
+
+  const previousAmountRaw = amountRaw - dailyPnlRaw;
+  if (!(previousAmountRaw > 0)) {
+    return null;
+  }
+
+  return toNumberOrNull((dailyPnlRaw / previousAmountRaw) * 100);
+}
+
+function buildRow(position, resolved, quote, today, profitLock = null, options = {}) {
   const amount = Number(position?.amount ?? 0);
+  const sessionPolicy =
+    options?.sessionPolicy ?? resolveFundMarketSessionPolicy({ asset: options?.assetMeta, position });
+  const now = options?.now ?? new Date();
   const profitLockedAmountRaw = Math.max(
     0,
     Math.min(Number(profitLock?.lockedAmount ?? 0), Number.isFinite(amount) ? amount : 0)
   );
   const eligibleAmountRaw = Math.max(amount - profitLockedAmountRaw, 0);
-  const valuation = toNumberOrNull(quote?.valuation ?? quote?.netValue, 4);
   const confirmedChangePct = resolveDisplayedDailyChangePct({
     valuationChangePercent: quote?.valuationChangePercent,
     growthRate: quote?.growthRate
   });
+  const intradayChangePct = toNumberOrNull(quote?.valuationChangePercent);
+  const intradayQuoteDate = quoteDateFromItem(quote);
+  const intradayUpdateTime = quote?.valuationTime ?? null;
+  const estimatedDisplay = deriveEstimatedPnlDisplay({
+    quoteDate: intradayQuoteDate,
+    today,
+    updateTime: intradayUpdateTime,
+    sessionPolicy,
+    now,
+    intradayChangePct,
+    estimatedDailyPnl:
+      Number.isFinite(intradayChangePct) && Number.isFinite(eligibleAmountRaw)
+        ? round((eligibleAmountRaw * intradayChangePct) / 100)
+        : null
+  });
+  const quoteFresh = estimatedDisplay.quoteFresh;
+  const quoteCurrent = estimatedDisplay.quoteCurrent;
+  const quoteMode = estimatedDisplay.quoteMode;
+  const updateTime =
+    ((quoteMode === "live_estimate" || quoteMode === "close_reference") ? intradayUpdateTime : null) ??
+    (quote?.netValueDate ? `${quote.netValueDate} 净值` : null);
+  const valuation = toNumberOrNull(
+    quoteCurrent ? quote?.valuation : quote?.netValue,
+    4
+  );
   const confirmedDailyPnl =
     Number.isFinite(confirmedChangePct) && Number.isFinite(eligibleAmountRaw)
       ? round((eligibleAmountRaw * confirmedChangePct) / 100)
@@ -502,28 +571,52 @@ function buildRow(position, resolved, quote, today, profitLock = null) {
       ? toNumberOrNull((Number(holdingPnl) / Number(costBasis)) * 100)
       : null);
   const quoteDate = quoteDateFromItem(quote);
+  const confirmedNavDate = String(quote?.netValueDate ?? position?.last_confirmed_nav_date ?? "").trim() || null;
   const todayPnlDisplay = deriveTodayPnlDisplay({
     quoteDate,
     today,
+    updateTime,
+    sessionPolicy,
+    now,
     confirmedChangePct,
     confirmedDailyPnl
   });
-  const updateTime = quote?.valuationTime ?? (quote?.netValueDate ? `${quote.netValueDate} 净值` : null);
+  const ledgerDailyPnl = toNumberOrNull(position?.daily_pnl);
+  const ledgerDailyChangePct = deriveLedgerDailyChangePct(position, amount);
+  const displayedChangePct = estimatedDisplay.displayedChangePct;
+  const displayedDailyPnl = estimatedDisplay.displayedDailyPnl;
 
   return {
     name: resolved?.name ?? position?.name ?? "未命名基金",
     code: resolved?.code ?? null,
     amount: toNumberOrNull(amount),
     valuation,
-    changePct: todayPnlDisplay.displayedChangePct,
-    estimatedPnl: todayPnlDisplay.displayedDailyPnl,
+    changePct: displayedChangePct,
+    estimatedPnl: displayedDailyPnl,
+    intradayQuoteDate,
+    intradayUpdateTime,
+    intradayChangePct: toNumberOrNull(intradayChangePct),
+    intradayEstimatedPnl:
+      Number.isFinite(intradayChangePct) && Number.isFinite(eligibleAmountRaw)
+        ? toNumberOrNull(round((eligibleAmountRaw * intradayChangePct) / 100))
+        : null,
     confirmedChangePct: todayPnlDisplay.displayedChangePct,
     confirmedDailyPnl: todayPnlDisplay.displayedDailyPnl,
+    ledgerDailyPnl,
+    ledgerDailyChangePct,
     estimateDriftPct,
     estimateDriftPnl: toNumberOrNull(estimateDriftPnl),
     updateTime,
     quoteDate,
-    quoteFresh: todayPnlDisplay.quoteFresh,
+    confirmedNavDate,
+    latestConfirmedLabel: resolveLatestConfirmedLabel({
+      quoteMode,
+      confirmedNavDate
+    }),
+    quoteFresh,
+    quoteCurrent,
+    quoteMode,
+    sessionPolicy,
     mappingSource: resolved?.source ?? "unmapped",
     holdingPnl,
     holdingPnlRatePct,
@@ -555,12 +648,74 @@ function buildPendingRow(pending, resolved, quote, today) {
   };
 }
 
-function applyLiveQuoteOverlay(row, snapshotDate, today) {
+function resolveConfirmationTone(state) {
+  if (state === "late_missing" || state === "source_missing") {
+    return "warn";
+  }
+  if (state === "normal_lag" || state === "holiday_delay") {
+    return "flat";
+  }
+  return "flat";
+}
+
+export function annotateRowConfirmation(
+  row,
+  position,
+  assetMeta,
+  { confirmedTargetDate = null, currentDate = null } = {}
+) {
+  const confirmation = classifyFundConfirmation({
+    targetDate: confirmedTargetDate,
+    confirmedNavDate: row?.confirmedNavDate ?? position?.last_confirmed_nav_date ?? null,
+    asset: assetMeta,
+    position
+  });
+
+  const overnightCarry = deriveOvernightCarryDisplay({
+    quoteDate: row?.intradayQuoteDate ?? row?.quoteDate,
+    today: currentDate,
+    updateTime: row?.intradayUpdateTime ?? row?.updateTime,
+    intradayChangePct: row?.intradayChangePct ?? row?.changePct ?? null,
+    estimatedDailyPnl: row?.intradayEstimatedPnl ?? row?.estimatedPnl ?? null,
+    pendingReferenceDate:
+      row?.sessionPolicy?.profile === "global_qdii"
+        ? findPreviousTradingDateBefore({
+            market: "US",
+            date: row?.intradayQuoteDate ?? row?.quoteDate
+          })
+        : null,
+    expectedConfirmedDate: confirmation.expectedConfirmedDate,
+    sessionPolicy: row?.sessionPolicy ?? null
+  });
+
+  return {
+    ...row,
+    confirmationState: confirmation.state,
+    confirmationLabel: confirmation.label,
+    expectedConfirmedDate: confirmation.expectedConfirmedDate,
+    confirmationTone: resolveConfirmationTone(confirmation.state),
+    overnightCarryChangePct: overnightCarry.overnightCarryChangePct,
+    overnightCarryPnl: overnightCarry.overnightCarryPnl,
+    overnightCarryLabel: overnightCarry.overnightCarryLabel,
+    overnightCarryReferenceDate: overnightCarry.overnightCarryReferenceDate
+  };
+}
+
+function applyLiveQuoteOverlay(row, snapshotDate, today, options = {}) {
   const ledgerAmountRaw = Number(row?.amount ?? 0);
   const ledgerHoldingPnlRaw = Number(row?.holdingPnl ?? NaN);
   const ledgerHoldingPnlRatePctRaw = Number(row?.holdingPnlRatePct ?? NaN);
   const costBasisRaw = Number(row?.costBasis ?? NaN);
-  const overlayAllowed = shouldApplyEstimatedPnlOverlay(snapshotDate, row?.quoteDate, today);
+  const overlayAllowed = shouldApplyEstimatedPnlOverlay(
+    snapshotDate,
+    row?.quoteDate,
+    today,
+    row?.updateTime,
+    {
+      ...options,
+      sessionPolicy: row?.sessionPolicy ?? options?.sessionPolicy ?? null
+    }
+  );
   const overlayPnlRaw = overlayAllowed ? Number(row?.estimatedPnl ?? NaN) : NaN;
   const appliedOverlayRaw = Number.isFinite(overlayPnlRaw) ? overlayPnlRaw : 0;
   const liveAmountRaw =
@@ -569,6 +724,9 @@ function applyLiveQuoteOverlay(row, snapshotDate, today) {
           applyTodayPnlToBaseValue({
             quoteDate: row?.quoteDate,
             today,
+            updateTime: row?.updateTime,
+            sessionPolicy: row?.sessionPolicy ?? options?.sessionPolicy ?? null,
+            now: options?.now ?? new Date(),
             baseValue: ledgerAmountRaw,
             todayPnl: overlayPnlRaw
           }) ?? ledgerAmountRaw + appliedOverlayRaw
@@ -665,6 +823,28 @@ function materializePendingPositionsForLiveView(activePositions, pendingPosition
   return materialized.sort((left, right) => Number(right?.amount ?? 0) - Number(left?.amount ?? 0));
 }
 
+export function deriveLiveDashboardPositionSets(portfolioState = {}, today = formatDateInShanghai()) {
+  const activePositions = (portfolioState?.positions ?? []).filter(
+    (item) =>
+      item?.status === "active" &&
+      item?.execution_type !== "EXCHANGE" &&
+      Number(item?.amount ?? 0) > 0
+  );
+  const pendingPositions = (portfolioState?.pending_profit_effective_positions ?? []).filter(
+    (item) => Number(item?.amount ?? 0) > 0 && item?.execution_type !== "EXCHANGE"
+  );
+  const { effectiveToday, future } = splitPendingPositionsByEffectiveDate(pendingPositions, today);
+  const effectiveActivePositions = materializePendingPositionsForLiveView(activePositions, effectiveToday);
+
+  return {
+    activePositions,
+    pendingPositions,
+    maturedPendingPositions: effectiveToday,
+    futurePendingPositions: future,
+    effectiveActivePositions
+  };
+}
+
 async function readJson(path) {
   const raw = await readFile(path, "utf8");
   return JSON.parse(raw);
@@ -706,37 +886,137 @@ function formatAccountLabel(accountId) {
 }
 
 async function listAvailableAccounts() {
-  const accounts = [
-    {
-      id: "main",
-      label: formatAccountLabel("main")
-    }
-  ];
-
   try {
-    const entries = await readdir(portfolioUsersRoot, { withFileTypes: true });
-    const userDirs = entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .sort((left, right) => left.localeCompare(right, "zh-CN"));
-
-    for (const accountId of userDirs) {
-      accounts.push({
-        id: accountId,
-        label: formatAccountLabel(accountId)
-      });
-    }
+    const accounts = await listDiscoveredPortfolioAccounts({ includeMain: true });
+    return accounts.map((item) => ({
+      id: item.id,
+      label: formatAccountLabel(item.id)
+    }));
   } catch {
-    return accounts;
+    return [
+      {
+        id: "main",
+        label: formatAccountLabel("main")
+      }
+    ];
   }
-
-  return accounts;
 }
 
 function pickValidAccountId(requestedAccountId, availableAccounts, fallbackAccountId = activeAccountId) {
   const normalized = resolveAccountId({ user: requestedAccountId || fallbackAccountId });
   const available = new Set(availableAccounts.map((item) => item.id));
   return available.has(normalized) ? normalized : fallbackAccountId;
+}
+
+function resolveConfirmedNavStatusLabel(confirmedNavStatus) {
+  const state = String(confirmedNavStatus?.state ?? "").trim();
+  const targetDate = String(confirmedNavStatus?.targetDate ?? "").trim();
+  const didRunSelfHeal = confirmedNavStatus?.didRunSelfHeal === true;
+  const stats = confirmedNavStatus?.accountRun?.stats ?? {};
+  const normalLagCount =
+    Number(stats?.normalLagFundCount ?? 0) + Number(stats?.holidayDelayFundCount ?? 0);
+  const holidayDelayCount = Number(stats?.holidayDelayFundCount ?? 0);
+
+  if (state === "confirmed_nav_ready") {
+    return {
+      tone: "success",
+      text: didRunSelfHeal
+        ? `今晨已自动补跑确认净值${targetDate ? ` · ${targetDate}` : ""}`
+        : `昨晚确认净值已完成${targetDate ? ` · ${targetDate}` : ""}`
+    };
+  }
+
+  if (state === "partially_confirmed_normal_lag") {
+    return {
+      tone: "warn",
+      text:
+        holidayDelayCount > 0 && normalLagCount === holidayDelayCount
+          ? `${targetDate || "当前"}确认净值部分完成，${holidayDelayCount}只基金因休市顺延`
+          : `${targetDate || "当前"}确认净值部分完成，${normalLagCount}只基金仍属正常滞后`
+    };
+  }
+
+  if (state === "self_heal_running") {
+    return {
+      tone: "warn",
+      text: `正在补跑确认净值${targetDate ? ` · ${targetDate}` : ""}`
+    };
+  }
+
+  if (state === "self_heal_failed") {
+    return {
+      tone: "error",
+      text: `确认净值补跑失败，当前仍为临时估值口径${targetDate ? ` · ${targetDate}` : ""}`
+    };
+  }
+
+  return {
+    tone: "warn",
+    text: `当前为临时估值口径${targetDate ? ` · ${targetDate}` : ""}`
+  };
+}
+
+async function ensureNightlyConfirmedNavReady({ portfolioRoot, accountId, snapshotDate }) {
+  const readStatus = async () => readNightlyConfirmedNavStatus();
+  let statusPayload = await readStatus();
+  let didRunSelfHeal = false;
+  let readiness = resolveNightlyConfirmedNavReadiness({
+    statusPayload,
+    accountId,
+    snapshotDate,
+    selfHealInFlight: inflightConfirmedNavSelfHealPromises.has(accountId)
+  });
+
+  if (readiness.shouldTriggerSelfHeal && !inflightConfirmedNavSelfHealPromises.has(accountId)) {
+    const selfHealPromise = runNightlyConfirmedNavBatch({
+      runType: "self_heal_on_read",
+      date: snapshotDate || undefined
+    })
+      .catch((error) => {
+        console.warn(
+          JSON.stringify(
+            {
+              status: "nightly_confirmed_nav_self_heal_failed",
+              accountId,
+              portfolioRoot,
+              message: String(error?.message ?? error)
+            },
+            null,
+            2
+          )
+        );
+        return null;
+      })
+      .finally(() => {
+        inflightConfirmedNavSelfHealPromises.delete(accountId);
+      });
+
+    inflightConfirmedNavSelfHealPromises.set(accountId, selfHealPromise);
+    didRunSelfHeal = true;
+  }
+
+  const inflight = inflightConfirmedNavSelfHealPromises.get(accountId);
+  if (inflight) {
+    await inflight;
+    statusPayload = await readStatus();
+    readiness = resolveNightlyConfirmedNavReadiness({
+      statusPayload,
+      accountId,
+      snapshotDate,
+      selfHealInFlight: false
+    });
+  }
+
+  return {
+    ...readiness,
+    didRunSelfHeal,
+    label: resolveConfirmedNavStatusLabel({
+      ...readiness,
+      didRunSelfHeal
+    }),
+    statusGeneratedAt: statusPayload?.generatedAt ?? null,
+    statusRunType: readiness?.accountRun?.runType ?? statusPayload?.runType ?? null
+  };
 }
 
 async function loadDashboardOperatorContext(portfolioRoot, accountId) {
@@ -1132,41 +1412,58 @@ function buildBucketGroups(rows, totalPortfolioAssetsRaw, bucketMetaMap) {
     });
 }
 
-async function buildLivePayload(refreshMs, requestedAccountId) {
+export async function buildLivePayload(refreshMs, requestedAccountId) {
   const availableAccounts = await listAvailableAccounts();
   const accountId = pickValidAccountId(requestedAccountId, availableAccounts, activeAccountId);
   const portfolioRoot = resolvePortfolioRoot({ user: accountId });
   const watchlistPath = buildPortfolioPath(portfolioRoot, "fund-watchlist.json");
-  const [latestView, watchlist, dashboardOperatorContext] = await Promise.all([
-    loadPreferredPortfolioState({ portfolioRoot }),
+  let latestView = await loadCanonicalPortfolioState({ portfolioRoot });
+  const initialSnapshotDate = String(latestView?.payload?.snapshot_date ?? "").trim() || null;
+  const confirmedNavStatus = await ensureNightlyConfirmedNavReady({
+    portfolioRoot,
+    accountId,
+    snapshotDate: initialSnapshotDate
+  });
+  if (confirmedNavStatus.didRunSelfHeal) {
+    latestView = await loadCanonicalPortfolioState({ portfolioRoot });
+  }
+  const [watchlist, dashboardOperatorContext] = await Promise.all([
     readJson(watchlistPath),
     loadDashboardOperatorContext(portfolioRoot, accountId)
   ]);
-  const latest = latestView.payload;
+  const latestCompatPayload = await readJsonOrNull(latestView?.paths?.latestCompatPath);
+  const canonicalSelection = selectCanonicalPortfolioPayload({
+    latestView,
+    latestCompat: latestCompatPayload
+  });
+  const latest = buildCanonicalPortfolioView({
+    payload: canonicalSelection.payload,
+    sourceKind: canonicalSelection.sourceKind,
+    sourcePath: canonicalSelection.sourcePath,
+    latestCompatSnapshotDate: latestCompatPayload?.snapshot_date ?? null
+  });
+  const useConfirmedSnapshotDisplay = shouldUseConfirmedSnapshotDisplay({
+    confirmedNavState: confirmedNavStatus?.state,
+    confirmedTargetDate: confirmedNavStatus?.targetDate,
+    snapshotDate: latest?.snapshot_date
+  });
+  const confirmationTargetDate =
+    String(confirmedNavStatus?.targetDate ?? latest?.snapshot_date ?? "").trim() || null;
   const { accountContext, assetMaster, bucketMetaMap, bucketIndex } = dashboardOperatorContext;
-  const activePositions = (latest?.positions ?? [])
-    .filter(
-      (item) =>
-        item?.status === "active" &&
-        item?.execution_type !== "EXCHANGE" &&
-        Number(item?.amount ?? 0) > 0
-    )
-    .sort((left, right) => Number(right?.amount ?? 0) - Number(left?.amount ?? 0));
-  const pendingPositions = (latest?.pending_profit_effective_positions ?? [])
-    .filter((item) => Number(item?.amount ?? 0) > 0 && item?.execution_type !== "EXCHANGE")
-    .sort((left, right) => Number(right?.amount ?? 0) - Number(left?.amount ?? 0));
   const watchlistItems = Array.isArray(watchlist?.watchlist) ? watchlist.watchlist : [];
   const resolvePosition = buildResolver(watchlistItems);
   const today = formatDateInShanghai();
+  const buildNow = new Date();
   const profitLockRegistry = await loadProfitLockRegistry(portfolioRoot, today);
-  const { effectiveToday: maturedPendingPositions, future: futurePendingPositions } =
-    splitPendingPositionsByEffectiveDate(pendingPositions, today);
+  const {
+    activePositions,
+    pendingPositions,
+    maturedPendingPositions,
+    futurePendingPositions,
+    effectiveActivePositions
+  } = deriveLiveDashboardPositionSets(latest, today);
   reconcileProfitLockRegistryWithPendingPositions(profitLockRegistry, futurePendingPositions);
   const snapshotDate = String(latest?.snapshot_date ?? "").trim() || null;
-  const effectiveActivePositions = materializePendingPositionsForLiveView(
-    activePositions,
-    maturedPendingPositions
-  );
 
   const resolvedPositions = effectiveActivePositions.map((position) => ({
     position,
@@ -1198,13 +1495,31 @@ async function buildLivePayload(refreshMs, requestedAccountId) {
         position,
         resolved
       );
+      const sessionPolicy = resolveFundMarketSessionPolicy({
+        asset: dashboardMeta.assetMeta,
+        position
+      });
       return {
-        ...buildRow(
+        ...annotateRowConfirmation(
+          buildRow(
+            position,
+            resolved,
+            quoteMap.get(resolved?.code) ?? null,
+            today,
+            resolveProfitLockForRow(profitLockRegistry, position, resolved),
+            {
+              useConfirmedSnapshotDisplay,
+              assetMeta: dashboardMeta.assetMeta,
+              sessionPolicy,
+              now: buildNow
+            }
+          ),
           position,
-          resolved,
-          quoteMap.get(resolved?.code) ?? null,
-          today,
-          resolveProfitLockForRow(profitLockRegistry, position, resolved)
+          dashboardMeta.assetMeta,
+          {
+            confirmedTargetDate: confirmationTargetDate,
+            currentDate: today
+          }
         ),
         bucketKey: dashboardMeta.bucketKey,
         portfolioRole: dashboardMeta.assetMeta?.portfolioRole ?? null,
@@ -1213,7 +1528,12 @@ async function buildLivePayload(refreshMs, requestedAccountId) {
       };
     })()
   }));
-  const rows = ledgerRows.map((row) => applyLiveQuoteOverlay(row, snapshotDate, today));
+  const rows = ledgerRows.map((row) =>
+    applyLiveQuoteOverlay(row, snapshotDate, today, {
+      useConfirmedSnapshotDisplay,
+      now: buildNow
+    })
+  );
   const pendingRows = resolvedPendingPositions.map(({ position, resolved }) => ({
     ...(() => {
       const dashboardMeta = resolveRowDashboardMeta(
@@ -1224,7 +1544,15 @@ async function buildLivePayload(refreshMs, requestedAccountId) {
         resolved
       );
       return {
-        ...buildPendingRow(position, resolved, quoteMap.get(resolved?.code) ?? null, today),
+        ...annotateRowConfirmation(
+          buildPendingRow(position, resolved, quoteMap.get(resolved?.code) ?? null, today),
+          position,
+          dashboardMeta.assetMeta,
+          {
+            confirmedTargetDate: confirmationTargetDate,
+            currentDate: today
+          }
+        ),
         bucketKey: dashboardMeta.bucketKey,
         portfolioRole: dashboardMeta.assetMeta?.portfolioRole ?? null,
         roleBadge: dashboardMeta.assetMeta?.roleBadge ?? null,
@@ -1242,7 +1570,15 @@ async function buildLivePayload(refreshMs, requestedAccountId) {
         resolved
       );
       return {
-        ...buildPendingRow(position, resolved, quoteMap.get(resolved?.code) ?? null, today),
+        ...annotateRowConfirmation(
+          buildPendingRow(position, resolved, quoteMap.get(resolved?.code) ?? null, today),
+          position,
+          dashboardMeta.assetMeta,
+          {
+            confirmedTargetDate: confirmationTargetDate,
+            currentDate: today
+          }
+        ),
         bucketKey: dashboardMeta.bucketKey,
         portfolioRole: dashboardMeta.assetMeta?.portfolioRole ?? null,
         roleBadge: dashboardMeta.assetMeta?.roleBadge ?? null,
@@ -1252,9 +1588,11 @@ async function buildLivePayload(refreshMs, requestedAccountId) {
   }));
   const mappedRows = rows.filter((row) => row.code);
   const unresolvedRows = rows.filter((row) => !row.code);
-  const freshRows = rows.filter((row) => row?.quoteFresh);
+  const currentRows = rows.filter((row) => row?.quoteCurrent === true);
+  const freshRows = rows.filter((row) => row?.quoteFresh === true);
+  const confirmationSummary = summarizeFundConfirmationStates(rows);
   const latestQuoteTime =
-    freshRows
+    (currentRows.length > 0 ? currentRows : freshRows)
       .map((row) => String(row?.updateTime ?? "").trim())
       .filter(Boolean)
       .sort((left, right) => left.localeCompare(right))
@@ -1274,6 +1612,23 @@ async function buildLivePayload(refreshMs, requestedAccountId) {
     (sum, row) => sum + Number(row?.profitLockedAmount ?? 0),
     0
   );
+  const overnightCarryRows = rows.filter(
+    (row) =>
+      row?.overnightCarryPnl !== null &&
+      row?.overnightCarryPnl !== undefined &&
+      Number.isFinite(Number(row?.overnightCarryPnl))
+  );
+  const overnightCarryPnlRaw = overnightCarryRows.reduce(
+    (sum, row) => sum + Number(row?.overnightCarryPnl ?? 0),
+    0
+  );
+  const overnightCarryExpectedDates = [
+    ...new Set(
+      overnightCarryRows
+        .map((row) => String(row?.overnightCarryReferenceDate ?? "").trim())
+        .filter(Boolean)
+    )
+  ];
   const activeFundCount = rows.length;
   const availableCashCny = resolveAvailableCashCny(latest, accountContext);
   const totalPortfolioAssetsRaw = resolveTotalPortfolioAssetsRaw(
@@ -1288,9 +1643,24 @@ async function buildLivePayload(refreshMs, requestedAccountId) {
   const displayedTotalFundAssets = toNumberOrNull(displayedTotalFundAssetsRaw);
   const estimatedCurrentFundAssets = toNumberOrNull(displayedTotalFundAssetsRaw);
   const todayPnlSummary = summarizeTodayPnl(rows, displayedTotalFundAssetsRaw);
+  const displayedTodayPnlSummary =
+    currentRows.length > 0
+      ? todayPnlSummary
+      : {
+          estimatedDailyPnl: null,
+          estimatedDailyPnlRatePct: null
+        };
   const pendingBuyConfirm = toNumberOrNull(
     pendingRows.reduce((sum, row) => sum + Number(row?.amount ?? 0), 0)
   );
+  const accountingSummary = deriveDashboardAccountingSummary({
+    portfolioStateSummary: latest?.summary ?? {},
+    performanceSnapshot: latest?.performance_snapshot ?? {},
+    cashLedger: latest?.cash_ledger ?? {},
+    liveUnrealizedHoldingProfitCny: totalHoldingProfitRaw,
+    liveUnrealizedHoldingProfitRatePct:
+      totalHoldingCostBasisRaw > 0 ? (totalHoldingProfitRaw / totalHoldingCostBasisRaw) * 100 : null
+  });
   const bucketGroups = buildBucketGroups(rows, totalPortfolioAssetsRaw, bucketMetaMap);
 
   return {
@@ -1312,10 +1682,25 @@ async function buildLivePayload(refreshMs, requestedAccountId) {
         totalHoldingCostBasisRaw > 0
           ? toNumberOrNull((totalHoldingProfitRaw / totalHoldingCostBasisRaw) * 100)
           : null,
+      unrealizedHoldingProfit: toNumberOrNull(accountingSummary.unrealizedHoldingProfitCny),
+      unrealizedHoldingProfitRatePct: toNumberOrNull(accountingSummary.unrealizedHoldingProfitRatePct),
+      realizedCumulativeProfit: toNumberOrNull(accountingSummary.realizedCumulativeProfitCny),
+      pendingSellSettlementCny: toNumberOrNull(accountingSummary.pendingSellSettlementCny),
+      settledCashCny: toNumberOrNull(accountingSummary.settledCashCny),
+      projectedSettledCashCny: toNumberOrNull(accountingSummary.projectedSettledCashCny),
+      pendingProfitEffectiveCny: toNumberOrNull(accountingSummary.pendingProfitEffectiveCny),
       pendingBuyConfirm,
       profitLockedAmount: toNumberOrNull(totalProfitLockedAmountRaw),
-      estimatedDailyPnl: todayPnlSummary.estimatedDailyPnl,
-      estimatedDailyPnlRatePct: todayPnlSummary.estimatedDailyPnlRatePct,
+      pendingOverseasConfirmedPnl: overnightCarryRows.length > 0 ? toNumberOrNull(overnightCarryPnlRaw) : null,
+      pendingOverseasConfirmedLabel:
+        overnightCarryRows.length === 0
+          ? null
+          : overnightCarryExpectedDates.length === 1
+            ? `海外待确认 ${overnightCarryExpectedDates[0]}`
+            : "海外待确认 多日期",
+      pendingOverseasConfirmedCount: overnightCarryRows.length,
+      estimatedDailyPnl: displayedTodayPnlSummary.estimatedDailyPnl,
+      estimatedDailyPnlRatePct: displayedTodayPnlSummary.estimatedDailyPnlRatePct,
       estimatedDriftPnl: toNumberOrNull(estimatedDriftPnlRaw),
       estimatedDriftPnlRatePct:
         displayedTotalFundAssetsRaw > 0
@@ -1323,11 +1708,18 @@ async function buildLivePayload(refreshMs, requestedAccountId) {
           : null,
       activeFundCount,
       freshFundCount: freshRows.length,
+      currentFundCount: currentRows.length,
       latestQuoteTime,
       pendingFundCount: pendingRows.length,
       maturedPendingFundCount: maturedPendingRows.length,
       mappedFundCount: mappedRows.length,
-      unresolvedFundCount: unresolvedRows.length
+      unresolvedFundCount: unresolvedRows.length,
+      confirmedFundCount: confirmationSummary.confirmedFundCount,
+      normalLagFundCount:
+        confirmationSummary.normalLagFundCount + confirmationSummary.holidayDelayFundCount,
+      lateMissingFundCount:
+        confirmationSummary.lateMissingFundCount + confirmationSummary.sourceMissingFundCount,
+      confirmationCoveragePct: confirmationSummary.confirmationCoveragePct
     },
     configuration: {
       activeProfile: String(assetMaster?.active_profile ?? "").trim() || null,
@@ -1339,6 +1731,7 @@ async function buildLivePayload(refreshMs, requestedAccountId) {
         normalizeDashboardPct(assetMaster?.global_constraints?.absolute_equity_cap)
       )
     },
+    confirmedNavStatus,
     bucketGroups,
     rows,
     pendingRows,
@@ -1346,7 +1739,7 @@ async function buildLivePayload(refreshMs, requestedAccountId) {
   };
 }
 
-async function persistLiveSnapshot(portfolioRoot, payload) {
+export async function persistLiveSnapshot(portfolioRoot, payload) {
   try {
     const snapshotPath = buildPortfolioPath(portfolioRoot, "data/live_funds_snapshot.json");
     await mkdir(dirname(snapshotPath), { recursive: true });
@@ -1366,6 +1759,11 @@ async function persistLiveSnapshot(portfolioRoot, payload) {
   }
 }
 
+export function isAutoMarkToMarketWritebackEnabled(env = process.env) {
+  const flag = String(env?.FUNDS_DASHBOARD_ENABLE_AUTO_MARK_TO_MARKET ?? "").trim();
+  return flag === "1" || flag.toLowerCase() === "true";
+}
+
 function resolveAutoMaterializeSnapshotDate(rows, currentSnapshotDate) {
   const candidates = rows
     .filter((row) => !row?.isSyntheticCash)
@@ -1376,8 +1774,28 @@ function resolveAutoMaterializeSnapshotDate(rows, currentSnapshotDate) {
   return candidates.at(-1) ?? null;
 }
 
-async function materializeLatestMarkToMarket(portfolioRoot, payload) {
+function isConfirmedPayloadReadyForWriteback(payload, nextSnapshotDate) {
+  const confirmedState = String(payload?.confirmedNavStatus?.state ?? "").trim();
+  const targetDate = String(payload?.confirmedNavStatus?.targetDate ?? "").trim();
+
+  return (
+    confirmedState === "confirmed_nav_ready" &&
+    Boolean(targetDate) &&
+    Boolean(nextSnapshotDate) &&
+    targetDate === nextSnapshotDate
+  );
+}
+
+export async function materializeLatestMarkToMarket(portfolioRoot, payload) {
   try {
+    if (!isAutoMarkToMarketWritebackEnabled()) {
+      return {
+        updated: false,
+        disabledReason: "auto_mark_to_market_writeback_disabled",
+        snapshotDate: payload?.snapshotDate ?? null
+      };
+    }
+
     const accountId = resolveAccountId({ portfolioRoot });
     const paths = buildDualLedgerPaths(portfolioRoot);
     const accountContextPath = buildPortfolioPath(portfolioRoot, "account_context.json");
@@ -1398,6 +1816,16 @@ async function materializeLatestMarkToMarket(portfolioRoot, payload) {
       return {
         updated: false,
         snapshotDate: currentSnapshotDate || null,
+        ensuredChanges: seeded.ensuredChanges
+      };
+    }
+
+    if (!isConfirmedPayloadReadyForWriteback(payload, nextSnapshotDate)) {
+      return {
+        updated: false,
+        disabledReason: "confirmed_nav_not_ready_for_writeback",
+        snapshotDate: currentSnapshotDate || null,
+        nextSnapshotDate,
         ensuredChanges: seeded.ensuredChanges
       };
     }
@@ -1563,6 +1991,21 @@ async function materializeLatestMarkToMarket(portfolioRoot, payload) {
       snapshotDate: payload?.snapshotDate ?? null
     };
   }
+}
+
+export async function runLiveFundsSnapshotBuild(rawOptions = {}) {
+  const refreshMs = Math.max(5000, Number(rawOptions.refreshMs ?? rawOptions["refresh-ms"]) || 60000);
+  const accountId = resolveAccountId(rawOptions);
+  const portfolioRoot = resolvePortfolioRoot(rawOptions);
+  const payload = await buildLivePayload(refreshMs, accountId);
+  await persistLiveSnapshot(portfolioRoot, payload);
+
+  return {
+    accountId,
+    portfolioRoot,
+    outputPath: buildPortfolioPath(portfolioRoot, "data/live_funds_snapshot.json"),
+    payload
+  };
 }
 
 async function getLivePayload(refreshMs, requestedAccountId, force = false) {
@@ -1735,6 +2178,30 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         text-overflow: ellipsis;
       }
 
+      .toolbar-chip.success {
+        background: rgba(15, 118, 110, 0.08);
+        border-color: rgba(15, 118, 110, 0.12);
+        color: rgba(15, 118, 110, 0.92);
+      }
+
+      .toolbar-chip.warn {
+        background: rgba(202, 138, 4, 0.1);
+        border-color: rgba(202, 138, 4, 0.18);
+        color: rgba(161, 98, 7, 0.96);
+      }
+
+      .toolbar-chip.error {
+        background: rgba(220, 38, 38, 0.08);
+        border-color: rgba(220, 38, 38, 0.14);
+        color: rgba(185, 28, 28, 0.95);
+      }
+
+      .toolbar-chip.muted {
+        background: rgba(100, 116, 139, 0.08);
+        border-color: rgba(100, 116, 139, 0.14);
+        color: rgba(71, 85, 105, 0.96);
+      }
+
       .account-picker {
         display: inline-flex;
         align-items: center;
@@ -1860,6 +2327,11 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
       .ribbon-value.flat,
       .ribbon-sub.flat {
         color: rgba(226, 232, 240, 0.8);
+      }
+
+      .ribbon-value.warn,
+      .ribbon-sub.warn {
+        color: #fbbf24;
       }
 
       .summary-collapsed-note {
@@ -2323,6 +2795,16 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         color: rgba(71, 85, 105, 0.92);
         font-size: 10px;
         line-height: 1;
+      }
+
+      .holding-pill--warn {
+        background: rgba(245, 158, 11, 0.12);
+        color: rgba(180, 83, 9, 0.96);
+      }
+
+      .holding-pill--error {
+        background: rgba(239, 68, 68, 0.12);
+        color: rgba(185, 28, 28, 0.96);
       }
 
       .holding-time {
@@ -2931,6 +3413,7 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
                 <select id="accountSelect">${optionHtml}</select>
               </label>
               <div class="status" id="status">准备连接实时估值链路...</div>
+              <div class="toolbar-chip muted" id="confirmedNavHeadline">确认净值状态读取中...</div>
               <div class="toolbar-chip" id="configHeadlineInline">配置读取中...</div>
             </div>
             <button class="btn" id="refreshBtn" type="button">刷新</button>
@@ -2960,9 +3443,19 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
               <div class="ribbon-sub" id="estimatedDailyPnlRate">--</div>
               </div>
               <div class="ribbon-item">
-              <div class="ribbon-label">持有收益</div>
-              <div class="ribbon-value ribbon-value--profit" id="holdingProfit">--</div>
-              <div class="ribbon-sub" id="holdingProfitRate">--</div>
+              <div class="ribbon-label">未实现收益</div>
+              <div class="ribbon-value ribbon-value--profit" id="unrealizedHoldingProfit">--</div>
+              <div class="ribbon-sub" id="unrealizedHoldingProfitRate">--</div>
+              </div>
+              <div class="ribbon-item">
+              <div class="ribbon-label">已实现收益</div>
+              <div class="ribbon-value ribbon-value--profit" id="realizedCumulativeProfit">--</div>
+              <div class="ribbon-sub" id="realizedCumulativeProfitNote">--</div>
+              </div>
+              <div class="ribbon-item">
+              <div class="ribbon-label">待到账资金</div>
+              <div class="ribbon-value" id="pendingSellSettlement">--</div>
+              <div class="ribbon-sub" id="pendingSellSettlementNote">--</div>
               </div>
             </div>
           </div>
@@ -3015,7 +3508,7 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
                   <div id="maturedPendingRows"></div>
                 </div>
                 <div class="pending-panel" id="pendingPanel" hidden>
-                  <div class="pending-title">今日申购，次日起计收益</div>
+                  <div class="pending-title">今日申购，下一交易日起计收益</div>
                   <div id="pendingRows"></div>
                 </div>
               </div>
@@ -3025,7 +3518,7 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         </div>
 
         <div class="empty" id="empty" hidden>正在加载基金实时估值...</div>
-        <div class="footer">默认每 ${Math.round(refreshMs / 1000)} 秒自动刷新一次；每次刷新都会优先读取 <code>state/portfolio_state.json</code>，缺失时才回退到兼容视图 <code>latest.json</code>，并叠加实时基金估值后写入 <code>data/live_funds_snapshot.json</code>。若触发自动写回，底层会先更新 <code>snapshots/latest_raw.json</code>，再重算 <code>state/portfolio_state.json</code> 与兼容层。</div>
+        <div class="footer">默认每 ${Math.round(refreshMs / 1000)} 秒自动刷新一次；每次刷新都以 <code>state/portfolio_state.json</code> 作为唯一业务状态源，并叠加实时基金估值后写入 <code>data/live_funds_snapshot.json</code>。若触发自动写回，底层会先更新 <code>snapshots/latest_raw.json</code>，再重算 <code>state/portfolio_state.json</code>；<code>latest.json</code> 仅保留兼容展示用途。</div>
       </div>
     </div>
 
@@ -3045,6 +3538,7 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         status: document.getElementById("status"),
         accountLabel: document.getElementById("accountLabel"),
         accountSelect: document.getElementById("accountSelect"),
+        confirmedNavHeadline: document.getElementById("confirmedNavHeadline"),
         configHeadlineInline: document.getElementById("configHeadlineInline"),
         summaryBody: document.getElementById("summaryBody"),
         summaryToggleBtn: document.getElementById("summaryToggleBtn"),
@@ -3052,8 +3546,12 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         totalAssets: document.getElementById("totalAssets"),
         fundMarketValue: document.getElementById("fundMarketValue"),
         fundCountText: document.getElementById("fundCountText"),
-        holdingProfit: document.getElementById("holdingProfit"),
-        holdingProfitRate: document.getElementById("holdingProfitRate"),
+        unrealizedHoldingProfit: document.getElementById("unrealizedHoldingProfit"),
+        unrealizedHoldingProfitRate: document.getElementById("unrealizedHoldingProfitRate"),
+        realizedCumulativeProfit: document.getElementById("realizedCumulativeProfit"),
+        realizedCumulativeProfitNote: document.getElementById("realizedCumulativeProfitNote"),
+        pendingSellSettlement: document.getElementById("pendingSellSettlement"),
+        pendingSellSettlementNote: document.getElementById("pendingSellSettlementNote"),
         estimatedDailyPnl: document.getElementById("estimatedDailyPnl"),
         estimatedDailyPnlRate: document.getElementById("estimatedDailyPnlRate"),
         bucketStrip: document.getElementById("bucketStrip"),
@@ -3340,13 +3838,26 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
       }
 
       function resolveValuationLabelForCard(row) {
-        return row?.quoteFresh === true ? "估算净值" : "确认净值";
+        if (row?.quoteMode === "live_estimate") {
+          return "盘中估值";
+        }
+        if (row?.quoteMode === "close_reference" || row?.quoteMode === "today_close") {
+          return "收盘参考";
+        }
+        return "确认净值";
       }
 
       function resolveQuoteStatusForCard(row) {
-        if (row?.quoteFresh === true) {
+        if (row?.quoteMode === "live_estimate") {
           return {
-            text: "实时估值",
+            text: "盘中估值",
+            tone: "flat"
+          };
+        }
+
+        if (row?.quoteMode === "close_reference" || row?.quoteMode === "today_close") {
+          return {
+            text: "收盘参考",
             tone: "flat"
           };
         }
@@ -3424,6 +3935,13 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         return "flat";
       }
 
+      function settlementToneClass(value) {
+        if (!hasNumericValue(value)) {
+          return "flat";
+        }
+        return Number(value) > 0 ? "warn" : "flat";
+      }
+
       function buildCashHoldingCard(row) {
         const weightText = hasNumericValue(row.currentWeightPct)
           ? "占组合 " + formatPercent(row.currentWeightPct)
@@ -3488,10 +4006,32 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
             ? '<span class="holding-pill">' +
               escapeHtml(
                 "待" +
-                  (row.profitEffectiveOn ?? "次日") +
+                  (row.profitEffectiveOn ?? "下一交易日") +
                   "计收益 " +
                   formatCurrency(row.profitLockedAmount)
               ) +
+              "</span>"
+            : "";
+        const latestConfirmedBadge =
+          row?.latestConfirmedLabel
+            ? '<span class="holding-pill">' + escapeHtml(row.latestConfirmedLabel) + "</span>"
+            : "";
+        const overnightCarryBadge =
+          hasNumericValue(row?.overnightCarryPnl)
+            ? '<span class="holding-pill holding-pill--flat">' +
+              escapeHtml(
+                (row?.overnightCarryLabel ?? "待确认收益") +
+                  " " +
+                  formatSignedCurrency(row.overnightCarryPnl)
+              ) +
+              "</span>"
+            : "";
+        const confirmationBadge =
+          row?.confirmationState && row.confirmationState !== "confirmed"
+            ? '<span class="holding-pill holding-pill--' +
+              escapeHtml(row?.confirmationTone === "warn" ? "warn" : "flat") +
+              '">' +
+              escapeHtml(row.confirmationLabel ?? "确认状态待补") +
               "</span>"
             : "";
         const weightText = hasNumericValue(row.currentWeightPct)
@@ -3506,6 +4046,9 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
                 '<div class="all-fund-meta">' +
                   badgesHtml +
                   profitLockBadge +
+                  latestConfirmedBadge +
+                  overnightCarryBadge +
+                  confirmationBadge +
                   '<span class="holding-time">' + escapeHtml(row.updateTime ?? "无估值") + "</span>" +
                 "</div>" +
               "</div>" +
@@ -3521,11 +4064,11 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
               "</div>" +
               '<div class="all-fund-pnl-item">' +
                 '<span class="all-fund-pnl-label">今日收益</span>' +
-                '<span class="all-fund-pnl-value ' + toneClass(row.confirmedDailyPnl) + '">' + escapeHtml(formatSignedCurrency(row.confirmedDailyPnl)) + "</span>" +
+                '<span class="all-fund-pnl-value ' + toneClass(row.estimatedPnl) + '">' + escapeHtml(formatSignedCurrency(row.estimatedPnl)) + "</span>" +
               "</div>" +
               '<div class="all-fund-pnl-item">' +
                 '<span class="all-fund-pnl-label">今日涨跌幅</span>' +
-                '<span class="all-fund-pnl-value ' + toneClass(row.confirmedChangePct) + '">' + escapeHtml(formatSignedPercent(row.confirmedChangePct)) + "</span>" +
+                '<span class="all-fund-pnl-value ' + toneClass(row.changePct) + '">' + escapeHtml(formatSignedPercent(row.changePct)) + "</span>" +
               "</div>" +
               '<div class="all-fund-pnl-item">' +
                 '<span class="all-fund-pnl-label">持有收益</span>' +
@@ -3627,28 +4170,87 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         ].filter(Boolean);
         elements.configHeadlineInline.textContent = configHeadlineParts.join(" · ") || "配置未标注";
         elements.configHeadlineInline.hidden = configHeadlineParts.length === 0;
+        const confirmedNavHeadline = payload?.confirmedNavStatus?.label ?? {
+          tone: "muted",
+          text: "确认净值状态未知"
+        };
+        elements.confirmedNavHeadline.textContent = confirmedNavHeadline.text;
+        elements.confirmedNavHeadline.className =
+          "toolbar-chip " + (confirmedNavHeadline.tone || "muted");
 
         elements.totalAssets.textContent = formatCurrency(payload?.summary?.totalPortfolioAssets);
         elements.fundMarketValue.textContent = formatCurrency(payload?.summary?.totalFundAssets);
         elements.fundCountText.textContent =
           String(payload?.summary?.activeFundCount ?? fundRows.length) + " 只基金";
-        elements.holdingProfit.textContent = formatSignedCurrency(payload?.summary?.holdingProfit);
-        elements.holdingProfit.className =
-          "ribbon-value ribbon-value--profit " + toneClass(payload?.summary?.holdingProfit);
-        elements.holdingProfitRate.textContent =
-          "收益率 " + formatSignedPercent(payload?.summary?.holdingProfitRatePct);
-        elements.holdingProfitRate.className =
-          "ribbon-sub " + toneClass(payload?.summary?.holdingProfitRatePct);
+        elements.unrealizedHoldingProfit.textContent = formatSignedCurrency(
+          payload?.summary?.unrealizedHoldingProfit
+        );
+        elements.unrealizedHoldingProfit.className =
+          "ribbon-value ribbon-value--profit " + toneClass(payload?.summary?.unrealizedHoldingProfit);
+        elements.unrealizedHoldingProfitRate.textContent =
+          hasNumericValue(payload?.summary?.unrealizedHoldingProfitRatePct)
+            ? "收益率 " + formatSignedPercent(payload?.summary?.unrealizedHoldingProfitRatePct)
+            : "持仓浮盈亏";
+        elements.unrealizedHoldingProfitRate.className =
+          "ribbon-sub " + toneClass(payload?.summary?.unrealizedHoldingProfitRatePct);
+        elements.realizedCumulativeProfit.textContent = formatSignedCurrency(
+          payload?.summary?.realizedCumulativeProfit
+        );
+        elements.realizedCumulativeProfit.className =
+          "ribbon-value ribbon-value--profit " + toneClass(payload?.summary?.realizedCumulativeProfit);
+        elements.realizedCumulativeProfitNote.textContent =
+          hasNumericValue(payload?.summary?.realizedCumulativeProfit)
+            ? (
+                hasNumericValue(payload?.summary?.pendingProfitEffectiveCny) &&
+                Number(payload.summary.pendingProfitEffectiveCny) > 0
+                  ? "另有待生效申购 " + formatCurrency(payload.summary.pendingProfitEffectiveCny)
+                  : "历史已结转收益"
+              )
+            : "历史流水未补齐";
+        elements.realizedCumulativeProfitNote.className =
+          "ribbon-sub " +
+          (hasNumericValue(payload?.summary?.realizedCumulativeProfit)
+            ? "flat"
+            : "warn");
+        elements.pendingSellSettlement.textContent = formatCurrency(
+          payload?.summary?.pendingSellSettlementCny
+        );
+        elements.pendingSellSettlement.className =
+          "ribbon-value " + settlementToneClass(payload?.summary?.pendingSellSettlementCny);
+        elements.pendingSellSettlementNote.textContent =
+          hasNumericValue(payload?.summary?.pendingSellSettlementCny) &&
+          Number(payload.summary.pendingSellSettlementCny) > 0
+            ? "到账后现金 " + formatCurrency(payload?.summary?.projectedSettledCashCny)
+            : "已结算现金 " + formatCurrency(payload?.summary?.settledCashCny);
+        elements.pendingSellSettlementNote.className =
+          "ribbon-sub " + settlementToneClass(payload?.summary?.pendingSellSettlementCny);
         elements.estimatedDailyPnl.textContent = formatSignedCurrency(payload?.summary?.estimatedDailyPnl);
         elements.estimatedDailyPnl.className =
           "ribbon-value ribbon-value--profit " + toneClass(payload?.summary?.estimatedDailyPnl);
+        const estimatedDailyNotes = [];
+        if (hasNumericValue(payload?.summary?.profitLockedAmount) && Number(payload.summary.profitLockedAmount) > 0) {
+          estimatedDailyNotes.push("已剔除待下一交易日计收益 " + formatCurrency(payload.summary.profitLockedAmount));
+        }
+        if (
+          hasNumericValue(payload?.summary?.pendingOverseasConfirmedPnl) &&
+          Number(payload.summary.pendingOverseasConfirmedPnl) !== 0
+        ) {
+          estimatedDailyNotes.push(
+            (payload?.summary?.pendingOverseasConfirmedLabel ?? "海外待确认") +
+              " " +
+              formatSignedCurrency(payload.summary.pendingOverseasConfirmedPnl)
+          );
+        }
         elements.estimatedDailyPnlRate.textContent =
-          hasNumericValue(payload?.summary?.profitLockedAmount) && Number(payload.summary.profitLockedAmount) > 0
-            ? "已剔除待次日计收益 " + formatCurrency(payload.summary.profitLockedAmount)
-            : "收益率 " + formatSignedPercent(payload?.summary?.estimatedDailyPnlRatePct);
+          estimatedDailyNotes.length > 0
+            ? estimatedDailyNotes.join(" · ")
+            : hasNumericValue(payload?.summary?.estimatedDailyPnlRatePct)
+              ? "收益率 " + formatSignedPercent(payload?.summary?.estimatedDailyPnlRatePct)
+              : "当前暂无最新估值";
         elements.estimatedDailyPnlRate.className =
           "ribbon-sub " +
-          (hasNumericValue(payload?.summary?.profitLockedAmount) && Number(payload.summary.profitLockedAmount) > 0
+          ((estimatedDailyNotes.length > 0) ||
+          !hasNumericValue(payload?.summary?.estimatedDailyPnlRatePct)
             ? "flat"
             : toneClass(payload?.summary?.estimatedDailyPnlRatePct));
 
@@ -3919,91 +4521,102 @@ function startBackgroundRefresh(refreshMs) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-activePortfolioRoot = resolvePortfolioRoot(args);
-activeAccountId = resolveAccountId(args);
 
-const server = createServer(async (request, response) => {
-  const requestUrl = new URL(request.url ?? "/", `http://${args.host}:${args.port}`);
+export function createFundsLiveDashboardServer(runtimeArgs = parseArgs(process.argv.slice(2))) {
+  activePortfolioRoot = resolvePortfolioRoot(runtimeArgs);
+  activeAccountId = resolveAccountId(runtimeArgs);
 
-  try {
-    if (requestUrl.pathname === "/api/live-funds") {
-      const force = requestUrl.searchParams.get("force") === "1";
-      const requestedAccountId = requestUrl.searchParams.get("account") || activeAccountId;
-      const payload = await getLivePayload(args.refreshMs, requestedAccountId, force);
-      sendJson(response, 200, payload);
-      return;
+  const server = createServer(async (request, response) => {
+    const requestUrl = new URL(request.url ?? "/", `http://${runtimeArgs.host}:${runtimeArgs.port}`);
+
+    try {
+      if (requestUrl.pathname === "/api/live-funds") {
+        const force = requestUrl.searchParams.get("force") === "1";
+        const requestedAccountId = requestUrl.searchParams.get("account") || activeAccountId;
+        const payload = await getLivePayload(runtimeArgs.refreshMs, requestedAccountId, force);
+        sendJson(response, 200, payload);
+        return;
+      }
+
+      if (requestUrl.pathname === "/favicon.ico") {
+        response.writeHead(204);
+        response.end();
+        return;
+      }
+
+      if (requestUrl.pathname === "/" || requestUrl.pathname === "/index.html") {
+        const availableAccounts = await listAvailableAccounts();
+        const initialAccountId = pickValidAccountId(
+          requestUrl.searchParams.get("account"),
+          availableAccounts,
+          activeAccountId
+        );
+        sendHtml(
+          response,
+          htmlPage({
+            refreshMs: runtimeArgs.refreshMs,
+            initialAccountId,
+            availableAccounts
+          })
+        );
+        return;
+      }
+
+      sendJson(response, 404, {
+        error: "not_found",
+        path: requestUrl.pathname
+      });
+    } catch (error) {
+      sendJson(response, 500, {
+        error: "live_dashboard_failed",
+        message: String(error?.message ?? error)
+      });
     }
+  });
 
-    if (requestUrl.pathname === "/favicon.ico") {
-      response.writeHead(204);
-      response.end();
-      return;
-    }
+  server.on("error", (error) => {
+    console.error(
+      JSON.stringify(
+        {
+          status: "failed",
+          host: runtimeArgs.host,
+          port: runtimeArgs.port,
+          error: String(error?.message ?? error)
+        },
+        null,
+        2
+      )
+    );
+    process.exit(1);
+  });
 
-    if (requestUrl.pathname === "/" || requestUrl.pathname === "/index.html") {
-      const availableAccounts = await listAvailableAccounts();
-      const initialAccountId = pickValidAccountId(
-        requestUrl.searchParams.get("account"),
-        availableAccounts,
-        activeAccountId
-      );
-      sendHtml(
-        response,
-        htmlPage({
-          refreshMs: args.refreshMs,
-          initialAccountId,
-          availableAccounts
-        })
-      );
-      return;
-    }
+  return server;
+}
 
-    sendJson(response, 404, {
-      error: "not_found",
-      path: requestUrl.pathname
-    });
-  } catch (error) {
-    sendJson(response, 500, {
-      error: "live_dashboard_failed",
-      message: String(error?.message ?? error)
-    });
-  }
-});
+const isDirectExecution =
+  Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
 
-server.on("error", (error) => {
-  console.error(
-    JSON.stringify(
-      {
-        status: "failed",
-        host: args.host,
-        port: args.port,
-        error: String(error?.message ?? error)
-      },
-      null,
-      2
-    )
-  );
-  process.exit(1);
-});
-
-server.listen(args.port, args.host, async () => {
-  const url = `http://${args.host}:${args.port}`;
-  startBackgroundRefresh(args.refreshMs);
-  getLivePayload(args.refreshMs, activeAccountId, true).catch(() => null);
-  await maybeOpenBrowser(`${url}/?account=${encodeURIComponent(activeAccountId)}`, args.open);
-  console.log(
-    JSON.stringify(
-      {
-        status: "listening",
-        accountId: activeAccountId,
-        portfolioRoot: activePortfolioRoot,
-        host: args.host,
-        port: args.port,
-        url,
-        refreshMs: args.refreshMs
-      },
-      null,
-      2
-    )
-  );
-});
+if (isDirectExecution) {
+  const server = createFundsLiveDashboardServer(args);
+  server.listen(args.port, args.host, async () => {
+    const url = `http://${args.host}:${args.port}`;
+    startBackgroundRefresh(args.refreshMs);
+    getLivePayload(args.refreshMs, activeAccountId, true).catch(() => null);
+    await maybeOpenBrowser(`${url}/?account=${encodeURIComponent(activeAccountId)}`, args.open);
+    console.log(
+      JSON.stringify(
+        {
+          status: "listening",
+          accountId: activeAccountId,
+          portfolioRoot: activePortfolioRoot,
+          host: args.host,
+          port: args.port,
+          url,
+          refreshMs: args.refreshMs
+        },
+        null,
+        2
+      )
+    );
+  });
+}
