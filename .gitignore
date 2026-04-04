@@ -3,5 +3,45 @@
 .venv*/
 **/__pycache__/
 **/*.pyc
+**/.pytest_cache/
 **/node_modules/
+**/*.log
+**/*.db
+**/*.sqlite
+**/*.bak
 **/.git.embedded.backup/
+
+# Portfolio runtime state
+portfolio/latest.json
+portfolio/latest.json.pending-materialize.bak
+portfolio/account_context.json
+portfolio/state-manifest.json
+portfolio/risk_dashboard.json
+portfolio/plugin_sync_status.json
+portfolio/funds-plugin-import.json
+portfolio/fund-watchlist.json
+portfolio/hypotheses.md
+portfolio/transactions/
+portfolio/snapshots/
+portfolio/state/
+portfolio/ledger/
+portfolio/data/
+portfolio/signals/
+portfolio/reports/
+portfolio/daily_briefs/
+portfolio/market_briefs/
+portfolio/market_pulses/
+portfolio/journal/daily/
+portfolio/scorecards/weekly/
+portfolio/trade_cards/20*/
+portfolio/analysis/
+portfolio/cn_market_snapshots/
+portfolio/logs/
+
+# Per-user local ledgers
+portfolio_users/*
+!portfolio_users/README.md
+
+# Local scratch areas
+tmp_trade_guard_test/
+.worktrees/
