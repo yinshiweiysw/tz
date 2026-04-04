@@ -30,7 +30,9 @@ export function buildPortfolioStatePaths(portfolioRoot, manifest = null) {
     portfolioStatePath:
       canonical.portfolio_state ?? buildPortfolioPath(portfolioRoot, "state", "portfolio_state.json"),
     latestCompatPath:
-      canonical.latest_snapshot ?? buildPortfolioPath(portfolioRoot, "latest.json"),
+      canonical.latest_compat_view ??
+      canonical.latest_snapshot ??
+      buildPortfolioPath(portfolioRoot, "latest.json"),
     latestRawPath:
       canonical.latest_raw_snapshot ?? buildPortfolioPath(portfolioRoot, "snapshots", "latest_raw.json")
   };
@@ -53,6 +55,24 @@ export async function loadPreferredPortfolioState({ portfolioRoot, manifest = nu
     payload: latestCompat,
     sourcePath: latestCompat ? paths.latestCompatPath : null,
     sourceKind: latestCompat ? "latest_compat" : "missing",
+    paths
+  };
+}
+
+export async function loadCanonicalPortfolioState({ portfolioRoot, manifest = null }) {
+  const paths = buildPortfolioStatePaths(portfolioRoot, manifest);
+  const portfolioState = await readJsonOrNull(paths.portfolioStatePath);
+
+  if (!portfolioState || !Array.isArray(portfolioState?.positions)) {
+    throw new Error(
+      `portfolio_state.json is required and must contain positions[]: ${paths.portfolioStatePath}`
+    );
+  }
+
+  return {
+    payload: portfolioState,
+    sourcePath: paths.portfolioStatePath,
+    sourceKind: "portfolio_state",
     paths
   };
 }
