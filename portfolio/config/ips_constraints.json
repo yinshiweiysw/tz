@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "description": "SSOT hard constraints for trade gating, risk dashboard blocking state, and rebalance enforcement.",
+  "drawdown": {
+    "re_evaluate_pct": 0.08,
+    "hard_stop_pct": 0.12
+  },
+  "concentration": {
+    "single_fund_max_pct": 0.1,
+    "single_theme_max_pct": 0.15,
+    "high_correlation_max_pct": 0.25
+  },
+  "cash_floor_pct": 0.15,
+  "speculative_cap_pct": 0.15,
+  "rebalance_trigger_deviation_pp": 0.05
+}

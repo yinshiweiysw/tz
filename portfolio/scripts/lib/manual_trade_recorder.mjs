@@ -1,8 +1,10 @@
-import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { buildPortfolioPath } from "./account_root.mjs";
+import { updateJsonFileAtomically, writeJsonAtomic } from "./atomic_json_state.mjs";
 import { inferProfitEffectiveOn, parseAmount } from "./portfolio_state_materializer.mjs";
+import { resolveLedgerEntryLifecycleStage } from "./trade_lifecycle.mjs";
 
 function normalizeName(name) {
   return String(name ?? "")
@@ -182,6 +184,20 @@ function buildBuyTrade({
     trade.interpretation_basis = `Recorded via manual_trade_recorder from "${item.token}" as EXCHANGE execution; same-day profit lock is bypassed.`;
   }
 
+  trade.lifecycle_stage = resolveLedgerEntryLifecycleStage(
+    {
+      type: "buy",
+      status: trade.status,
+      profit_effective_on: trade.profit_effective_on,
+      normalized: {
+        execution_type: trade.execution_type,
+        amount_cny: trade.amount_cny,
+        profit_effective_on: trade.profit_effective_on
+      }
+    },
+    tradeDate
+  );
+
   return trade;
 }
 
@@ -209,6 +225,21 @@ function buildSellTrade({
   trade.interpretation_basis = cashArrived
     ? `Recorded via manual_trade_recorder from "${item.token}" as an executed sell; proceeds are marked cash_arrived=true and may be recognized immediately.`
     : `Recorded via manual_trade_recorder from "${item.token}" as an executed sell; proceeds remain pending settlement until cash_arrived=true.`;
+  trade.lifecycle_stage = resolveLedgerEntryLifecycleStage(
+    {
+      type: "sell",
+      status: trade.status,
+      normalized: {
+        amount_cny: trade.amount_cny,
+        cash_effect_cny: cashArrived ? trade.amount_cny : 0,
+        pending_sell_to_arrive_cny: cashArrived ? 0 : trade.amount_cny
+      },
+      original: {
+        cash_arrived: trade.cash_arrived
+      }
+    },
+    tradeDate
+  );
 
   return trade;
 }
@@ -222,7 +253,7 @@ function buildConversionTrade({
 }) {
   const resolvedFrom = resolveFundToken(item.fromToken, lookup);
   const resolvedTo = resolveFundToken(item.toToken, lookup);
-  return {
+  const trade = {
     trade_date: tradeDate,
     from_fund_name_user_stated: item.fromToken,
     to_fund_name_user_stated: item.toToken,
@@ -237,6 +268,20 @@ function buildConversionTrade({
     raw_snapshot_includes_trade: rawSnapshotIncludesTrade,
     interpretation_basis: `Recorded via manual_trade_recorder as a confirmed conversion from "${item.fromToken}" to "${item.toToken}"; the state materializer should apply the conversion immediately.`
   };
+
+  trade.lifecycle_stage = resolveLedgerEntryLifecycleStage(
+    {
+      type: "conversion",
+      status: trade.status,
+      normalized: {
+        from_amount_cny: trade.from_amount_cny,
+        to_amount_cny: trade.to_amount_cny
+      }
+    },
+    tradeDate
+  );
+
+  return trade;
 }
 
 export function buildManualTradeTransactionContent({
@@ -411,7 +456,7 @@ export async function chooseManualBuysFilePath({ transactionsDir, tradeDate, lab
 
 export async function writeJson(targetPath, payload) {
   await mkdir(path.dirname(targetPath), { recursive: true });
-  await writeFile(targetPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  await writeJsonAtomic(targetPath, payload);
 }
 
 export async function readJsonOrNull(targetPath) {
@@ -456,7 +501,7 @@ export async function updateRawSnapshotRelatedFiles({
     rawSnapshot.snapshot_date = tradeDate;
   }
 
-  await writeJson(rawPath, rawSnapshot);
+  await writeJsonAtomic(rawPath, rawSnapshot);
   return rawPath;
 }
 
@@ -474,12 +519,14 @@ export async function updateStateManifestManualTradePointer({
   const normalizedKinds = new Set(
     (tradeKinds ?? []).map((item) => String(item ?? "").trim().toLowerCase()).filter(Boolean)
   );
-  manifest.canonical_entrypoints = {
-    ...(manifest.canonical_entrypoints ?? {}),
-    manual_trade_transactions: transactionFilePath,
-    ...(normalizedKinds.has("buy") ? { manual_buy_transactions: transactionFilePath } : {})
-  };
-  await writeJson(manifestPath, manifest);
+  await updateJsonFileAtomically(manifestPath, (current) => ({
+    ...(current ?? {}),
+    canonical_entrypoints: {
+      ...((current ?? {}).canonical_entrypoints ?? {}),
+      manual_trade_transactions: transactionFilePath,
+      ...(normalizedKinds.has("buy") ? { manual_buy_transactions: transactionFilePath } : {})
+    }
+  }));
   return manifestPath;
 }
 

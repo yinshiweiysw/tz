@@ -1,7 +1,10 @@
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { buildPortfolioPath, defaultPortfolioRoot } from "./account_root.mjs";
+import { writeJsonAtomic } from "./atomic_json_state.mjs";
+import { summarizeLedgerEntryLifecycles } from "./trade_lifecycle.mjs";
+import { nextTradingDay, secondTradingDay } from "./trading_calendar.mjs";
 
 export function nowIso() {
   return new Date().toISOString();
@@ -47,7 +50,7 @@ async function readJson(targetPath) {
 }
 
 async function writeJson(targetPath, payload) {
-  await writeFile(targetPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  await writeJsonAtomic(targetPath, payload);
 }
 
 export function buildDualLedgerPaths(portfolioRoot) {
@@ -117,25 +120,6 @@ export function parseAmount(value) {
   return round(Number(match[0]));
 }
 
-function nextBusinessDay(dateText) {
-  const base = new Date(`${dateText}T12:00:00+08:00`);
-  if (!Number.isFinite(base.getTime())) {
-    return null;
-  }
-
-  const cursor = new Date(base.getTime());
-  do {
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  } while ([0, 6].includes(cursor.getUTCDay()));
-
-  return formatShanghaiDate(cursor);
-}
-
-function secondBusinessDay(dateText) {
-  const first = nextBusinessDay(dateText);
-  return first ? nextBusinessDay(first) : null;
-}
-
 export function resolveFundName(trade) {
   return (
     trade?.fund_name ??
@@ -173,16 +157,16 @@ export function inferProfitEffectiveOn(trade, fallbackDate) {
     trade?.before_cutoff === false;
 
   if (submittedAfterCutoff) {
-    return secondBusinessDay(tradeDate);
+    return secondTradingDay(tradeDate);
   }
 
   if (submittedBeforeCutoff) {
-    return nextBusinessDay(tradeDate);
+    return nextTradingDay(tradeDate);
   }
 
   // Default OTC assumption: if the user only reported a same-day executed fund order
   // but omitted cutoff details, keep it out of today's PnL and assume T+1 profit start.
-  return nextBusinessDay(tradeDate);
+  return nextTradingDay(tradeDate);
 }
 
 function stripCompatLatestToRawSnapshot(latest, accountId, latestCompatPath) {
@@ -805,8 +789,31 @@ function buildPendingPosition(entry) {
   };
 }
 
+function dedupeExecutionEntries(entries) {
+  const seen = new Set();
+  const deduped = [];
+
+  for (const entry of entries ?? []) {
+    const key = String(entry?.id ?? "").trim()
+      ? `id:${String(entry.id).trim()}`
+      : [
+          entry?.type ?? "",
+          entry?.effective_trade_date ?? "",
+          entry?.source_file ?? "",
+          JSON.stringify(entry?.normalized ?? {})
+        ].join("::");
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(entry);
+  }
+
+  return deduped;
+}
+
 function sortExecutionEntries(entries) {
-  return [...entries].sort((left, right) => {
+  return dedupeExecutionEntries(entries).sort((left, right) => {
     const leftDate = String(left?.effective_trade_date ?? "");
     const rightDate = String(right?.effective_trade_date ?? "");
     if (leftDate !== rightDate) {
@@ -829,7 +836,11 @@ function shouldOverlayLedgerEntry(rawSnapshotDate, entry) {
   if (!rawDate || !effectiveTradeDate) {
     return true;
   }
-  return compareDateStrings(rawDate, effectiveTradeDate) <= 0;
+  if (compareDateStrings(rawDate, effectiveTradeDate) <= 0) {
+    return true;
+  }
+
+  return !entryReflectsTradeInRawSnapshot(entry);
 }
 
 function entryReflectsTradeInRawSnapshot(entry) {
@@ -1179,6 +1190,7 @@ export function materializePortfolioStateFromInputs({
     .at(-1) ?? null;
   const rawSummary = cloneJson(raw?.summary ?? {});
   const rawCashLedger = cloneJson(raw?.cash_ledger ?? {});
+  const rawPerformanceSnapshot = cloneJson(raw?.performance_snapshot ?? {});
   const pendingSellToArrive = round(
     Number(rawCashLedger?.pending_sell_to_arrive_cny ?? rawSummary?.pending_sell_to_arrive ?? 0) +
       rawPendingSellArrivalReflectionUnwind +
@@ -1189,6 +1201,22 @@ export function materializePortfolioStateFromInputs({
       rawCashReflectionUnwind +
       ledgerCashDelta
   );
+  const cumulativeProfitRaw = Number(rawSummary?.cumulative_profit);
+  const canDeriveRealizedCumulativeProfit =
+    Number.isFinite(cumulativeProfitRaw) &&
+    (round(cumulativeProfitRaw) !== 0 ||
+      Object.keys(rawPerformanceSnapshot ?? {}).length > 0 ||
+      String(rawSummary?.last_user_reported_profit_update_at ?? "").trim().length > 0);
+  const cumulativeProfit = canDeriveRealizedCumulativeProfit ? round(cumulativeProfitRaw) : null;
+  const realizedCumulativeProfit =
+    Number.isFinite(cumulativeProfit) ? round(cumulativeProfit - totalHoldingPnl) : null;
+  const tradeLifecycleSummaryRaw = summarizeLedgerEntryLifecycles(overlayEntries, effectiveDate);
+  const tradeLifecycleSummary = {
+    reference_date: effectiveDate,
+    total_entries: overlayEntries.length,
+    counts_by_stage: tradeLifecycleSummaryRaw.countsByStage,
+    amounts_by_stage: tradeLifecycleSummaryRaw.amountsByStage
+  };
 
   const summary = {
     ...rawSummary,
@@ -1198,6 +1226,8 @@ export function materializePortfolioStateFromInputs({
     effective_exposure_after_pending_sell: totalFundAssets,
     yesterday_profit: totalDailyPnl,
     holding_profit: totalHoldingPnl,
+    unrealized_holding_profit_cny: totalHoldingPnl,
+    realized_cumulative_profit_cny: realizedCumulativeProfit,
     performance_precision:
       overlayEntries.length > 0
         ? "materialized_from_raw_snapshot_plus_execution_ledger"
@@ -1228,7 +1258,29 @@ export function materializePortfolioStateFromInputs({
     ...rawCashLedger,
     available_cash_cny: availableCash,
     pending_buy_confirm_cny: pendingBuyConfirm,
-    pending_sell_to_arrive_cny: pendingSellToArrive
+    pending_sell_to_arrive_cny: pendingSellToArrive,
+    deployed_pending_profit_effective_cny: pendingBuyConfirm,
+    projected_settled_cash_cny: round(availableCash + pendingSellToArrive),
+    execution_ledger_pending_cash_arrival_cny: round(
+      Number(tradeLifecycleSummaryRaw.amountsByStage.platform_confirmed_pending_cash_arrival ?? 0)
+    ),
+    execution_ledger_cash_arrived_cny: round(
+      Number(tradeLifecycleSummaryRaw.amountsByStage.cash_arrived ?? 0)
+    )
+  };
+  const performanceSnapshot = {
+    ...(rawPerformanceSnapshot ?? {}),
+    daily_mark_to_market_profit_cny: totalDailyPnl,
+    unrealized_holding_profit_cny: totalHoldingPnl,
+    realized_cumulative_profit_cny: realizedCumulativeProfit,
+    cumulative_profit_cny: cumulativeProfit,
+    pending_profit_effective_cny: pendingBuyConfirm,
+    pending_sell_settlement_cny: pendingSellToArrive,
+    settled_cash_cny: availableCash,
+    projected_settled_cash_cny: round(availableCash + pendingSellToArrive),
+    accounting_basis: Number.isFinite(cumulativeProfit)
+      ? "realized_cumulative_profit_cny = cumulative_profit_cny - unrealized_holding_profit_cny"
+      : "unrealized_holding_profit_cny derived from active positions; realized cumulative unavailable because raw summary.cumulative_profit is missing"
   };
 
   const relatedFiles = {
@@ -1247,13 +1299,14 @@ export function materializePortfolioStateFromInputs({
     source_images: cloneJson(raw?.source_images ?? []),
     summary,
     raw_account_snapshot: deriveRawAccountSnapshot(raw),
-    performance_snapshot: cloneJson(raw?.performance_snapshot ?? {}),
+    performance_snapshot: performanceSnapshot,
     positions,
     pending_profit_effective_positions: pendingPositions,
     exposure_summary: exposureSummary,
     recognition_notes: recognitionNotes,
     related_files: relatedFiles,
     cash_ledger: cashLedger,
+    trade_lifecycle_summary: tradeLifecycleSummary,
     raw_snapshot_meta: cloneJson(raw?.snapshot_meta ?? {}),
     materialization
   };
@@ -1289,9 +1342,34 @@ export function createLedgerEntriesFromTransactionContent({
 }) {
   const snapshotDate = content?.snapshot_date ?? null;
   const entries = [];
+  const buildTradeId = (type, index, original) => {
+    const tradeDate = String(original?.trade_date ?? snapshotDate ?? "").trim() || "na";
+    if (type === "conversion") {
+      const fromKey = String(
+        original?.from_fund_code ?? original?.from_fund_name ?? original?.from_fund_name_user_stated ?? "na"
+      ).trim();
+      const toKey = String(
+        original?.to_fund_code ?? original?.to_fund_name ?? original?.to_fund_name_user_stated ?? "na"
+      ).trim();
+      const amount = parseAmount(original?.to_amount_cny ?? original?.from_amount_cny ?? original?.amount_cny);
+      return `${filePath}::${type}::${tradeDate}::${fromKey}->${toKey}::${amount}::${index}`;
+    }
+
+    const securityKey = String(
+      original?.fund_code ??
+        original?.code ??
+        original?.symbol ??
+        original?.interpreted_fund_name ??
+        original?.fund_name_user_stated ??
+        "na"
+    ).trim();
+    const amount = parseAmount(original?.amount_cny ?? original?.amount_or_shares);
+    return `${filePath}::${type}::${tradeDate}::${securityKey}::${amount}::${index}`;
+  };
   const pushEntry = (type, index, original, normalized) => {
     entries.push({
       id: `${filePath}::${type}::${index}`,
+      trade_id: buildTradeId(type, index, original),
       account_id: accountId,
       type,
       status: "recorded",
@@ -1315,6 +1393,10 @@ export function createLedgerEntriesFromTransactionContent({
       code: trade?.fund_code ?? trade?.code ?? trade?.symbol ?? null,
       fund_code: trade?.fund_code ?? trade?.code ?? trade?.symbol ?? null,
       symbol: trade?.symbol ?? trade?.fund_code ?? trade?.code ?? null,
+      source_confidence: trade?.source_confidence ?? null,
+      fund_identity: cloneJson(trade?.fund_identity ?? null),
+      bucket_key: trade?.bucket_key ?? null,
+      theme_key: trade?.theme_key ?? null,
       submitted_before_cutoff:
         trade?.submitted_before_cutoff === true ||
         trade?.order_submitted_before_cutoff === true ||
@@ -1333,6 +1415,14 @@ export function createLedgerEntriesFromTransactionContent({
     pushEntry("sell", index, trade, {
       fund_name: name,
       amount_cny: parseAmount(trade?.amount_cny ?? trade?.amount_or_shares),
+      execution_type: trade?.execution_type ?? "OTC",
+      code: trade?.fund_code ?? trade?.code ?? trade?.symbol ?? null,
+      fund_code: trade?.fund_code ?? trade?.code ?? trade?.symbol ?? null,
+      symbol: trade?.symbol ?? trade?.fund_code ?? trade?.code ?? null,
+      source_confidence: trade?.source_confidence ?? null,
+      fund_identity: cloneJson(trade?.fund_identity ?? null),
+      bucket_key: trade?.bucket_key ?? null,
+      theme_key: trade?.theme_key ?? null,
       cash_effect_cny:
         trade?.cash_arrived === true
           ? parseAmount(trade?.amount_cny ?? trade?.amount_or_shares)
@@ -1354,6 +1444,13 @@ export function createLedgerEntriesFromTransactionContent({
       from_amount_cny: parseAmount(trade?.from_amount_cny ?? trade?.amount_cny),
       to_amount_cny: parseAmount(trade?.to_amount_cny ?? trade?.amount_cny),
       execution_type: trade?.execution_type ?? "OTC",
+      source_confidence: trade?.source_confidence ?? null,
+      from_fund_identity: cloneJson(trade?.from_fund_identity ?? null),
+      to_fund_identity: cloneJson(trade?.to_fund_identity ?? null),
+      from_bucket_key: trade?.from_bucket_key ?? null,
+      to_bucket_key: trade?.to_bucket_key ?? null,
+      from_theme_key: trade?.from_theme_key ?? null,
+      to_theme_key: trade?.to_theme_key ?? null,
       raw_snapshot_includes_trade:
         trade?.raw_snapshot_includes_trade === true ||
         trade?.platform_snapshot_includes_trade === true

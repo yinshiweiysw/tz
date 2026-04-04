@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import path from "node:path";
 import { promisify } from "node:util";
 
 import {
@@ -6,6 +7,8 @@ import {
   resolveAccountId,
   resolvePortfolioRoot
 } from "./lib/account_root.mjs";
+import { loadAssetMaster } from "./lib/asset_master.mjs";
+import { loadIpsConstraints } from "./lib/ips_constraints.mjs";
 import {
   buildManualTradeTransactionContent,
   chooseManualTransactionFilePath,
@@ -18,8 +21,12 @@ import {
   updateStateManifestManualTradePointer,
   writeJson
 } from "./lib/manual_trade_recorder.mjs";
+import { buildProposedTradesForGate } from "./lib/manual_trade_gate_context.mjs";
 import { formatShanghaiDate } from "./lib/portfolio_state_materializer.mjs";
-import { loadPreferredPortfolioState } from "./lib/portfolio_state_view.mjs";
+import { loadCanonicalPortfolioState } from "./lib/portfolio_state_view.mjs";
+import { evaluateExecutionPermission } from "./lib/execution_permission_gate.mjs";
+import { evaluateTradePreFlight } from "./lib/trade_pre_flight_gate.mjs";
+import { runRefreshAccountSidecars } from "./refresh_account_sidecars.mjs";
 
 const execFileAsync = promisify(execFile);
 const mergeConfirmedTradesScriptPath = new URL("./merge_confirmed_trades_into_latest.mjs", import.meta.url);
@@ -209,6 +216,105 @@ function summarizeTradeKinds({ buyCount, sellCount, conversionCount }) {
   ];
 }
 
+function buildTradeFundIdentity(meta = {}, fallbackName = "", userToken = "") {
+  return {
+    code: String(meta?.fund_code ?? meta?.fundCode ?? "").trim() || null,
+    name: String(meta?.name ?? fallbackName ?? "").trim() || null,
+    user_stated_token: String(userToken ?? "").trim() || null
+  };
+}
+
+function enrichTradePayloadWithGateMetadata({
+  payload,
+  proposedTrades,
+  buyItems,
+  sellItems,
+  conversionItems
+}) {
+  const normalizedProposedTrades = Array.isArray(proposedTrades) ? proposedTrades : [];
+  const normalizedBuyItems = Array.isArray(buyItems) ? buyItems : [];
+  const normalizedSellItems = Array.isArray(sellItems) ? sellItems : [];
+  const normalizedConversionItems = Array.isArray(conversionItems) ? conversionItems : [];
+  const buyMetas = normalizedProposedTrades.slice(0, normalizedBuyItems.length);
+  const sellMetas = normalizedProposedTrades.slice(
+    normalizedBuyItems.length,
+    normalizedBuyItems.length + normalizedSellItems.length
+  );
+  const conversionMetas = normalizedProposedTrades.slice(
+    normalizedBuyItems.length + normalizedSellItems.length
+  );
+
+  return {
+    ...payload,
+    ...(Array.isArray(payload?.executed_buy_transactions)
+      ? {
+          executed_buy_transactions: payload.executed_buy_transactions.map((trade, index) => {
+            const meta = buyMetas[index] ?? {};
+            return {
+              ...trade,
+              category: trade?.category ?? meta?.category ?? null,
+              fund_code: trade?.fund_code ?? meta?.fund_code ?? null,
+              source_confidence: "user_dialogue_confirmed",
+              fund_identity: buildTradeFundIdentity(
+                meta,
+                trade?.interpreted_fund_name ?? trade?.fund_name_user_stated ?? "",
+                normalizedBuyItems[index]?.token ?? trade?.fund_name_user_stated ?? ""
+              ),
+              bucket_key: meta?.bucket_key ?? null,
+              theme_key: meta?.theme_key ?? null
+            };
+          })
+        }
+      : {}),
+    ...(Array.isArray(payload?.executed_sell_transactions)
+      ? {
+          executed_sell_transactions: payload.executed_sell_transactions.map((trade, index) => {
+            const meta = sellMetas[index] ?? {};
+            return {
+              ...trade,
+              category: trade?.category ?? meta?.category ?? null,
+              fund_code: trade?.fund_code ?? meta?.fund_code ?? null,
+              source_confidence: "user_dialogue_confirmed",
+              fund_identity: buildTradeFundIdentity(
+                meta,
+                trade?.interpreted_fund_name ?? trade?.fund_name_user_stated ?? "",
+                normalizedSellItems[index]?.token ?? trade?.fund_name_user_stated ?? ""
+              ),
+              bucket_key: meta?.bucket_key ?? null,
+              theme_key: meta?.theme_key ?? null
+            };
+          })
+        }
+      : {}),
+    ...(Array.isArray(payload?.executed_conversion_transactions)
+      ? {
+          executed_conversion_transactions: payload.executed_conversion_transactions.map((trade, index) => {
+            const fromMeta = conversionMetas[index * 2] ?? {};
+            const toMeta = conversionMetas[index * 2 + 1] ?? {};
+            return {
+              ...trade,
+              source_confidence: "user_dialogue_confirmed",
+              from_fund_identity: buildTradeFundIdentity(
+                fromMeta,
+                trade?.from_fund_name ?? trade?.from_fund_name_user_stated ?? "",
+                normalizedConversionItems[index]?.fromToken ?? trade?.from_fund_name_user_stated ?? ""
+              ),
+              to_fund_identity: buildTradeFundIdentity(
+                toMeta,
+                trade?.to_fund_name ?? trade?.to_fund_name_user_stated ?? "",
+                normalizedConversionItems[index]?.toToken ?? trade?.to_fund_name_user_stated ?? ""
+              ),
+              from_bucket_key: fromMeta?.bucket_key ?? null,
+              to_bucket_key: toMeta?.bucket_key ?? null,
+              from_theme_key: fromMeta?.theme_key ?? null,
+              to_theme_key: toMeta?.theme_key ?? null
+            };
+          })
+        }
+      : {})
+  };
+}
+
 const options = parseArgs(process.argv.slice(2));
 if (!String(options.buy ?? "").trim() && !String(options.sell ?? "").trim() && !String(options.convert ?? "").trim()) {
   console.error(
@@ -219,6 +325,7 @@ if (!String(options.buy ?? "").trim() && !String(options.sell ?? "").trim() && !
 
 const portfolioRoot = resolvePortfolioRoot(options);
 const accountId = resolveAccountId(options);
+const manifestPath = buildPortfolioPath(portfolioRoot, "state-manifest.json");
 const tradeDate = String(options.date ?? "").trim() || formatShanghaiDate();
 const executionType = String(options.executionType ?? options["execution-type"] ?? "OTC")
   .trim()
@@ -237,25 +344,78 @@ const label = String(options.label ?? "").trim();
 const buyItems = String(options.buy ?? "").trim() ? parseBuySpec(options.buy) : [];
 const sellItems = String(options.sell ?? "").trim() ? parseSellSpec(options.sell) : [];
 const conversionItems = String(options.convert ?? "").trim() ? parseConversionSpec(options.convert) : [];
-const latestState = (await loadPreferredPortfolioState({ portfolioRoot })).payload ?? {};
+const manifest = await readJsonOrNull(manifestPath);
+const latestState = (await loadCanonicalPortfolioState({ portfolioRoot, manifest })).payload ?? {};
 const watchlist = await readJsonOrNull(buildPortfolioPath(portfolioRoot, "fund-watchlist.json"));
 const lookup = await loadRecorderLookup({
   portfolioRoot,
   latestState,
   watchlist
 });
-
-const payload = buildManualTradeTransactionContent({
-  tradeDate,
+const assetMasterPath =
+  manifest?.canonical_entrypoints?.asset_master ??
+  buildPortfolioPath(portfolioRoot, "config", "asset_master.json");
+const ipsConstraintsPath =
+  manifest?.canonical_entrypoints?.ips_constraints ??
+  path.join(path.dirname(assetMasterPath), "ips_constraints.json");
+const assetMaster = await loadAssetMaster(assetMasterPath);
+const ipsConstraints = await loadIpsConstraints(ipsConstraintsPath);
+const riskDashboard = await readJsonOrNull(buildPortfolioPath(portfolioRoot, "risk_dashboard.json"));
+const proposedTrades = buildProposedTradesForGate({
   buyItems,
   sellItems,
   conversionItems,
-  executionType,
-  submittedBeforeCutoff,
-  cutoffTimeLocal,
-  rawSnapshotIncludesTrade: rawIncludesTrade,
-  sellCashArrived,
-  lookup
+  lookup,
+  latestState,
+  assetMaster,
+  sellCashArrived
+});
+const gateResult = evaluateTradePreFlight({
+  portfolioState: latestState,
+  proposedTrades,
+  assetMaster,
+  portfolioRiskState: {
+    ...(riskDashboard?.portfolio_risk ?? {}),
+    current_drawdown_pct:
+      Number(riskDashboard?.portfolio_risk?.current_drawdown_pct ?? riskDashboard?.current_drawdown_pct ?? NaN)
+  },
+  ipsConstraints
+});
+
+const researchBrainPath =
+  manifest?.canonical_entrypoints?.latest_research_brain ??
+  buildPortfolioPath(portfolioRoot, "data", "research_brain.json");
+const researchBrain = await readJsonOrNull(researchBrainPath);
+const executionGateResult = evaluateExecutionPermission({
+  structuralGate: gateResult,
+  researchDecision: researchBrain,
+  proposedTrades
+});
+
+if (!executionGateResult.allowed) {
+  console.error(
+    `Trade blocked by unified execution gate: ${executionGateResult.blockingReasons.join(" | ")}`
+  );
+  process.exit(1);
+}
+
+const payload = enrichTradePayloadWithGateMetadata({
+  payload: buildManualTradeTransactionContent({
+    tradeDate,
+    buyItems,
+    sellItems,
+    conversionItems,
+    executionType,
+    submittedBeforeCutoff,
+    cutoffTimeLocal,
+    rawSnapshotIncludesTrade: rawIncludesTrade,
+    sellCashArrived,
+    lookup
+  }),
+  proposedTrades,
+  buyItems,
+  sellItems,
+  conversionItems
 });
 
 const transactionsDir = buildPortfolioPath(portfolioRoot, "transactions");
@@ -293,7 +453,7 @@ const rawSnapshotPath = await updateRawSnapshotRelatedFiles({
   note: rawNote,
   tradeKinds
 });
-const manifestPath = await updateStateManifestManualTradePointer({
+const manifestUpdatePath = await updateStateManifestManualTradePointer({
   portfolioRoot,
   transactionFilePath,
   tradeKinds
@@ -305,6 +465,15 @@ if (!skipMerge) {
   args.push("--user", accountId);
   const result = await runNodeScript(mergeConfirmedTradesScriptPath.pathname, args);
   mergeResult = result.stdout ? JSON.parse(result.stdout) : null;
+}
+
+let refreshResult = null;
+if (!skipMerge) {
+  refreshResult = await runRefreshAccountSidecars({
+    portfolioRoot,
+    user: accountId,
+    date: tradeDate
+  });
 }
 
 let writebackResult = null;
@@ -368,8 +537,9 @@ console.log(
       conversionOutAmount,
       effectiveDates,
       rawSnapshotPath,
-      manifestPath,
+      manifestPath: manifestUpdatePath,
       mergeResult,
+      refreshResult,
       writebackResult
     },
     null,

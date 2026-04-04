@@ -12,12 +12,27 @@ function toNumberOrNull(value) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function normalizeMatchText(value) {
+  return String(value ?? "")
+    .replace(/（/g, "(")
+    .replace(/）/g, ")")
+    .replace(/[（）()［］\[\]\s\-_/·.]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 function normalizePct(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
     return 0;
   }
   return numeric;
+}
+
+function normalizeStringArray(value) {
+  return Array.isArray(value)
+    ? value.map((item) => String(item ?? "").trim()).filter(Boolean)
+    : [];
 }
 
 function normalizeBucketConfig(bucketKey, bucket) {
@@ -54,6 +69,54 @@ function matchesRule(rule, category, name) {
   return false;
 }
 
+function matchesThemeRule(rule, subject = {}) {
+  const category = String(
+    subject?.category ?? subject?.latestCategory ?? subject?.latest_category ?? ""
+  ).trim();
+  const name = String(subject?.name ?? subject?.fund_name ?? "").trim();
+  const codeCandidates = new Set(buildAssetCodeCandidates(subject));
+  const bucketKey = String(
+    subject?.bucket_key ?? subject?.bucketKey ?? subject?.bucket ?? ""
+  ).trim();
+  const market = String(subject?.market ?? "").trim();
+  const bucketKeys = normalizeStringArray(rule?.bucket_keys);
+  const marketEquals = normalizeStringArray(rule?.market_equals);
+  const codeEquals = normalizeStringArray(rule?.code_equals);
+
+  if (bucketKeys.length > 0 && (!bucketKey || !bucketKeys.includes(bucketKey))) {
+    return false;
+  }
+  if (marketEquals.length > 0 && (!market || !marketEquals.includes(market))) {
+    return false;
+  }
+
+  if (codeEquals.length > 0) {
+    for (const code of codeEquals) {
+      if (codeCandidates.has(code)) {
+        return true;
+      }
+    }
+  }
+
+  return matchesRule(rule, category, name);
+}
+
+function buildAssetCodeCandidates(subject = {}) {
+  return [
+    subject?.fund_code,
+    subject?.code,
+    subject?.symbol
+  ]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+}
+
+function buildAssetNameCandidates(subject = {}) {
+  return [subject?.name, subject?.fund_name]
+    .map((value) => normalizeMatchText(value))
+    .filter(Boolean);
+}
+
 export async function loadAssetMaster(path = defaultAssetMasterPath) {
   const payload = JSON.parse(await readFile(path, "utf8"));
   if (!payload?.buckets || !payload?.bucket_mapping_rules) {
@@ -77,7 +140,81 @@ export function buildBucketConfigMap(assetMaster) {
   return Object.fromEntries(getBucketEntries(assetMaster));
 }
 
+function normalizeThemeConfig(themeKey, theme) {
+  return {
+    key: themeKey,
+    label: theme?.label ?? themeKey,
+    bucketKeys: normalizeStringArray(theme?.bucket_keys)
+  };
+}
+
+export function getThemeEntries(assetMaster) {
+  return Object.entries(assetMaster?.themes ?? {}).map(([themeKey, theme]) => [
+    themeKey,
+    normalizeThemeConfig(themeKey, theme)
+  ]);
+}
+
+export function buildThemeConfigMap(assetMaster) {
+  return Object.fromEntries(getThemeEntries(assetMaster));
+}
+
+export function resolveAssetDefinition(assetMaster, subject = {}) {
+  const assets = Array.isArray(assetMaster?.assets) ? assetMaster.assets : [];
+  if (!assets.length) {
+    return null;
+  }
+
+  const codeCandidates = new Set(buildAssetCodeCandidates(subject));
+  const nameCandidates = buildAssetNameCandidates(subject);
+
+  for (const asset of assets) {
+    const assetCode = String(
+      asset?.symbol ?? asset?.fund_code ?? asset?.code ?? ""
+    ).trim();
+    if (assetCode && codeCandidates.has(assetCode)) {
+      return asset;
+    }
+  }
+
+  if (!nameCandidates.length) {
+    return null;
+  }
+
+  for (const asset of assets) {
+    const assetName = normalizeMatchText(asset?.name);
+    if (!assetName) {
+      continue;
+    }
+
+    const matched = nameCandidates.some(
+      (candidate) =>
+        candidate === assetName ||
+        candidate.includes(assetName) ||
+        assetName.includes(candidate)
+    );
+    if (matched) {
+      return asset;
+    }
+  }
+
+  return null;
+}
+
 export function resolveBucketKey(assetMaster, subject = {}) {
+  const explicitBucketKey = String(
+    subject?.bucket_key ?? subject?.bucketKey ?? subject?.bucket ?? ""
+  ).trim();
+  if (explicitBucketKey) {
+    return explicitBucketKey;
+  }
+
+  const assetDefinition = resolveAssetDefinition(assetMaster, subject);
+  const explicitAssetBucket = String(assetDefinition?.bucket ?? assetDefinition?.bucket_key ?? "").trim();
+  if (explicitAssetBucket) {
+    return explicitAssetBucket;
+  }
+
   const category = String(
     subject?.category ?? subject?.latestCategory ?? subject?.latest_category ?? ""
   ).trim();
@@ -94,6 +231,50 @@ export function resolveBucketKey(assetMaster, subject = {}) {
 
 export function resolveBucketLabel(assetMaster, bucketKey) {
   return assetMaster?.buckets?.[bucketKey]?.label ?? "未分类仓位";
+}
+
+export function resolveThemeKey(assetMaster, subject = {}) {
+  const explicitThemeKey = String(
+    subject?.theme_key ?? subject?.themeKey ?? ""
+  ).trim();
+  if (explicitThemeKey) {
+    return explicitThemeKey;
+  }
+
+  const assetDefinition = resolveAssetDefinition(assetMaster, subject);
+  const assetThemeKey = String(assetDefinition?.theme_key ?? assetDefinition?.themeKey ?? "").trim();
+  if (assetThemeKey) {
+    return assetThemeKey;
+  }
+
+  const category = String(
+    subject?.category ?? subject?.latestCategory ?? subject?.latest_category ?? ""
+  ).trim();
+  const name = String(subject?.name ?? subject?.fund_name ?? "").trim();
+  const bucketKey = resolveBucketKey(assetMaster, subject);
+
+  for (const rule of assetMaster?.theme_mapping_rules ?? []) {
+    if (
+      matchesThemeRule(rule, {
+        ...subject,
+        category,
+        name,
+        bucket: bucketKey
+      })
+    ) {
+      return rule.theme_key ?? null;
+    }
+  }
+
+  return assetMaster?.fallback_theme_key ?? "UNCLASSIFIED";
+}
+
+export function resolveThemeLabel(assetMaster, themeKey) {
+  const normalizedThemeKey = String(themeKey ?? "").trim();
+  if (!normalizedThemeKey) {
+    return "未分类主题";
+  }
+  return assetMaster?.themes?.[normalizedThemeKey]?.label ?? normalizedThemeKey;
 }
 
 export function resolveRiskRole(assetMaster, bucketKey) {

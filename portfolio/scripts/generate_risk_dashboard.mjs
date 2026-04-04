@@ -1,16 +1,19 @@
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { readdir, readFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 import {
   buildBucketConfigMap,
-  defaultAssetMasterPath,
   loadAssetMaster,
   resolveBucketKey,
   resolveBucketLabel,
   resolveRiskRole
 } from "./lib/asset_master.mjs";
 import { buildPortfolioPath, resolveAccountId, resolvePortfolioRoot } from "./lib/account_root.mjs";
-import { loadPreferredPortfolioState } from "./lib/portfolio_state_view.mjs";
-
-const args = process.argv.slice(2);
+import { writeJsonAtomic } from "./lib/atomic_json_state.mjs";
+import { loadIpsConstraints } from "./lib/ips_constraints.mjs";
+import { buildPortfolioRiskState } from "./lib/portfolio_risk_state.mjs";
+import { loadCanonicalPortfolioState, readJsonOrNull } from "./lib/portfolio_state_view.mjs";
+import { buildCanonicalPortfolioView } from "./lib/portfolio_canonical_view.mjs";
 const RISK_RESONANCE_THRESHOLD = 0.6;
 const HEDGE_DISCOVERY_THRESHOLD = -0.6;
 
@@ -493,7 +496,7 @@ function buildDynamicCorrelationRadar() {
   };
 }
 
-async function loadPendingManualBuyTrades() {
+async function loadPendingManualBuyTrades(transactionsDir) {
   const entries = await readdir(transactionsDir).catch(() => []);
   const files = entries
     .filter((name) => name.endsWith(".json") && name.includes("-manual-"))
@@ -783,148 +786,203 @@ function buildView(label, positions, capitalContext = null) {
   };
 }
 
-const options = parseArgs(args);
-const portfolioRoot = resolvePortfolioRoot(options);
-const accountId = resolveAccountId(options);
-const manifestPath = buildPortfolioPath(portfolioRoot, "state-manifest.json");
-const transactionsDir = buildPortfolioPath(portfolioRoot, "transactions");
-const accountContextPath = buildPortfolioPath(portfolioRoot, "account_context.json");
-const signalsMatrixPath = buildPortfolioPath(portfolioRoot, "signals", "signals_matrix.json");
-const indexValuationMatrixPath = buildPortfolioPath(
-  portfolioRoot,
-  "signals",
-  "index_valuation_matrix.json"
-);
-const quantMetricsPath = buildPortfolioPath(portfolioRoot, "data", "quant_metrics_engine.json");
-const outputPath = buildPortfolioPath(portfolioRoot, "risk_dashboard.json");
-const manifest = await readFile(manifestPath, "utf8")
-  .then((content) => JSON.parse(content))
-  .catch(() => null);
-const assetMasterPath =
-  manifest?.canonical_entrypoints?.asset_master ?? defaultAssetMasterPath;
-
-assetMaster = await loadAssetMaster(assetMasterPath);
-bucketConfigMap = buildBucketConfigMap(assetMaster);
-const latestView = await loadPreferredPortfolioState({ portfolioRoot, manifest });
-
-const [latest, accountContext, pendingManual, signalMatrix, indexValuationMatrix, loadedQuantMetrics] = await Promise.all([
-  Promise.resolve(latestView.payload),
-  JSON.parse(await readFile(accountContextPath, "utf8")),
-  loadPendingManualBuyTrades(),
-  JSON.parse(await readFile(signalsMatrixPath, "utf8")),
-  readFile(indexValuationMatrixPath, "utf8")
+export async function runRiskDashboardBuild(rawOptions = {}) {
+  const options = rawOptions && typeof rawOptions === "object" ? rawOptions : {};
+  const portfolioRoot = resolvePortfolioRoot(options);
+  const accountId = resolveAccountId(options);
+  const manifestPath = buildPortfolioPath(portfolioRoot, "state-manifest.json");
+  const transactionsDir = buildPortfolioPath(portfolioRoot, "transactions");
+  const accountContextPath = buildPortfolioPath(portfolioRoot, "account_context.json");
+  const signalsMatrixPath = buildPortfolioPath(portfolioRoot, "signals", "signals_matrix.json");
+  const indexValuationMatrixPath = buildPortfolioPath(
+    portfolioRoot,
+    "signals",
+    "index_valuation_matrix.json"
+  );
+  const quantMetricsPath = buildPortfolioPath(portfolioRoot, "data", "quant_metrics_engine.json");
+  const outputPath =
+    String(options.output ?? "").trim() || buildPortfolioPath(portfolioRoot, "risk_dashboard.json");
+  const manifest = await readFile(manifestPath, "utf8")
     .then((content) => JSON.parse(content))
-    .catch(() => ({ signals: {}, errors: [] })),
-  readFile(quantMetricsPath, "utf8")
-    .then((content) => JSON.parse(content))
-    .catch(() => ({
-      risk_model: {},
-      matrices: { correlation_matrix: { symbols: [], matrix: {}, highest_pair: null } }
-    }))
-]);
+    .catch(() => null);
+  const assetMasterPath =
+    manifest?.canonical_entrypoints?.asset_master ??
+    buildPortfolioPath(portfolioRoot, "config", "asset_master.json");
+  const ipsConstraintsPath =
+    manifest?.canonical_entrypoints?.ips_constraints ??
+    path.join(path.dirname(assetMasterPath), "ips_constraints.json");
 
-quantMetrics = loadedQuantMetrics;
+  assetMaster = await loadAssetMaster(assetMasterPath);
+  bucketConfigMap = buildBucketConfigMap(assetMaster);
+  const latestView = await loadCanonicalPortfolioState({ portfolioRoot, manifest });
+  const latest = buildCanonicalPortfolioView({
+    payload: latestView.payload,
+    sourceKind: latestView.sourceKind,
+    sourcePath: latestView.sourcePath
+  });
 
-const canonicalPositions = (latest.positions ?? []).filter((item) => item.status === "active");
-const manualBuys = pendingManual.manualTrades ?? [];
-const workingPositions = buildWorkingPositions(canonicalPositions, manualBuys);
-const canonicalView = buildView("canonical_latest_snapshot", canonicalPositions, accountContext);
-const workingView = buildView(
-  "working_view_including_user_reported_manual_buys",
-  workingPositions,
-  accountContext
-);
-const l2SignalAlerts = buildL2SignalAlerts(canonicalPositions, signalMatrix);
-const valuationAlerts = buildValuationAlerts(indexValuationMatrix);
-const dynamicCorrelationRadar = buildDynamicCorrelationRadar();
-const topMrcBuckets = canonicalView.correlation_structure?.top_mrc_buckets ?? [];
-const materialCorrelationPairs =
-  canonicalView.correlation_structure?.correlation_pairs_over_threshold ?? [];
+  const [accountContext, pendingManual, signalMatrix, indexValuationMatrix, loadedQuantMetrics, ipsConstraints] =
+    await Promise.all([
+      JSON.parse(await readFile(accountContextPath, "utf8")),
+      loadPendingManualBuyTrades(transactionsDir),
+      JSON.parse(await readFile(signalsMatrixPath, "utf8")),
+      readFile(indexValuationMatrixPath, "utf8")
+        .then((content) => JSON.parse(content))
+        .catch(() => ({ signals: {}, errors: [] })),
+      readFile(quantMetricsPath, "utf8")
+        .then((content) => JSON.parse(content))
+        .catch(() => ({
+          risk_model: {},
+          matrices: { correlation_matrix: { symbols: [], matrix: {}, highest_pair: null } }
+        })),
+      loadIpsConstraints(ipsConstraintsPath)
+    ]);
 
-const dashboard = {
-  account_id: accountId,
-  as_of: latest.snapshot_date ?? accountContext.as_of ?? null,
-  generated_at: new Date().toISOString(),
-  source_files: {
-    latest_snapshot: latestView.sourcePath,
-    manual_buy_transaction_files: pendingManual.sourceFiles,
-    account_context: accountContextPath,
-    signals_matrix: signalsMatrixPath,
-    index_valuation_matrix: indexValuationMatrixPath,
-    quant_metrics_engine: quantMetricsPath
-  },
-  l2_signal_alerts: l2SignalAlerts,
-  valuation_alerts: valuationAlerts,
-  risk_resonance_alerts: dynamicCorrelationRadar.risk_resonance_alerts,
-  crowding_alerts: dynamicCorrelationRadar.crowding_alerts,
-  correlation_hedge_notes: dynamicCorrelationRadar.hedge_notes,
-  dynamic_correlation_radar: dynamicCorrelationRadar,
-  quant_risk_summary: {
-    portfolio_annualized_volatility_pct:
-      canonicalView.correlation_structure?.portfolio_annualized_volatility_pct ?? null,
-    top_mrc_buckets: topMrcBuckets,
-    correlation_pairs_over_threshold: materialCorrelationPairs.slice(0, 10)
-  },
-  capital_context: {
-    ...accountContext,
-    inferred_total_assets_from_working_holdings_plus_reported_cash_cny:
-      workingView.estimated_total_capital_cny
-  },
-  canonical_view: canonicalView,
-  working_view: workingView,
-  reconciliation_notes: [
-    latestView.sourceKind === "portfolio_state"
-      ? "Canonical view uses portfolio_state.json as the primary state source."
-      : "Canonical view falls back to latest.json compatibility view.",
-    manualBuys.length > 0
-      ? "Working view adds user-reported manual buys that have not yet been merged into the canonical state."
-      : "There are currently no pending manual buy files outside the canonical state.",
-    "Cash and total assets in account_context.json are user-reported approximate values and may differ from a fresh full-account screenshot."
-  ],
-  methodology_notes: [
-    "组合波动率、桶级 MRC 与相关性矩阵全部来自 quant_metrics_engine.json 的真实 60 日收益率协方差运算。",
-    "真实相关性预警仅提取非对角线资产对中绝对值大于 0.6 的 Pearson 相关系数，不再使用启发式主题聚类。",
-    "Stress scenarios are theme-shock approximations intended for discussion and risk control, not predictive return forecasts.",
-    "Valuation alerts are derived from index_valuation_matrix.json, which now fuses CN AkShare valuation proxies with overseas price-percentile proxies."
-  ]
-};
+  quantMetrics = loadedQuantMetrics;
 
-await writeFile(outputPath, `${JSON.stringify(dashboard, null, 2)}\n`, "utf8");
+  const canonicalPositions = (latest.positions ?? []).filter((item) => item.status === "active");
+  const manualBuys = pendingManual.manualTrades ?? [];
+  const workingPositions = buildWorkingPositions(canonicalPositions, manualBuys);
+  const canonicalView = buildView("canonical_latest_snapshot", canonicalPositions, accountContext);
+  const workingView = buildView(
+    "working_view_including_user_reported_manual_buys",
+    workingPositions,
+    accountContext
+  );
+  const l2SignalAlerts = buildL2SignalAlerts(canonicalPositions, signalMatrix);
+  const valuationAlerts = buildValuationAlerts(indexValuationMatrix);
+  const dynamicCorrelationRadar = buildDynamicCorrelationRadar();
+  const topMrcBuckets = canonicalView.correlation_structure?.top_mrc_buckets ?? [];
+  const materialCorrelationPairs =
+    canonicalView.correlation_structure?.correlation_pairs_over_threshold ?? [];
+  const portfolioRisk = buildPortfolioRiskState({
+    positions: canonicalPositions,
+    signalMatrix,
+    assetMaster,
+    quantMetrics,
+    ipsConstraints,
+    totalAssetsCny:
+      Number(
+        latest?.summary?.total_portfolio_assets_cny ??
+          latest?.summary?.total_assets_cny ??
+          accountContext?.total_assets_cny ??
+          0
+      ) || null,
+    rebalanceMode: latest?.rebalance_mode ?? null,
+    rebalanceTargets: latest?.rebalance_targets ?? null
+  });
 
-const terminalLines = [
-  "=== 🚨 风控盘 / Quant Risk Radar ===",
-  `Account: ${accountId}`,
-  `As Of: ${dashboard.as_of ?? "--"}`,
-  `Portfolio Annualized Volatility: ${round(
-    dashboard.quant_risk_summary.portfolio_annualized_volatility_pct ?? null,
-    4
-  )}%`,
-  "",
-  "Top MRC Risk Share:",
-  ...(topMrcBuckets.length > 0
-    ? topMrcBuckets.map(
-        (item, index) =>
-          `${index + 1}. ${item.bucket_label} | Risk Share ${item.risk_share_pct}% | Weight ${item.weight_pct}% | MRC ${item.marginal_risk_contribution_pct}%`
-      )
-    : ["1. 暂无可用的桶级 MRC 数据"]),
-  "",
-  "Cross-Bucket Resonance Alerts:",
-  ...(dynamicCorrelationRadar.resonance_pairs.length > 0
-    ? dynamicCorrelationRadar.resonance_pairs.slice(0, 5).map(
-        (item, index) =>
-          `${index + 1}. ${item.left_bucket} ${item.left_fund} <-> ${item.right_bucket} ${item.right_fund} | rho ${item.correlation_60d}`
-      )
-    : ["1. 暂无跨桶高共振资产对"]),
-  "",
-  "Intra-Bucket Crowding Alerts:",
-  ...(dynamicCorrelationRadar.crowding_pairs.length > 0
-    ? dynamicCorrelationRadar.crowding_pairs.slice(0, 5).map(
-        (item, index) =>
-          `${index + 1}. ${item.left_bucket} ${item.left_fund} <-> ${item.right_fund} | rho ${item.correlation_60d}`
-      )
-    : ["1. 暂无同桶内部拥挤资产对"]),
-  "",
-  `Output: ${outputPath}`
-];
+  const dashboard = {
+    account_id: accountId,
+    as_of: latest.snapshot_date ?? accountContext.as_of ?? null,
+    generated_at: new Date().toISOString(),
+    source_files: {
+      latest_snapshot: latestView.sourcePath,
+      manual_buy_transaction_files: pendingManual.sourceFiles,
+      account_context: accountContextPath,
+      signals_matrix: signalsMatrixPath,
+      index_valuation_matrix: indexValuationMatrixPath,
+      quant_metrics_engine: quantMetricsPath,
+      ips_constraints: ipsConstraintsPath
+    },
+    l2_signal_alerts: l2SignalAlerts,
+    valuation_alerts: valuationAlerts,
+    risk_resonance_alerts: dynamicCorrelationRadar.risk_resonance_alerts,
+    crowding_alerts: dynamicCorrelationRadar.crowding_alerts,
+    correlation_hedge_notes: dynamicCorrelationRadar.hedge_notes,
+    dynamic_correlation_radar: dynamicCorrelationRadar,
+    quant_risk_summary: {
+      portfolio_annualized_volatility_pct:
+        canonicalView.correlation_structure?.portfolio_annualized_volatility_pct ?? null,
+      top_mrc_buckets: topMrcBuckets,
+      correlation_pairs_over_threshold: materialCorrelationPairs.slice(0, 10)
+    },
+    portfolio_risk: portfolioRisk,
+    blocking_state: portfolioRisk.blocking_state,
+    single_fund_breaches: portfolioRisk.single_fund_breaches,
+    theme_breaches: portfolioRisk.theme_breaches,
+    correlation_cluster_breaches: portfolioRisk.correlation_cluster_breaches,
+    capital_context: {
+      ...accountContext,
+      inferred_total_assets_from_working_holdings_plus_reported_cash_cny:
+        workingView.estimated_total_capital_cny
+    },
+    canonical_view: canonicalView,
+    working_view: workingView,
+    reconciliation_notes: [
+      "Canonical view now hard-reads state/portfolio_state.json as the only business state source for risk evaluation.",
+      manualBuys.length > 0
+        ? "Working view adds user-reported manual buys that have not yet been merged into the canonical state."
+        : "There are currently no pending manual buy files outside the canonical state.",
+      "Cash and total assets in account_context.json are user-reported approximate values and may differ from a fresh full-account screenshot."
+    ],
+    methodology_notes: [
+      "组合波动率、桶级 MRC 与相关性矩阵全部来自 quant_metrics_engine.json 的真实 60 日收益率协方差运算。",
+      "真实相关性预警仅提取非对角线资产对中绝对值大于 0.6 的 Pearson 相关系数，不再使用启发式主题聚类。",
+      "Stress scenarios are theme-shock approximations intended for discussion and risk control, not predictive return forecasts.",
+      "Valuation alerts are derived from index_valuation_matrix.json, which now fuses CN AkShare valuation proxies with overseas price-percentile proxies.",
+      "portfolio_risk.current_drawdown_pct is a portfolio-level proxy built from active positions' matched 60-day drawdown signals and is intended for execution gating, not audited NAV peak-trough accounting."
+    ]
+  };
 
-console.log(terminalLines.join("\n"));
+  await writeJsonAtomic(outputPath, dashboard);
+
+  const terminalLines = [
+    "=== 🚨 风控盘 / Quant Risk Radar ===",
+    `Account: ${accountId}`,
+    `As Of: ${dashboard.as_of ?? "--"}`,
+    `Portfolio Annualized Volatility: ${round(
+      dashboard.quant_risk_summary.portfolio_annualized_volatility_pct ?? null,
+      4
+    )}%`,
+    `Portfolio Drawdown Proxy: ${dashboard.portfolio_risk?.weighted_current_drawdown_60d_percent ?? "--"}% | Gate ${
+      dashboard.portfolio_risk?.breached_max_drawdown_limit ? "BREACHED" : "OK"
+    }`,
+    `Blocking State: ${dashboard.blocking_state?.blocked ? "BLOCKED" : "CLEAR"} | Reasons ${
+      (dashboard.blocking_state?.reasons ?? []).join(", ") || "--"
+    }`,
+    `Breaches: fund=${dashboard.single_fund_breaches.length} | theme=${dashboard.theme_breaches.length} | corr_cluster=${dashboard.correlation_cluster_breaches.length}`,
+    "",
+    "Top MRC Risk Share:",
+    ...(topMrcBuckets.length > 0
+      ? topMrcBuckets.map(
+          (item, index) =>
+            `${index + 1}. ${item.bucket_label} | Risk Share ${item.risk_share_pct}% | Weight ${item.weight_pct}% | MRC ${item.marginal_risk_contribution_pct}%`
+        )
+      : ["1. 暂无可用的桶级 MRC 数据"]),
+    "",
+    "Cross-Bucket Resonance Alerts:",
+    ...(dynamicCorrelationRadar.resonance_pairs.length > 0
+      ? dynamicCorrelationRadar.resonance_pairs.slice(0, 5).map(
+          (item, index) =>
+            `${index + 1}. ${item.left_bucket} ${item.left_fund} <-> ${item.right_bucket} ${item.right_fund} | rho ${item.correlation_60d}`
+        )
+      : ["1. 暂无跨桶高共振资产对"]),
+    "",
+    "Intra-Bucket Crowding Alerts:",
+    ...(dynamicCorrelationRadar.crowding_pairs.length > 0
+      ? dynamicCorrelationRadar.crowding_pairs.slice(0, 5).map(
+          (item, index) =>
+            `${index + 1}. ${item.left_bucket} ${item.left_fund} <-> ${item.right_fund} | rho ${item.correlation_60d}`
+        )
+      : ["1. 暂无同桶内部拥挤资产对"]),
+    "",
+    `Output: ${outputPath}`
+  ];
+
+  return {
+    accountId,
+    portfolioRoot,
+    outputPath,
+    dashboard,
+    terminalLines
+  };
+}
+
+const isDirectExecution =
+  Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isDirectExecution) {
+  const result = await runRiskDashboardBuild(parseArgs(process.argv.slice(2)));
+  console.log(result.terminalLines.join("\n"));
+}

@@ -126,6 +126,7 @@ test("buildManualBuyTransactionContent builds OTC trades with next-day profit ef
       fundCode: item.fund_code,
       amount: item.amount_cny,
       profitEffectiveOn: item.profit_effective_on,
+      lifecycleStage: item.lifecycle_stage,
       rawSnapshotIncludesTrade: item.raw_snapshot_includes_trade
     })),
     [
@@ -134,6 +135,7 @@ test("buildManualBuyTransactionContent builds OTC trades with next-day profit ef
         fundCode: "007339",
         amount: 8000,
         profitEffectiveOn: "2026-04-02",
+        lifecycleStage: "platform_confirmed_pending_profit",
         rawSnapshotIncludesTrade: true
       },
       {
@@ -141,6 +143,7 @@ test("buildManualBuyTransactionContent builds OTC trades with next-day profit ef
         fundCode: "022502",
         amount: 10000,
         profitEffectiveOn: "2026-04-02",
+        lifecycleStage: "platform_confirmed_pending_profit",
         rawSnapshotIncludesTrade: true
       }
     ]
@@ -165,6 +168,7 @@ test("buildManualBuyTransactionContent keeps exchange trades out of pending prof
   });
 
   assert.equal(payload.executed_buy_transactions[0].profit_effective_on, null);
+  assert.equal(payload.executed_buy_transactions[0].lifecycle_stage, "profit_effective");
   assert.equal(payload.executed_buy_transactions[0].execution_type, "EXCHANGE");
   assert.equal(payload.executed_buy_transactions[0].raw_snapshot_includes_trade, false);
 });
@@ -211,6 +215,7 @@ test("buildManualTradeTransactionContent builds sell and confirmed conversion pa
     status: "user_reported_executed",
     execution_type: "OTC",
     cash_arrived: false,
+    lifecycle_stage: "platform_confirmed_pending_cash_arrival",
     raw_snapshot_includes_trade: true,
     interpretation_basis:
       'Recorded via manual_trade_recorder from "022502" as an executed sell; proceeds remain pending settlement until cash_arrived=true.'
@@ -227,8 +232,36 @@ test("buildManualTradeTransactionContent builds sell and confirmed conversion pa
     to_amount_cny: 29320.63,
     status: "user_reported_confirmed_conversion",
     execution_type: "OTC",
+    lifecycle_stage: "platform_confirmed_conversion",
     raw_snapshot_includes_trade: true,
     interpretation_basis:
       'Recorded via manual_trade_recorder as a confirmed conversion from "工银瑞信黄金ETF联接C" to "022502"; the state materializer should apply the conversion immediately.'
   });
+});
+
+test("buildManualTradeTransactionContent marks settled sell proceeds as cash arrived", () => {
+  const lookup = createFundLookup({
+    positions: [
+      {
+        name: "国泰黄金ETF联接E",
+        code: "022502",
+        fund_code: "022502",
+        symbol: "022502"
+      }
+    ],
+    pendingPositions: [],
+    watchlistItems: []
+  });
+
+  const payload = buildManualTradeTransactionContent({
+    tradeDate: "2026-04-01",
+    sellItems: parseSellSpec("022502:5000"),
+    executionType: "OTC",
+    rawSnapshotIncludesTrade: false,
+    sellCashArrived: true,
+    lookup
+  });
+
+  assert.equal(payload.executed_sell_transactions[0].cash_arrived, true);
+  assert.equal(payload.executed_sell_transactions[0].lifecycle_stage, "cash_arrived");
 });

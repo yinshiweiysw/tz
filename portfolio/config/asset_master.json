@@ -5,6 +5,7 @@
   "description": "Route A asset master with six plain-language buckets, dynamic intervals, execution-aware routing, and the B offensive-growth profile burned in.",
   "active_profile": "B_offensive_growth_v1",
   "fallback_bucket_key": "TACTICAL",
+  "fallback_theme_key": "",
   "bucket_order": [
     "A_CORE",
     "GLB_MOM",
@@ -192,6 +193,149 @@
         "债券",
         "短债",
         "货币"
+      ]
+    }
+  ],
+  "themes": {
+    "CN_CORE_BETA": {
+      "label": "A股核心Beta"
+    },
+    "CN_ACTIVE_GROWTH": {
+      "label": "A股主动成长"
+    },
+    "CN_SEMICONDUCTOR": {
+      "label": "半导体"
+    },
+    "CN_FINANCIAL": {
+      "label": "保险金融"
+    },
+    "US_GROWTH": {
+      "label": "美股成长"
+    },
+    "HK_TECH": {
+      "label": "港股互联网科技"
+    },
+    "CN_DIVIDEND": {
+      "label": "红利低波"
+    },
+    "GOLD_HEDGE": {
+      "label": "黄金"
+    },
+    "COMMODITY_CYCLE": {
+      "label": "商品周期"
+    },
+    "BOND_CASH": {
+      "label": "债券现金管理"
+    }
+  },
+  "theme_mapping_rules": [
+    {
+      "theme_key": "CN_SEMICONDUCTOR",
+      "name_patterns": [
+        "半导体",
+        "芯片",
+        "存储"
+      ]
+    },
+    {
+      "theme_key": "CN_FINANCIAL",
+      "name_patterns": [
+        "保险"
+      ]
+    },
+    {
+      "theme_key": "HK_TECH",
+      "category_equals": [
+        "港股互联网/QDII",
+        "港股科技/QDII",
+        "港股银行/QDII"
+      ],
+      "name_patterns": [
+        "恒生互联网",
+        "恒生科技",
+        "港股互联网"
+      ]
+    },
+    {
+      "theme_key": "US_GROWTH",
+      "category_equals": [
+        "美股指数/QDII",
+        "美股科技/QDII",
+        "海外科技/QDII",
+        "美股场内代理"
+      ],
+      "name_patterns": [
+        "标普500",
+        "纳斯达克",
+        "纳指",
+        "海外科技",
+        "QQQ"
+      ]
+    },
+    {
+      "theme_key": "CN_DIVIDEND",
+      "category_equals": [
+        "A股红利低波"
+      ],
+      "name_patterns": [
+        "红利低波",
+        "红利",
+        "高股息"
+      ]
+    },
+    {
+      "theme_key": "GOLD_HEDGE",
+      "category_equals": [
+        "黄金"
+      ],
+      "name_patterns": [
+        "黄金"
+      ]
+    },
+    {
+      "theme_key": "COMMODITY_CYCLE",
+      "category_equals": [
+        "大宗商品/QDII"
+      ],
+      "name_patterns": [
+        "大宗商品",
+        "商品"
+      ]
+    },
+    {
+      "theme_key": "BOND_CASH",
+      "category_equals": [
+        "偏债混合",
+        "债券",
+        "货币"
+      ],
+      "name_patterns": [
+        "恒信债",
+        "宁景",
+        "债券",
+        "短债",
+        "货币"
+      ]
+    },
+    {
+      "theme_key": "CN_CORE_BETA",
+      "category_equals": [
+        "A股宽基"
+      ],
+      "name_patterns": [
+        "沪深300",
+        "上证50",
+        "量化增强",
+        "量化"
+      ]
+    },
+    {
+      "theme_key": "CN_ACTIVE_GROWTH",
+      "name_patterns": [
+        "质量成长",
+        "远见智选",
+        "成长混合",
+        "智选混合"
       ]
     }
   ],
@@ -508,6 +652,31 @@
         },
         "risk_control": {
           "max_atr_threshold": 0.028,
+          "kill_switch_enabled": false
+        }
+      }
+    },
+    {
+      "symbol": "021142",
+      "name": "华夏港股通央企红利ETF联接A",
+      "execution_type": "OTC",
+      "bucket": "INCOME",
+      "market": "CN",
+      "category": "港股红利",
+      "signal_enabled": false,
+      "strategy_regime": {
+        "type": "dividend_carry",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": true,
+          "crowding_penalty": true
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 6,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.03,
           "kill_switch_enabled": false
         }
       }
