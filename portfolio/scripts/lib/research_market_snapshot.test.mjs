@@ -44,6 +44,11 @@ test("buildResearchMarketSnapshot normalizes quote payloads into coverage groups
     snapshot.rates_fx.map((item) => item.code),
     ["USDX"]
   );
+
+  assert.deepEqual(
+    snapshot.global_indices.map((item) => item.code),
+    ["usINX", "usNDX", "znb_NKY", "znb_KOSPI", "hf_ES", "hf_NQ"]
+  );
 });
 
 test("buildResearchMarketSnapshot keeps missing rows when quote fetch fails", async () => {

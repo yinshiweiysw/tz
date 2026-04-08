@@ -121,6 +121,37 @@ test("buildPortfolioRiskState flags breach when weighted drawdown exceeds config
   assert.equal(result.breached_max_drawdown_limit, true);
 });
 
+test("buildPortfolioRiskState ignores positive drawdown values and aggregates downside exposure only", () => {
+  const result = buildPortfolioRiskState({
+    positions: [
+      { name: "易方达沪深300ETF联接C", fund_code: "007339", amount: 10000, status: "active", category: "A股宽基" },
+      { name: "博时标普500ETF联接(QDII)C", fund_code: "006075", amount: 10000, status: "active", category: "美股指数/QDII" }
+    ],
+    signalMatrix: {
+      signals: {
+        "007339": {
+          name: "易方达沪深300ETF联接C",
+          indicators: {
+            current_drawdown_60d_percent: 20,
+            max_drawdown_60d_percent: 20
+          }
+        },
+        "006075": {
+          name: "博时标普500ETF联接(QDII)C",
+          indicators: {
+            current_drawdown_60d_percent: -10,
+            max_drawdown_60d_percent: -10
+          }
+        }
+      }
+    },
+    assetMaster: buildAssetMasterFixture()
+  });
+
+  assert.equal(result.weighted_current_drawdown_60d_percent, -10);
+  assert.equal(result.current_drawdown_pct, 0.1);
+});
+
 test("buildPortfolioRiskState ignores inactive or unmatched positions", () => {
   const result = buildPortfolioRiskState({
     positions: [
@@ -251,4 +282,63 @@ test("buildPortfolioRiskState exposes standardized blocking fields and concentra
   assert.equal(result.correlation_cluster_breaches.length, 1);
   assert.equal(result.correlation_cluster_breaches[0].combined_weight_pct, 26);
   assert.equal(result.blocking_state.blocked, true);
+});
+
+test("buildPortfolioRiskState prefers asset position_limits over generic IPS single-fund limits", () => {
+  const assetMaster = buildAssetMasterFixture();
+  assetMaster.assets = [
+    {
+      symbol: "016482",
+      name: "兴全恒信债券C",
+      bucket: "CASH",
+      theme_key: "BOND_CASH",
+      position_limits: {
+        max_pct_of_total_assets: 0.18
+      }
+    },
+    {
+      symbol: "023764",
+      name: "华夏恒生互联网科技业ETF联接(QDII)D",
+      bucket: "TACTICAL",
+      theme_key: "HK_TECH",
+      position_limits: {
+        max_pct_of_total_assets: 0.1
+      }
+    }
+  ];
+  assetMaster.themes.BOND_CASH = { label: "债券现金管理" };
+  assetMaster.themes.HK_TECH = { label: "港股互联网科技" };
+
+  const result = buildPortfolioRiskState({
+    positions: [
+      {
+        name: "兴全恒信债券C",
+        fund_code: "016482",
+        amount: 70000,
+        status: "active",
+        category: "偏债混合"
+      },
+      {
+        name: "华夏恒生互联网科技业ETF联接(QDII)D",
+        fund_code: "023764",
+        amount: 72146.33,
+        status: "active",
+        category: "港股互联网/QDII"
+      }
+    ],
+    signalMatrix: { signals: {} },
+    assetMaster,
+    totalAssetsCny: 445000,
+    ipsConstraints: {
+      concentration: {
+        single_fund_max_pct: 0.1,
+        single_theme_max_pct: 0.15,
+        high_correlation_max_pct: 0.25
+      }
+    }
+  });
+
+  assert.equal(result.single_fund_breaches.length, 1);
+  assert.equal(result.single_fund_breaches[0].fund_code, "023764");
+  assert.equal(result.single_fund_breaches[0].max_pct, 10);
 });

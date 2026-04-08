@@ -91,6 +91,21 @@ test("runDialogueAnalysisContractBuild rebuilds research brain when report conte
               priced_in_assessment: "underpriced",
               evidence: [{ headline: "纳斯达克100期货" }]
             },
+            analysis_mode: "multi_source_confirmed",
+            top_headlines: [
+              {
+                source: "Reuters",
+                title: "Trump says Iran ceasefire talks continue",
+                published_at: "2026-04-03T09:20:00+08:00"
+              }
+            ],
+            gold_factor_model: {
+              dominantGoldDriver: "liquidity_deleveraging",
+              goldRegime: "forced_liquidation",
+              goldActionBias: "avoid_chasing_dip",
+              secondaryGoldDrivers: ["headline_geopolitics_overlay"],
+              goldRiskNotes: ["黄金下跌并非单纯避险失效。"]
+            },
             flow_macro_radar: {
               liquidity_regime: "neutral",
               summary: "流动性中性，需等待更清晰信号。"
@@ -121,9 +136,20 @@ test("runDialogueAnalysisContractBuild rebuilds research brain when report conte
   assert.equal(builderCalled, 1);
   assert.equal(result.rebuiltResearchBrain, true);
   assert.equal(result.contract.market_core.active_driver, "关税与贸易摩擦冲击全球风险偏好");
+  assert.equal(result.contract.news_context.analysis_mode, "multi_source_confirmed");
+  assert.equal(result.contract.news_context.top_headlines[0]?.source, "Reuters");
+  assert.equal(result.contract.gold_factor_model.dominantGoldDriver, "liquidity_deleveraging");
   assert.ok(
     result.contract.shared_research_sections.some(
       (section) => section.heading === "## Institutional Research Readiness"
+    )
+  );
+  assert.ok(
+    result.contract.shared_research_sections.some((section) => section.heading === "## Headline Tape")
+  );
+  assert.ok(
+    result.contract.shared_research_sections.some(
+      (section) => section.heading === "## Gold Factor Model"
     )
   );
   assert.equal(

@@ -1,9 +1,10 @@
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, openSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildPortfolioPath, resolveAccountId, resolvePortfolioRoot } from "./lib/account_root.mjs";
+import { runDashboardStateBuild } from "./build_dashboard_state.mjs";
 
 const defaultHost = "127.0.0.1";
 const defaultPort = 8766;
@@ -60,29 +61,64 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function isDashboardReady(url) {
+export async function fetchDashboardHealth(url, accountId) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 1500);
   try {
-    const response = await fetch(url, {
+    const healthUrl = new URL("/api/live-funds/health", `${url}/`);
+    healthUrl.searchParams.set("account", accountId);
+    const response = await fetch(healthUrl, {
       signal: controller.signal
     });
-    return response.ok;
+    if (!response.ok) {
+      return {
+        ready: false,
+        health: null,
+        reason: `HTTP ${response.status}`
+      };
+    }
+
+    const health = await response.json();
+    const state = String(health?.state ?? "").trim();
+    return {
+      ready: state === "ready" || state === "degraded",
+      health,
+      reason:
+        state === "ready" || state === "degraded"
+          ? null
+          : Array.isArray(health?.reasons) && health.reasons.length > 0
+            ? health.reasons.join("; ")
+            : `health_state:${state || "unknown"}`
+    };
   } catch {
-    return false;
+    return {
+      ready: false,
+      health: null,
+      reason: "dashboard_health_unreachable"
+    };
   } finally {
     clearTimeout(timer);
   }
 }
 
-async function waitUntilReady(url, attempts = defaultWaitAttempts, delayMs = defaultWaitMs) {
+export async function isDashboardReady(url, accountId) {
+  const result = await fetchDashboardHealth(url, accountId);
+  return result.ready;
+}
+
+async function waitUntilReady(url, accountId, attempts = defaultWaitAttempts, delayMs = defaultWaitMs) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    if (await isDashboardReady(url)) {
-      return true;
+    const health = await fetchDashboardHealth(url, accountId);
+    if (health.ready) {
+      return health;
     }
     await sleep(delayMs);
   }
-  return false;
+  return {
+    ready: false,
+    health: null,
+    reason: "dashboard_health_timeout"
+  };
 }
 
 function openBrowser(url) {
@@ -90,6 +126,20 @@ function openBrowser(url) {
     detached: true,
     stdio: "ignore"
   }).unref();
+}
+
+export function resolveStartupAction({
+  restart = true,
+  listeningPidCount = 0,
+  existingReady = false
+} = {}) {
+  if (restart && listeningPidCount > 0) {
+    return "recycle";
+  }
+  if (existingReady) {
+    return "reuse";
+  }
+  return "launch";
 }
 
 function findListeningPids(port) {
@@ -119,6 +169,19 @@ function stopListeningProcesses(port) {
     }
   }
   return pids;
+}
+
+export async function waitUntilPortFree(
+  port,
+  { attempts = 20, delayMs = 100, getPids = findListeningPids } = {}
+) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if ((getPids(port) ?? []).length === 0) {
+      return true;
+    }
+    await sleep(delayMs);
+  }
+  return (getPids(port) ?? []).length === 0;
 }
 
 function materializePendingBuys(args) {
@@ -174,20 +237,32 @@ async function main() {
     portfolioRoot: args.portfolioRoot
   });
   const materializeResult = materializePendingBuys(args);
+  const dashboardStateResult = await runDashboardStateBuild({
+    user: accountId,
+    portfolioRoot,
+    refreshMs: args.refreshMs
+  });
   const baseUrl = `http://${args.host}:${args.port}`;
   const dashboardUrl = `${baseUrl}/?account=${encodeURIComponent(accountId)}`;
 
-  const existingReady = await isDashboardReady(baseUrl);
+  const existingHealth = await fetchDashboardHealth(baseUrl, accountId);
+  const existingReady = existingHealth.ready;
+  const listeningPids = findListeningPids(args.port);
+  const startupAction = resolveStartupAction({
+    restart: args.restart,
+    listeningPidCount: listeningPids.length,
+    existingReady
+  });
   let stoppedPids = [];
-  if (existingReady && args.restart) {
+  if (startupAction === "recycle") {
     stoppedPids = stopListeningProcesses(args.port);
     if (stoppedPids.length > 0) {
-      await sleep(300);
+      await waitUntilPortFree(args.port);
     }
   }
 
-  let status = existingReady && !args.restart ? "reused" : "launched";
-  if (!(await isDashboardReady(baseUrl))) {
+  let status = startupAction === "reuse" ? "reused" : "launched";
+  if (!(await isDashboardReady(baseUrl, accountId))) {
     const logsDir = buildPortfolioPath(portfolioRoot, "logs");
     mkdirSync(logsDir, { recursive: true });
     const logPath = path.join(logsDir, "funds-live-dashboard.log");
@@ -218,9 +293,11 @@ async function main() {
       stdio: ["ignore", stdoutFd, stderrFd]
     }).unref();
 
-    const ready = await waitUntilReady(baseUrl);
-    if (!ready) {
-      throw new Error(`funds live dashboard did not become ready at ${baseUrl}`);
+    const readiness = await waitUntilReady(baseUrl, accountId);
+    if (!readiness.ready) {
+      throw new Error(
+        `funds live dashboard did not become ready at ${baseUrl}${readiness.reason ? `: ${readiness.reason}` : ""}`
+      );
     }
   }
 
@@ -235,6 +312,7 @@ async function main() {
         restart: args.restart,
         stoppedPids,
         materializeResult,
+        dashboardStateResult,
         accountId,
         portfolioRoot,
         url: dashboardUrl,
@@ -248,16 +326,21 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error(
-    JSON.stringify(
-      {
-        status: "failed",
-        error: String(error?.message ?? error)
-      },
-      null,
-      2
-    )
-  );
-  process.exit(1);
-});
+const isDirectExecution =
+  Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isDirectExecution) {
+  main().catch((error) => {
+    console.error(
+      JSON.stringify(
+        {
+          status: "failed",
+          error: String(error?.message ?? error)
+        },
+        null,
+        2
+      )
+    );
+    process.exit(1);
+  });
+}

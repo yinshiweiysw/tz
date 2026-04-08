@@ -71,7 +71,7 @@ test("resolveNightlyConfirmedNavReadiness marks matching successful reconcile as
   assert.equal(readiness.accountRun?.snapshotDate, "2026-04-01");
 });
 
-test("resolveNightlyConfirmedNavReadiness triggers self-heal after morning cutoff when prior-night reconcile is missing", () => {
+test("resolveNightlyConfirmedNavReadiness returns blocked when prior-night reconcile is missing after morning cutoff", () => {
   const readiness = resolveNightlyConfirmedNavReadiness({
     statusPayload: {
       generatedAt: "2026-04-01T14:30:05.000Z",
@@ -84,12 +84,12 @@ test("resolveNightlyConfirmedNavReadiness triggers self-heal after morning cutof
     now: new Date("2026-04-02T00:30:00.000Z")
   });
 
-  assert.equal(readiness.state, "temporary_live_valuation");
-  assert.equal(readiness.shouldTriggerSelfHeal, true);
+  assert.equal(readiness.state, "blocked");
+  assert.equal(readiness.shouldTriggerSelfHeal, false);
   assert.equal(readiness.targetDate, "2026-04-01");
 });
 
-test("resolveNightlyConfirmedNavReadiness suppresses repeated self-heal when latest self-heal already failed", () => {
+test("resolveNightlyConfirmedNavReadiness returns blocked when latest reconcile run failed on missing dependency", () => {
   const readiness = resolveNightlyConfirmedNavReadiness({
     statusPayload: {
       generatedAt: "2026-04-02T00:31:05.000Z",
@@ -110,7 +110,7 @@ test("resolveNightlyConfirmedNavReadiness suppresses repeated self-heal when lat
     now: new Date("2026-04-02T00:40:00.000Z")
   });
 
-  assert.equal(readiness.state, "self_heal_failed");
+  assert.equal(readiness.state, "blocked");
   assert.equal(readiness.shouldTriggerSelfHeal, false);
   assert.match(readiness.reason ?? "", /network timeout/i);
 });
@@ -140,7 +140,7 @@ test("resolveNightlyConfirmedNavReadiness anchors morning status to the prior-ni
   assert.equal(readiness.accountRun?.snapshotDate, "2026-04-01");
 });
 
-test("resolveNightlyConfirmedNavReadiness treats acceptable overseas lag as confirmed_nav_ready", () => {
+test("resolveNightlyConfirmedNavReadiness treats acceptable overseas lag as partially_confirmed_normal_lag", () => {
   const readiness = resolveNightlyConfirmedNavReadiness({
     statusPayload: {
       generatedAt: "2026-04-03T01:31:05.000Z",
@@ -167,7 +167,61 @@ test("resolveNightlyConfirmedNavReadiness treats acceptable overseas lag as conf
     now: new Date("2026-04-03T02:40:00.000Z")
   });
 
-  assert.equal(readiness.state, "confirmed_nav_ready");
+  assert.equal(readiness.state, "partially_confirmed_normal_lag");
   assert.equal(readiness.shouldTriggerSelfHeal, false);
   assert.equal(readiness.targetDate, "2026-04-02");
+});
+
+test("resolveNightlyConfirmedNavReadiness anchors to previous CN trading day across holidays", () => {
+  const readiness = resolveNightlyConfirmedNavReadiness({
+    statusPayload: {
+      generatedAt: "2026-04-07T01:31:05.000Z",
+      runType: "scheduled_primary",
+      targetDate: "2026-04-03",
+      accounts: [
+        {
+          accountId: "main",
+          success: true,
+          snapshotDate: "2026-04-03",
+          runType: "scheduled_primary"
+        }
+      ]
+    },
+    accountId: "main",
+    snapshotDate: "2026-04-07",
+    now: new Date("2026-04-07T02:40:00.000Z")
+  });
+
+  assert.equal(readiness.state, "confirmed_nav_ready");
+  assert.equal(readiness.targetDate, "2026-04-03");
+  assert.equal(readiness.accountRun?.snapshotDate, "2026-04-03");
+});
+
+test("resolveNightlyConfirmedNavReadiness surfaces source_missing when reconcile stats report source gaps", () => {
+  const readiness = resolveNightlyConfirmedNavReadiness({
+    statusPayload: {
+      generatedAt: "2026-04-03T01:31:05.000Z",
+      runType: "scheduled_primary",
+      targetDate: "2026-04-02",
+      accounts: [
+        {
+          accountId: "main",
+          success: false,
+          snapshotDate: "2026-04-02",
+          stats: {
+            normalLagFundCount: 0,
+            holidayDelayFundCount: 0,
+            lateMissingFundCount: 0,
+            sourceMissingFundCount: 2
+          }
+        }
+      ]
+    },
+    accountId: "main",
+    snapshotDate: "2026-04-02",
+    now: new Date("2026-04-03T02:40:00.000Z")
+  });
+
+  assert.equal(readiness.state, "source_missing");
+  assert.equal(readiness.shouldTriggerSelfHeal, false);
 });

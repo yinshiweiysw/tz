@@ -5,24 +5,29 @@
 ## 新会话启动顺序
 
 1. 先读 [state-manifest.json](/Users/yinshiwei/codex/tz/portfolio/state-manifest.json)
-2. 再读 [portfolio_state.json](/Users/yinshiwei/codex/tz/portfolio/state/portfolio_state.json)
-3. 如需核对原始平台口径与执行因果，再读：
+2. 再读 [agent_runtime_context.json](/Users/yinshiwei/codex/tz/portfolio/data/agent_runtime_context.json)
+3. 再读 [strategy_decision_contract.json](/Users/yinshiwei/codex/tz/portfolio/data/strategy_decision_contract.json)
+4. 再读 [AI_AGENT_DISPATCH_PROTOCOL.md](/Users/yinshiwei/codex/tz/portfolio/docs/AI_AGENT_DISPATCH_PROTOCOL.md)
+5. 再读 [portfolio_state.json](/Users/yinshiwei/codex/tz/portfolio/state/portfolio_state.json)
+4. 如需核对原始平台口径与执行因果，再读：
    - [latest_raw.json](/Users/yinshiwei/codex/tz/portfolio/snapshots/latest_raw.json)
    - [execution_ledger.json](/Users/yinshiwei/codex/tz/portfolio/ledger/execution_ledger.json)
-4. 再读最新的交易与计划文件：
+5. 再读最新的交易与计划文件：
    - [2026-03-25.md](/Users/yinshiwei/codex/tz/portfolio/journal/daily/2026-03-25.md)
    - [2026-03-25-trade-sequence.md](/Users/yinshiwei/codex/tz/portfolio/reports/2026-03-25-trade-sequence.md)
    - [2026-03-25-next-buy-triggers.md](/Users/yinshiwei/codex/tz/portfolio/reports/2026-03-25-next-buy-triggers.md)
    - [2026-03-25-live-reallocation-table.md](/Users/yinshiwei/codex/tz/portfolio/reports/2026-03-25-live-reallocation-table.md)
-5. 如果用户刚通过对话报告了交易或仓位变化，先读 transactions 目录中的手工流水文件
-6. 做周度复盘时，再读 [SCORING_RUBRIC.md](/Users/yinshiwei/codex/tz/portfolio/scorecards/SCORING_RUBRIC.md)
-7. 如果需要把新聊天/交易结论快速落盘，优先使用写回脚本与事件模板
-8. 进行仓位和集中度检查时，优先读取 [risk_dashboard.json](/Users/yinshiwei/codex/tz/portfolio/risk_dashboard.json)
-9. 对重要交易、结构调整和关键减仓，优先读取或新建 `trade_cards`
-10. 对重要市场判断，优先读取或更新 [hypotheses.md](/Users/yinshiwei/codex/tz/portfolio/hypotheses.md)
-11. 想快速了解当天全局时，优先读取 `daily_briefs`
-12. 若想快速了解市场驱动与板块风格，再读 `market_briefs`
-13. 若用户询问“分析当前行情 / 今天是否可以买卖 / A股港股黄金怎么看”，先运行 [generate_dialogue_analysis_contract.mjs](/Users/yinshiwei/codex/tz/portfolio/scripts/generate_dialogue_analysis_contract.mjs)，强制基于 `research_brain + cn_market_snapshot + opportunity_pool + speculative_plan + trade_plan` 生成对话分析合同，再结合当下需要的实时行情与新闻做最终结论
+6. 如果用户刚通过对话报告了交易或仓位变化，先读 transactions 目录中的手工流水文件
+7. 做周度复盘时，再读 [SCORING_RUBRIC.md](/Users/yinshiwei/codex/tz/portfolio/scorecards/SCORING_RUBRIC.md)
+8. 如果需要把新聊天/交易结论快速落盘，优先使用写回脚本与事件模板
+9. 进行仓位和集中度检查时，优先读取 [risk_dashboard.json](/Users/yinshiwei/codex/tz/portfolio/risk_dashboard.json)
+10. 对重要交易、结构调整和关键减仓，优先读取或新建 `trade_cards`
+11. 对重要市场判断，优先读取或更新 [hypotheses.md](/Users/yinshiwei/codex/tz/portfolio/hypotheses.md)
+12. 想快速了解当天全局时，优先读取 `daily_briefs`
+13. 若想快速了解市场驱动与板块风格，再读 `market_briefs`
+14. 若用户询问“分析当前行情 / 今天是否可以买卖 / A股港股黄金怎么看”，先运行 [generate_dialogue_analysis_contract.mjs](/Users/yinshiwei/codex/tz/portfolio/scripts/generate_dialogue_analysis_contract.mjs)，强制基于 `research_brain + cn_market_snapshot + opportunity_pool + speculative_plan + trade_plan` 生成对话分析合同，再结合当下需要的实时行情与新闻做最终结论
+15. 若是新 AI-agent 或新线程接入，必须优先遵守 [AI_AGENT_DISPATCH_PROTOCOL.md](/Users/yinshiwei/codex/tz/portfolio/docs/AI_AGENT_DISPATCH_PROTOCOL.md) 的意图路由规则，而不是自由发挥
+16. 所有投资类 agent 在输出分析、仓位判断或交易建议前，必须先读取 `agent_runtime_context.json` 与 `strategy_decision_contract.json`
 
 ## 一致性规则
 

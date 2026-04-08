@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { http, parsePossiblyWrappedJson } from "./http.js";
+import { classifyFundObservation } from "./fund_observation_policy.mjs";
 
 const deviceId = randomUUID();
 const FUND_PRIMARY_TIMEOUT_MS = 5000;
 const FUND_FALLBACK_TIMEOUT_MS = 3000;
+const FUND_FALLBACK_CONCURRENCY = 5;
 
 export function buildFundPrimaryRequestOptions(params = {}) {
   return {
@@ -110,6 +112,34 @@ function resolveDailyChangePercent(primaryQuote, legacyQuote, valuation, netValu
   return legacyChange ?? primaryChange ?? growthRate ?? null;
 }
 
+function createConcurrencyLimiter(limit) {
+  const maxConcurrency = Math.max(1, Number(limit) || 1);
+  let activeCount = 0;
+  const queue = [];
+
+  const runNext = () => {
+    if (activeCount >= maxConcurrency || queue.length === 0) {
+      return;
+    }
+
+    const task = queue.shift();
+    activeCount += 1;
+    Promise.resolve()
+      .then(task.fn)
+      .then(task.resolve, task.reject)
+      .finally(() => {
+        activeCount -= 1;
+        runNext();
+      });
+  };
+
+  return (fn) =>
+    new Promise((resolve, reject) => {
+      queue.push({ fn, resolve, reject });
+      runNext();
+    });
+}
+
 function mapPrimaryFundQuote(item) {
   if (!item?.FCODE) {
     return null;
@@ -202,33 +232,20 @@ export function mergeFundQuote(code, primaryQuote, legacyQuote, historyQuote) {
     legacyQuote?.name ??
     historyQuote?.name ??
     code;
-  const netValueDate =
-    primaryQuote?.netValueDate ??
-    legacyQuote?.netValueDate ??
-    historyQuote?.netValueDate ??
-    null;
-  const netValue =
-    primaryQuote?.netValue ??
-    legacyQuote?.netValue ??
-    historyQuote?.netValue ??
-    null;
-  const valuation =
-    legacyQuote?.valuation ??
-    primaryQuote?.valuation ??
-    null;
-  const valuationChangePercent = resolveDailyChangePercent(
+  const observation = classifyFundObservation({
+    name,
     primaryQuote,
     legacyQuote,
-    valuation,
-    netValue
-  );
-  const valuationTime =
-    legacyQuote?.valuationTime ??
-    primaryQuote?.valuationTime ??
-    null;
-  const growthRate = primaryQuote?.growthRate ?? null;
+    historyQuote
+  });
+  const netValueDate = observation.confirmedNavDate;
+  const netValue = observation.confirmedNav;
+  const valuation = observation.compatibility.valuation;
+  const valuationChangePercent = observation.compatibility.valuationChangePercent;
+  const valuationTime = observation.compatibility.valuationTime;
+  const growthRate = observation.confirmedChangePercent ?? primaryQuote?.growthRate ?? null;
   const estimatedDailyProfitPerUnit =
-    valuation !== null && netValue !== null
+    observation.intradayValuation !== null && netValue !== null
       ? Number((valuation - netValue).toFixed(4))
       : null;
 
@@ -242,6 +259,16 @@ export function mergeFundQuote(code, primaryQuote, legacyQuote, historyQuote) {
     valuationTime,
     growthRate,
     estimatedDailyProfitPerUnit
+    ,
+    observationKind: observation.observationKind,
+    fundTypeHint: observation.fundTypeHint,
+    confirmedNavDate: observation.confirmedNavDate,
+    confirmedNav: observation.confirmedNav,
+    intradayValuation: observation.intradayValuation,
+    intradayChangePercent: observation.intradayChangePercent,
+    intradayValuationTime: observation.intradayValuationTime,
+    intradaySource: observation.intradaySource,
+    sourceDiagnostics: observation.sourceDiagnostics
   };
 }
 
@@ -281,6 +308,7 @@ export async function getFundQuotes(fundCodes) {
   }
 
   let primaryQuotes = [];
+  let primaryError = null;
   try {
     const { data } = await http.get(
       "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo",
@@ -296,11 +324,14 @@ export async function getFundQuotes(fundCodes) {
       })
     );
     primaryQuotes = (data?.Datas ?? []).map(mapPrimaryFundQuote).filter(Boolean);
-  } catch {}
+  } catch (error) {
+    primaryError = error instanceof Error ? error.message : String(error ?? "primary_quote_failed");
+  }
 
+  const limitFallback = createConcurrencyLimiter(FUND_FALLBACK_CONCURRENCY);
   const [legacyQuotes, historyQuotes] = await Promise.all([
-    Promise.all(codes.map((code) => fetchLegacyRealtimeQuote(code))),
-    Promise.all(codes.map((code) => fetchPingzhongdataFallback(code)))
+    Promise.all(codes.map((code) => limitFallback(() => fetchLegacyRealtimeQuote(code)))),
+    Promise.all(codes.map((code) => limitFallback(() => fetchPingzhongdataFallback(code))))
   ]);
 
   const primaryMap = new Map(primaryQuotes.map((item) => [item.code, item]));
@@ -311,14 +342,24 @@ export async function getFundQuotes(fundCodes) {
     historyQuotes.filter(Boolean).map((item) => [item.code, item])
   );
 
-  return codes.map((code) =>
-    mergeFundQuote(
+  return codes.map((code) => {
+    const merged = mergeFundQuote(
       code,
       primaryMap.get(code) ?? null,
       legacyMap.get(code) ?? null,
       historyMap.get(code) ?? null
-    )
-  );
+    );
+    if (primaryError) {
+      merged.sourceDiagnostics = {
+        ...merged.sourceDiagnostics,
+        primary: {
+          ...(merged.sourceDiagnostics?.primary ?? {}),
+          error: primaryError
+        }
+      };
+    }
+    return merged;
+  });
 }
 
 export async function getFundPositionDetails(fundCode) {

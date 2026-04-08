@@ -11,6 +11,7 @@ import {
 } from "./lib/account_root.mjs";
 import { buildExchangeDashboardRow } from "./lib/exchange_dashboard_row.mjs";
 import { loadCanonicalPortfolioState } from "./lib/portfolio_state_view.mjs";
+import { round } from "./lib/format_utils.mjs";
 
 const defaultHost = "127.0.0.1";
 const defaultPort = 8767;
@@ -52,10 +53,6 @@ function parseArgs(argv) {
   result.refreshMs = Number(result.refreshMs) || defaultRefreshMs;
   result.open = Boolean(result.open);
   return result;
-}
-
-function round(value, digits = 2) {
-  return Number(Number(value ?? 0).toFixed(digits));
 }
 
 function toNumberOrNull(value, digits = 2) {

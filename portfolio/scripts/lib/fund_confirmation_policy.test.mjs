@@ -6,7 +6,7 @@ import {
   summarizeFundConfirmationStates
 } from "./fund_confirmation_policy.mjs";
 
-test("classifyFundConfirmation keeps US QDII one-trading-day lag in normal_lag state", () => {
+test("classifyFundConfirmation keeps US QDII on previous CN trading day in normal_lag state", () => {
   const result = classifyFundConfirmation({
     targetDate: "2026-04-02",
     confirmedNavDate: "2026-04-01",
@@ -21,6 +21,23 @@ test("classifyFundConfirmation keeps US QDII one-trading-day lag in normal_lag s
   assert.equal(result.state, "normal_lag");
   assert.equal(result.expectedConfirmedDate, "2026-04-01");
   assert.equal(result.confirmedNavDate, "2026-04-01");
+});
+
+test("classifyFundConfirmation treats QDII holiday-stretched lag as normal_lag when previous CN trading day is older", () => {
+  const result = classifyFundConfirmation({
+    targetDate: "2026-04-07",
+    confirmedNavDate: "2026-04-03",
+    asset: {
+      symbol: "006075",
+      market: "US",
+      category: "美股指数/QDII",
+      name: "博时标普500ETF联接(QDII)C"
+    }
+  });
+
+  assert.equal(result.state, "normal_lag");
+  assert.equal(result.expectedConfirmedDate, "2026-04-03");
+  assert.equal(result.confirmedNavDate, "2026-04-03");
 });
 
 test("classifyFundConfirmation marks Hong Kong holiday carry-over as holiday_delay", () => {
@@ -53,6 +70,22 @@ test("classifyFundConfirmation marks domestic funds with old confirmed nav as la
 
   assert.equal(result.state, "late_missing");
   assert.equal(result.expectedConfirmedDate, "2026-04-02");
+});
+
+test("classifyFundConfirmation treats domestic holiday carry-over as holiday_delay", () => {
+  const result = classifyFundConfirmation({
+    targetDate: "2026-04-06",
+    confirmedNavDate: "2026-04-03",
+    asset: {
+      symbol: "007339",
+      market: "CN",
+      category: "A股宽基",
+      name: "易方达沪深300ETF联接C"
+    }
+  });
+
+  assert.equal(result.state, "holiday_delay");
+  assert.equal(result.expectedConfirmedDate, "2026-04-03");
 });
 
 test("summarizeFundConfirmationStates reports coverage and lag counts", () => {

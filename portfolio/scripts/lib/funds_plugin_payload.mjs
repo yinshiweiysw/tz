@@ -1,12 +1,9 @@
 import { getFundWatchlistQuotes } from "../../../market-mcp/src/providers/fund.js";
 import { buildPortfolioPath, resolvePortfolioRoot } from "./account_root.mjs";
+import { round } from "./format_utils.mjs";
 
 export function resolveFundsPluginImportPath(options = {}) {
   return buildPortfolioPath(resolvePortfolioRoot(options), "funds-plugin-import.json");
-}
-
-function round(value, digits = 2) {
-  return Number(Number(value ?? 0).toFixed(digits));
 }
 
 export async function buildFundsPluginPayload(options = {}) {

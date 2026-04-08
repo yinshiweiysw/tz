@@ -22,6 +22,13 @@ test("runRefreshAccountSidecars rebuilds canonical sidecars in a fixed order and
   const reportQualityScorecardPath = path.join(portfolioRoot, "data", "report_quality_scorecard.json");
   const analysisHitRatePath = path.join(portfolioRoot, "data", "analysis_hit_rate.json");
   const nightlyStatusPath = path.join(portfolioRoot, "data", "nightly_confirmed_nav_status.json");
+  const agentRuntimeContextPath = path.join(portfolioRoot, "data", "agent_runtime_context.json");
+  const strategyDecisionContractPath = path.join(
+    portfolioRoot,
+    "data",
+    "strategy_decision_contract.json"
+  );
+  const agentBootstrapContextPath = path.join(portfolioRoot, "data", "agent_bootstrap_context.json");
 
   await writeJson(manifestPath, {
     version: 3,
@@ -143,6 +150,23 @@ test("runRefreshAccountSidecars rebuilds canonical sidecars in a fixed order and
           output: researchBrain
         };
       },
+      runAgentEntrypointRefresh: async () => {
+        callOrder.push("agent");
+        await writeJson(agentRuntimeContextPath, {
+          generatedAt: "2026-04-04T15:32:30.000Z"
+        });
+        await writeJson(strategyDecisionContractPath, {
+          generatedAt: "2026-04-04T15:32:40.000Z"
+        });
+        await writeJson(agentBootstrapContextPath, {
+          generatedAt: "2026-04-04T15:32:50.000Z"
+        });
+        return {
+          runtimeContextPath: agentRuntimeContextPath,
+          strategyDecisionContractPath,
+          bootstrapAgentContextPath: agentBootstrapContextPath
+        };
+      },
       runReportQualityScorecardBuild: async () => {
         callOrder.push("scorecard");
         const persistedMemory = JSON.parse(await readFile(reportSessionMemoryPath, "utf8"));
@@ -164,7 +188,7 @@ test("runRefreshAccountSidecars rebuilds canonical sidecars in a fixed order and
     }
   );
 
-  assert.deepEqual(callOrder, ["risk", "live", "nightly", "research", "scorecard"]);
+  assert.deepEqual(callOrder, ["risk", "live", "nightly", "research", "agent", "scorecard"]);
 
   const persistedManifest = JSON.parse(await readFile(manifestPath, "utf8"));
   assert.equal(
@@ -179,6 +203,18 @@ test("runRefreshAccountSidecars rebuilds canonical sidecars in a fixed order and
   assert.equal(
     persistedManifest.canonical_entrypoints.latest_report_session_memory,
     reportSessionMemoryPath
+  );
+  assert.equal(
+    persistedManifest.canonical_entrypoints.agent_runtime_context,
+    agentRuntimeContextPath
+  );
+  assert.equal(
+    persistedManifest.canonical_entrypoints.strategy_decision_contract,
+    strategyDecisionContractPath
+  );
+  assert.equal(
+    persistedManifest.canonical_entrypoints.latest_agent_bootstrap_context,
+    agentBootstrapContextPath
   );
   assert.equal(
     persistedManifest.canonical_entrypoints.latest_report_quality_scorecard,
@@ -197,6 +233,9 @@ test("runRefreshAccountSidecars rebuilds canonical sidecars in a fixed order and
   assert.equal(result.outputs.liveFundsSnapshotPath, liveFundsSnapshotPath);
   assert.equal(result.outputs.nightlyConfirmedNavStatusPath, nightlyStatusPath);
   assert.equal(result.outputs.researchBrainPath, researchBrainPath);
+  assert.equal(result.outputs.agentRuntimeContextPath, agentRuntimeContextPath);
+  assert.equal(result.outputs.strategyDecisionContractPath, strategyDecisionContractPath);
+  assert.equal(result.outputs.agentBootstrapContextPath, agentBootstrapContextPath);
   assert.equal(result.outputs.reportSessionMemoryPath, reportSessionMemoryPath);
   assert.equal(result.outputs.reportQualityScorecardPath, reportQualityScorecardPath);
   assert.equal(result.outputs.analysisHitRatePath, analysisHitRatePath);

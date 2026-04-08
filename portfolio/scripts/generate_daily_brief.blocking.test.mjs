@@ -10,9 +10,11 @@ async function loadNamedFunction(relativePath, functionName) {
   const scriptPath = fileURLToPath(new URL(relativePath, import.meta.url));
   const source = await readFile(scriptPath, "utf8");
   const escapedName = functionName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = source.match(new RegExp(`^function ${escapedName}\\([^)]*\\) \\{[\\s\\S]*?^}\\n`, "m"));
+  const match = source.match(new RegExp(`^(?:async\\s+)?function ${escapedName}\\([^)]*\\) \\{[\\s\\S]*?^}\\n`, "m"));
   assert.ok(match, `${functionName} not found in ${scriptPath}`);
-  return vm.runInNewContext(`(${match[0]})`);
+  return vm.runInNewContext(`(${match[0]})`, {
+    readFile,
+  });
 }
 
 test("daily brief action memo helper can be forced into blocked mode even when trade-plan text is executable", () => {
@@ -136,4 +138,14 @@ test("buildDailyBriefTradePlanCandidates ignores stale manifest latest pointers 
       "/tmp/pf/reports/2026-04-03-next-trade-generator.md"
     ])
   );
+});
+
+test("readOptionalText returns fallback text when optional artifact is missing", async () => {
+  const readOptionalText = await loadNamedFunction(
+    "./generate_daily_brief.mjs",
+    "readOptionalText"
+  );
+
+  const result = await readOptionalText("/tmp/this-file-should-not-exist-daily-brief.txt", "fallback");
+  assert.equal(result, "fallback");
 });

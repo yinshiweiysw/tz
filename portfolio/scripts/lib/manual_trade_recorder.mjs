@@ -5,6 +5,11 @@ import { buildPortfolioPath } from "./account_root.mjs";
 import { updateJsonFileAtomically, writeJsonAtomic } from "./atomic_json_state.mjs";
 import { inferProfitEffectiveOn, parseAmount } from "./portfolio_state_materializer.mjs";
 import { resolveLedgerEntryLifecycleStage } from "./trade_lifecycle.mjs";
+import {
+  beginTransaction,
+  commitTransaction,
+  rollbackTransaction
+} from "./transaction_journal.mjs";
 
 function normalizeName(name) {
   return String(name ?? "")
@@ -563,4 +568,78 @@ export async function loadTransactionsForDate({ portfolioRoot, tradeDate }) {
         name.endsWith(".json")
     )
     .sort();
+}
+
+/**
+ * Record a manual trade with transaction journal integration for crash recovery.
+ *
+ * This function wraps the three multi-file writes (transaction file, raw snapshot
+ * update, state manifest pointer update) in a begin/commit/rollback journal cycle.
+ * The actual writes still proceed; the journal records intent and completion so
+ * that recoverJournal() can detect any interrupted operations after a crash.
+ *
+ * @param {object} params
+ * @param {string} params.portfolioRoot
+ * @param {object} params.payload - The trade transaction content.
+ * @param {string} params.transactionFilePath - Resolved path for the transaction file.
+ * @param {string} params.tradeDate
+ * @param {Array<string>} params.tradeKinds - e.g. ["buy"], ["buy", "sell"]
+ * @param {string} [params.note] - Optional note for the raw snapshot.
+ * @returns {Promise<{transactionFilePath: string, rawSnapshotPath: string|null, manifestUpdatePath: string|null}>}
+ */
+export async function recordManualTradeWithJournal({
+  portfolioRoot,
+  payload,
+  transactionFilePath,
+  tradeDate,
+  tradeKinds = ["buy"],
+  note = null
+}) {
+  const operations = [
+    { path: transactionFilePath, action: "write" },
+    { path: buildPortfolioPath(portfolioRoot, "snapshots", "latest_raw.json"), action: "update" },
+    { path: buildPortfolioPath(portfolioRoot, "state-manifest.json"), action: "update" }
+  ];
+  const description = `manual_trade_recorder: ${tradeDate} ${tradeKinds.join(",")} trades -> ${path.basename(transactionFilePath)}`;
+
+  let txId;
+  try {
+    txId = beginTransaction(description, operations);
+
+    // Write the transaction file.
+    await writeJson(transactionFilePath, payload);
+
+    // Update raw snapshot related files.
+    const rawSnapshotPath = await updateRawSnapshotRelatedFiles({
+      portfolioRoot,
+      transactionFilePath,
+      tradeDate,
+      note,
+      tradeKinds
+    });
+
+    // Update state manifest pointer.
+    const manifestUpdatePath = await updateStateManifestManualTradePointer({
+      portfolioRoot,
+      transactionFilePath,
+      tradeKinds
+    });
+
+    commitTransaction(txId);
+
+    return {
+      transactionFilePath,
+      rawSnapshotPath,
+      manifestUpdatePath
+    };
+  } catch (error) {
+    if (txId) {
+      try {
+        rollbackTransaction(txId, String(error?.message ?? error));
+      } catch {
+        // Best-effort rollback journaling; do not mask the original error.
+      }
+    }
+    throw error;
+  }
 }

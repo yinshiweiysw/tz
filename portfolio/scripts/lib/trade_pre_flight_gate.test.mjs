@@ -384,3 +384,81 @@ test("blocks non-rebalance buy when rebalance priority mode is active", () => {
   assert.equal(result.allowed, false);
   assert.match(result.blockingReasons.join(" | "), /rebalance priority/i);
 });
+
+test("single fund concentration breach is reported once even when fund has both code and name keys", () => {
+  const result = evaluateTradePreFlight({
+    portfolioState: {
+      summary: {
+        available_cash_cny: 30000,
+        total_portfolio_assets_cny: 100000
+      },
+      positions: [
+        {
+          name: "易方达沪深300ETF联接C",
+          amount: 9000,
+          category: "A股宽基",
+          status: "active",
+          fund_code: "007339"
+        }
+      ]
+    },
+    proposedTrades: [
+      {
+        type: "buy",
+        fund_code: "007339",
+        name: "易方达沪深300ETF联接C",
+        amount_cny: 2000,
+        bucket_key: "A_CORE"
+      }
+    ],
+    assetMaster: buildAssetMasterFixture(),
+    ipsConstraints: buildIpsConstraintsFixture(),
+    portfolioRiskState: { current_drawdown_pct: 0.04 }
+  });
+
+  const singleFundReasons = result.blockingReasons.filter((reason) => /single fund/i.test(reason));
+  assert.equal(singleFundReasons.length, 1);
+});
+
+test("characterization: pending sell cash does not relax cash floor before settlement", () => {
+  const result = evaluateTradePreFlight({
+    portfolioState: {
+      summary: {
+        available_cash_cny: 15000,
+        total_portfolio_assets_cny: 100000
+      },
+      positions: [
+        {
+          name: "易方达沪深300ETF联接C",
+          amount: 85000,
+          category: "A股宽基",
+          status: "active",
+          fund_code: "007339"
+        }
+      ]
+    },
+    proposedTrades: [
+      {
+        type: "sell",
+        fund_code: "007339",
+        name: "易方达沪深300ETF联接C",
+        amount_cny: 10000,
+        bucket_key: "A_CORE",
+        cash_arrived: false
+      },
+      {
+        type: "buy",
+        fund_code: "518880",
+        name: "黄金ETF联接",
+        amount_cny: 5000,
+        bucket_key: "HEDGE"
+      }
+    ],
+    assetMaster: buildAssetMasterFixture(),
+    ipsConstraints: buildIpsConstraintsFixture(),
+    portfolioRiskState: { current_drawdown_pct: 0.01 }
+  });
+
+  assert.equal(result.allowed, false);
+  assert.match(result.blockingReasons.join(" | "), /cash floor/i);
+});

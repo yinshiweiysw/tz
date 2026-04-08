@@ -24,6 +24,8 @@ import { runReportQualityScorecardBuild } from "./generate_report_quality_scorec
 import { runResearchBrainBuild } from "./generate_research_brain.mjs";
 import { runRiskDashboardBuild } from "./generate_risk_dashboard.mjs";
 import { runLiveFundsSnapshotBuild } from "./serve_funds_live_dashboard.mjs";
+import { runDashboardStateBuild } from "./build_dashboard_state.mjs";
+import { runAgentEntrypointRefresh } from "./refresh_agent_entrypoints.mjs";
 
 function parseArgs(argv) {
   const result = {};
@@ -59,8 +61,10 @@ function normalizeScopes(value) {
     return [
       "risk_dashboard",
       "live_funds_snapshot",
+      "dashboard_state",
       "nightly_confirmed_nav_status",
       "research_brain",
+      "agent_entrypoints",
       "report_session_memory",
       "report_quality_scorecard",
       "analysis_hit_rate"
@@ -72,10 +76,14 @@ function normalizeScopes(value) {
     ["risk_dashboard", "risk_dashboard"],
     ["live", "live_funds_snapshot"],
     ["live_funds_snapshot", "live_funds_snapshot"],
+    ["dashboard", "dashboard_state"],
+    ["dashboard_state", "dashboard_state"],
     ["nightly", "nightly_confirmed_nav_status"],
     ["nightly_confirmed_nav_status", "nightly_confirmed_nav_status"],
     ["research", "research_brain"],
     ["research_brain", "research_brain"],
+    ["agent", "agent_entrypoints"],
+    ["agent_entrypoints", "agent_entrypoints"],
     ["session_memory", "report_session_memory"],
     ["report_session_memory", "report_session_memory"],
     ["scorecard", "report_quality_scorecard"],
@@ -232,7 +240,9 @@ export async function runRefreshAccountSidecars(rawOptions = {}, deps = {}) {
 
   const runRiskDashboard = deps.runRiskDashboardBuild ?? runRiskDashboardBuild;
   const runLiveSnapshot = deps.runLiveFundsSnapshotBuild ?? runLiveFundsSnapshotBuild;
+  const runDashboardState = deps.runDashboardStateBuild ?? runDashboardStateBuild;
   const runResearchBrain = deps.runResearchBrainBuild ?? runResearchBrainBuild;
+  const runAgentEntrypoints = deps.runAgentEntrypointRefresh ?? runAgentEntrypointRefresh;
   const runReportQualityScorecard = deps.runReportQualityScorecardBuild ?? runReportQualityScorecardBuild;
   const upsertNightlyConfirmedNavStatus =
     deps.upsertNightlyConfirmedNavStatus ?? upsertNightlyConfirmedNavStatusDefault;
@@ -255,7 +265,11 @@ export async function runRefreshAccountSidecars(rawOptions = {}, deps = {}) {
     manifestEntries.risk_dashboard = outputs.riskDashboardPath;
   }
 
-  if (hasScope(scopes, "live_funds_snapshot") || hasScope(scopes, "nightly_confirmed_nav_status")) {
+  if (
+    hasScope(scopes, "live_funds_snapshot") ||
+    hasScope(scopes, "dashboard_state") ||
+    hasScope(scopes, "nightly_confirmed_nav_status")
+  ) {
     liveResult = await runLiveSnapshot({
       portfolioRoot,
       user: accountId,
@@ -263,6 +277,26 @@ export async function runRefreshAccountSidecars(rawOptions = {}, deps = {}) {
     });
     outputs.liveFundsSnapshotPath = liveResult?.outputPath ?? buildPortfolioPath(portfolioRoot, "data/live_funds_snapshot.json");
     manifestEntries.latest_live_funds_snapshot = outputs.liveFundsSnapshotPath;
+  }
+
+  if (
+    hasScope(scopes, "live_funds_snapshot") ||
+    hasScope(scopes, "dashboard_state") ||
+    hasScope(scopes, "nightly_confirmed_nav_status")
+  ) {
+    const dashboardStateResult = await runDashboardState({
+      portfolioRoot,
+      user: accountId,
+      date: tradeDate
+    });
+    outputs.dashboardStatePath =
+      dashboardStateResult?.outputPath ?? buildPortfolioPath(portfolioRoot, "data", "dashboard_state.json");
+    manifestEntries.dashboard_state = outputs.dashboardStatePath;
+    manifestEntries.dashboard_state_builder = buildPortfolioPath(
+      portfolioRoot,
+      "scripts",
+      "build_dashboard_state.mjs"
+    );
   }
 
   if (hasScope(scopes, "nightly_confirmed_nav_status")) {
@@ -292,6 +326,46 @@ export async function runRefreshAccountSidecars(rawOptions = {}, deps = {}) {
     });
     outputs.researchBrainPath = researchBrainResult?.outputPath ?? paths.researchBrainPath;
     manifestEntries.latest_research_brain = outputs.researchBrainPath;
+  }
+
+  if (
+    researchBrainResult &&
+    hasScope(scopes, "agent_entrypoints")
+  ) {
+    const agentEntrypointsResult = await runAgentEntrypoints({
+      portfolioRoot,
+      user: accountId,
+      date: tradeDate
+    });
+    outputs.agentRuntimeContextPath = agentEntrypointsResult?.runtimeContextPath ?? null;
+    outputs.strategyDecisionContractPath =
+      agentEntrypointsResult?.strategyDecisionContractPath ?? null;
+    outputs.agentBootstrapContextPath =
+      agentEntrypointsResult?.bootstrapAgentContextPath ?? null;
+    if (outputs.agentRuntimeContextPath) {
+      manifestEntries.agent_runtime_context = outputs.agentRuntimeContextPath;
+      manifestEntries.agent_runtime_context_builder = buildPortfolioPath(
+        portfolioRoot,
+        "scripts",
+        "build_agent_runtime_context.mjs"
+      );
+    }
+    if (outputs.strategyDecisionContractPath) {
+      manifestEntries.strategy_decision_contract = outputs.strategyDecisionContractPath;
+      manifestEntries.strategy_decision_contract_builder = buildPortfolioPath(
+        portfolioRoot,
+        "scripts",
+        "build_strategy_decision_contract.mjs"
+      );
+    }
+    if (outputs.agentBootstrapContextPath) {
+      manifestEntries.latest_agent_bootstrap_context = outputs.agentBootstrapContextPath;
+      manifestEntries.agent_bootstrap_context_script = buildPortfolioPath(
+        portfolioRoot,
+        "scripts",
+        "bootstrap_agent_context.mjs"
+      );
+    }
   }
 
   if (

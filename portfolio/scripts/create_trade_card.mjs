@@ -1,6 +1,7 @@
 import { mkdir, access, readFile, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { buildPortfolioPath, resolveAccountId, resolvePortfolioRoot } from "./lib/account_root.mjs";
+import { round } from "./lib/format_utils.mjs";
 
 const args = process.argv.slice(2);
 
@@ -43,10 +44,6 @@ function resolveDate(dateArg) {
     month: "2-digit",
     day: "2-digit"
   }).format(new Date());
-}
-
-function round(value, digits = 2) {
-  return Number(Number(value ?? 0).toFixed(digits));
 }
 
 function sanitizeSlug(value) {

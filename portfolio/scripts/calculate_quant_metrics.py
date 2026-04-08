@@ -18,6 +18,7 @@ if str(LIB_DIR) not in sys.path:
     sys.path.append(str(LIB_DIR))
 
 from account_root import resolve_account_id, resolve_portfolio_root  # noqa: E402
+from fund_name_normalizer import normalize_fund_name  # noqa: E402
 from portfolio_state_paths import load_preferred_portfolio_state, read_json_or_none  # noqa: E402
 PORTFOLIO_ROOT = resolve_portfolio_root()
 ASSET_MASTER_PATH = PORTFOLIO_ROOT / "config" / "asset_master.json"
@@ -107,39 +108,7 @@ def round_or_none(value: Any, digits: int = 6) -> float | None:
     return round(numeric, digits)
 
 
-def normalize_name(value: str) -> str:
-    text = str(value or "")
-    replacements = {
-        "（": "(",
-        "）": ")",
-        " ": "",
-        "\u3000": "",
-        "(QDII)": "",
-        "（QDII）": "",
-        "ETF发起式联接": "",
-        "ETF发起联接": "",
-        "ETF联接": "",
-        "ETF发起": "",
-        "联接": "",
-        "发起式": "",
-        "发起": "",
-        "人民币": "",
-        "混合型": "混合",
-        "持有期": "持有",
-        "QDII-LOF": "QDII",
-        "QDII-FOF-LOF": "QDII",
-        "-": "",
-        "_": "",
-        "/": "",
-        ".": "",
-        "(": "",
-        ")": "",
-        "[": "",
-        "]": "",
-    }
-    for source, target in replacements.items():
-        text = text.replace(source, target)
-    return text
+normalize_name = normalize_fund_name
 
 
 def matches_rule(rule: dict[str, Any], category: str, name: str) -> bool:
@@ -190,10 +159,44 @@ def build_watchlist_lookup(watchlist_payload: dict[str, Any]) -> tuple[dict[str,
     return by_name, ordered
 
 
-def resolve_position_symbol(position: dict[str, Any], watchlist_lookup: dict[str, str], watchlist_pairs: list[tuple[str, str]]) -> str | None:
-    candidates = [
+def build_asset_symbol_lookup(asset_master: dict[str, Any]) -> tuple[dict[str, str], list[tuple[str, str]]]:
+    by_name: dict[str, str] = {}
+    ordered: list[tuple[str, str]] = []
+
+    for asset in asset_master.get("assets", []):
+        symbol = str(asset.get("symbol") or "").strip()
+        if not symbol:
+            continue
+        names = [asset.get("name"), *(asset.get("aliases") or [])]
+        for name in names:
+            normalized = normalize_name(str(name or ""))
+            if not normalized:
+                continue
+            by_name[normalized] = symbol
+            ordered.append((normalized, symbol))
+
+    return by_name, ordered
+
+
+def resolve_position_symbol(
+    position: dict[str, Any],
+    watchlist_lookup: dict[str, str],
+    watchlist_pairs: list[tuple[str, str]],
+    asset_symbol_lookup: dict[str, str],
+    asset_symbol_pairs: list[tuple[str, str]],
+) -> str | None:
+    direct_code_candidates = [
         position.get("code"),
         position.get("fund_code"),
+        position.get("symbol"),
+    ]
+
+    for candidate in direct_code_candidates:
+        symbol = str(candidate or "").strip()
+        if symbol:
+            return symbol
+
+    candidates = [
         position.get("name"),
     ]
 
@@ -201,10 +204,16 @@ def resolve_position_symbol(position: dict[str, Any], watchlist_lookup: dict[str
         normalized = normalize_name(str(candidate or ""))
         if normalized and normalized in watchlist_lookup:
             return watchlist_lookup[normalized]
+        if normalized and normalized in asset_symbol_lookup:
+            return asset_symbol_lookup[normalized]
 
     normalized_name = normalize_name(str(position.get("name") or ""))
     if not normalized_name:
         return None
+
+    for asset_name, symbol in asset_symbol_pairs:
+        if normalized_name in asset_name or asset_name in normalized_name:
+            return symbol
 
     for watchlist_name, code in watchlist_pairs:
         if normalized_name in watchlist_name or watchlist_name in normalized_name:
@@ -274,6 +283,13 @@ def build_returns_frame(series_map: dict[str, pd.Series], lookback_days: int) ->
     return returns.tail(lookback_days)
 
 
+def compute_trailing_return(series: pd.Series, lookback_days: int) -> float:
+    if len(series) < lookback_days + 1:
+        raise ValueError(f"insufficient history for trailing return: need >= {lookback_days + 1}, got {len(series)}")
+    window_series = series.tail(lookback_days + 1)
+    return float(window_series.iloc[-1] / window_series.iloc[0] - 1.0)
+
+
 def compute_benchmark_bucket_weights(asset_master: dict[str, Any]) -> dict[str, float]:
     weights: dict[str, float] = {
         bucket_key: 0.0 for bucket_key in asset_master.get("bucket_order", [])
@@ -303,6 +319,32 @@ def to_nested_matrix(df: pd.DataFrame, digits: int = 8) -> dict[str, dict[str, f
             for column in df.columns
         }
     return result
+
+
+def compute_covariance_matrices(position_returns: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, float]:
+    raw_cov = position_returns.cov() * ANNUALIZATION_DAYS
+    asset_count = len(position_returns.columns)
+    sample_count = len(position_returns.index)
+    shrinkage_intensity = round(min(0.35, (asset_count / max(sample_count, 1)) * 0.25), 6)
+    diagonal_cov = pd.DataFrame(
+        np.diag(np.diag(raw_cov.to_numpy(dtype=float))),
+        index=raw_cov.index,
+        columns=raw_cov.columns,
+    )
+    shrunk_cov = raw_cov * (1.0 - shrinkage_intensity) + diagonal_cov * shrinkage_intensity
+    return raw_cov, shrunk_cov, shrinkage_intensity
+
+
+def compute_covariance_payload(position_returns: pd.DataFrame) -> dict[str, Any]:
+    raw_cov, shrunk_cov, shrinkage_intensity = compute_covariance_matrices(position_returns)
+    return {
+        "method": "diagonal_shrinkage_proxy",
+        "shrinkage_intensity": shrinkage_intensity,
+        "symbols": list(position_returns.columns),
+        "matrix": to_nested_matrix(shrunk_cov, digits=8),
+        "raw_sample": to_nested_matrix(raw_cov, digits=8),
+        "shrunk": to_nested_matrix(shrunk_cov, digits=8),
+    }
 
 
 def summarize_highest_correlation(corr_df: pd.DataFrame) -> dict[str, Any] | None:
@@ -354,6 +396,7 @@ def main() -> int:
     )
     watchlist = read_json(Path(args.watchlist))
     watchlist_lookup, watchlist_pairs = build_watchlist_lookup(watchlist)
+    asset_symbol_lookup, asset_symbol_pairs = build_asset_symbol_lookup(asset_master)
 
     active_positions = [
         position
@@ -376,15 +419,21 @@ def main() -> int:
         amount = float(position.get("amount") or 0)
         holding_profit = infer_holding_profit(position)
         estimated_cost = estimate_cost(amount, holding_profit)
-        symbol = resolve_position_symbol(position, watchlist_lookup, watchlist_pairs)
+        symbol = resolve_position_symbol(
+            position,
+            watchlist_lookup,
+            watchlist_pairs,
+            asset_symbol_lookup,
+            asset_symbol_pairs,
+        )
         bucket_key = resolve_bucket_key(asset_master, position)
         if not symbol:
             missing_symbols.append({"name": position.get("name"), "category": position.get("category")})
             continue
 
-        return_pct = None
+        holding_return_pct = None
         if estimated_cost is not None and estimated_cost > 0:
-            return_pct = holding_profit / estimated_cost
+            holding_return_pct = holding_profit / estimated_cost
 
         positions_enriched.append(
             {
@@ -396,7 +445,7 @@ def main() -> int:
                 "amount_cny": amount,
                 "holding_profit_cny": holding_profit,
                 "estimated_cost_cny": estimated_cost,
-                "return_pct_decimal": return_pct,
+                "holding_return_pct_decimal": holding_return_pct,
             }
         )
         total_market_value += amount
@@ -451,6 +500,10 @@ def main() -> int:
     for position in filtered_positions:
         position["weight_decimal"] = position["amount_cny"] / total_market_value
         position["weight_pct"] = position["weight_decimal"] * 100.0
+        position["trailing_return_decimal"] = compute_trailing_return(
+            series_map[position["symbol"]],
+            args.lookback_days,
+        )
 
     positions_enriched = filtered_positions
     symbol_to_position = {position["symbol"]: position for position in positions_enriched}
@@ -461,14 +514,24 @@ def main() -> int:
         lookback_days=args.lookback_days,
     )
     corr_df = position_returns.corr()
-    cov_annualized_df = position_returns.cov() * ANNUALIZATION_DAYS
+    raw_cov_annualized_df, shrunk_cov_annualized_df, covariance_shrinkage_intensity = compute_covariance_matrices(
+        position_returns
+    )
+    covariance_payload = {
+        "method": "diagonal_shrinkage_proxy",
+        "shrinkage_intensity": covariance_shrinkage_intensity,
+        "symbols": list(position_returns.columns),
+        "matrix": to_nested_matrix(shrunk_cov_annualized_df, digits=8),
+        "raw_sample": to_nested_matrix(raw_cov_annualized_df, digits=8),
+        "shrunk": to_nested_matrix(shrunk_cov_annualized_df, digits=8),
+    }
 
     weights_series = pd.Series(
         {position["symbol"]: position["weight_decimal"] for position in positions_enriched},
         index=position_returns.columns,
         dtype=float,
     )
-    cov_matrix = cov_annualized_df.loc[weights_series.index, weights_series.index]
+    cov_matrix = shrunk_cov_annualized_df.loc[weights_series.index, weights_series.index]
     portfolio_variance = float(weights_series.to_numpy().T @ cov_matrix.to_numpy() @ weights_series.to_numpy())
     portfolio_vol = math.sqrt(max(portfolio_variance, 0.0))
 
@@ -537,7 +600,12 @@ def main() -> int:
         bucket_cost = sum(
             position["estimated_cost_cny"] for position in members if position["estimated_cost_cny"] is not None
         )
-        bucket_return = bucket_profit / bucket_cost if bucket_cost and bucket_cost > 0 else None
+        bucket_trailing_return = (
+            sum(position["amount_cny"] * float(position["trailing_return_decimal"]) for position in members) / bucket_amount
+            if bucket_amount > 0
+            else None
+        )
+        bucket_holding_return = bucket_profit / bucket_cost if bucket_cost and bucket_cost > 0 else None
         bucket_weight = bucket_amount / total_market_value if total_market_value > 0 else 0.0
 
         bucket_rows.append(
@@ -549,10 +617,14 @@ def main() -> int:
                 "portfolio_market_value_cny": round_or_none(bucket_amount, 2),
                 "portfolio_holding_profit_cny": round_or_none(bucket_profit, 2),
                 "portfolio_return_pct": round_or_none(
-                    bucket_return * 100.0 if bucket_return is not None else None,
+                    bucket_trailing_return * 100.0 if bucket_trailing_return is not None else None,
                     4,
                 ),
-                "portfolio_return_decimal": round_or_none(bucket_return, 8) if bucket_return is not None else None,
+                "portfolio_return_decimal": round_or_none(bucket_trailing_return, 8) if bucket_trailing_return is not None else None,
+                "portfolio_holding_return_pct": round_or_none(
+                    bucket_holding_return * 100.0 if bucket_holding_return is not None else None,
+                    4,
+                ),
                 "positions": [
                     {
                         "symbol": position["symbol"],
@@ -561,8 +633,14 @@ def main() -> int:
                         "weight_pct": round_or_none(position["weight_pct"], 4),
                         "holding_profit_cny": round_or_none(position["holding_profit_cny"], 2),
                         "return_pct": round_or_none(
-                            (position["return_pct_decimal"] * 100.0)
-                            if position["return_pct_decimal"] is not None
+                            (position["trailing_return_decimal"] * 100.0)
+                            if position["trailing_return_decimal"] is not None
+                            else None,
+                            4,
+                        ),
+                        "holding_return_pct": round_or_none(
+                            (position["holding_return_pct_decimal"] * 100.0)
+                            if position["holding_return_pct_decimal"] is not None
                             else None,
                             4,
                         ),
@@ -683,11 +761,12 @@ def main() -> int:
                 "matrix": to_nested_matrix(corr_df, digits=6),
             },
             "annualized_covariance_matrix": {
-                "symbols": list(position_returns.columns),
-                "matrix": to_nested_matrix(cov_annualized_df, digits=8),
+                **covariance_payload,
             },
         },
         "risk_model": {
+            "covariance_method": "diagonal_shrinkage_proxy",
+            "covariance_shrinkage_intensity": covariance_shrinkage_intensity,
             "portfolio_annualized_volatility_pct": round_or_none(portfolio_vol * 100.0, 6),
             "return_observations": int(len(position_returns)),
             "position_risk_contributions": position_risk_rows,
@@ -697,7 +776,7 @@ def main() -> int:
         },
         "errors": history_errors,
         "brinson_attribution": {
-            "portfolio_return_source": "portfolio_state holding_pnl / estimated_cost (cross-sectional snapshot; falls back to latest.json compatibility view only if needed)",
+            "portfolio_return_source": f"market_lake adj_close trailing {args.lookback_days}d",
             "benchmark_return_source": f"market_lake adj_close trailing {args.lookback_days}d",
             "benchmark_total_return_pct": round_or_none(benchmark_total_return * 100.0, 6),
             "total_allocation_effect_pct": round_or_none(total_allocation * 100.0, 6),
@@ -713,6 +792,12 @@ def main() -> int:
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_payload["_meta"] = {
+        "schema_version": "1.0",
+        "generated_at": format_now(),
+        "source_script": "calculate_quant_metrics.py",
+    }
+
     output_path.write_text(json.dumps(output_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     update_manifest(output_path)
 

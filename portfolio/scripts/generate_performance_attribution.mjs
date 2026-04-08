@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { buildPortfolioPath, resolveAccountId, resolvePortfolioRoot } from "./lib/account_root.mjs";
+import { round } from "./lib/format_utils.mjs";
 import { updateManifestCanonicalEntrypoints } from "./lib/manifest_state.mjs";
 import { loadCanonicalPortfolioState, readJsonOrNull } from "./lib/portfolio_state_view.mjs";
 
@@ -32,11 +33,6 @@ function resolveDate(dateArg) {
     month: "2-digit",
     day: "2-digit"
   }).format(new Date());
-}
-
-function round(value, digits = 2) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? Number(numeric.toFixed(digits)) : null;
 }
 
 function signed(value, digits = 2, suffix = "") {

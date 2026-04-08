@@ -36,6 +36,7 @@ import {
   summarizeGuardedBatch
 } from "./lib/report_market_fetch_guard.mjs";
 import { updateManifestCanonicalEntrypoints } from "./lib/manifest_state.mjs";
+import { round } from "./lib/format_utils.mjs";
 import { ensureReportContext } from "./lib/report_context.mjs";
 
 const args = process.argv.slice(2);
@@ -185,10 +186,6 @@ function resolveDate(dateArg) {
 function normalizeSession(raw) {
   const session = String(raw ?? "close").trim().toLowerCase();
   return ["morning", "noon", "close"].includes(session) ? session : "close";
-}
-
-function round(value, digits = 2) {
-  return Number(Number(value ?? 0).toFixed(digits));
 }
 
 function formatSigned(value, suffix = "") {

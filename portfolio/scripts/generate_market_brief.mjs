@@ -39,6 +39,7 @@ import {
   summarizeGuardedBatch
 } from "./lib/report_market_fetch_guard.mjs";
 import { updateManifestCanonicalEntrypoints } from "./lib/manifest_state.mjs";
+import { round } from "./lib/format_utils.mjs";
 import { ensureReportContext } from "./lib/report_context.mjs";
 
 const args = process.argv.slice(2);
@@ -131,10 +132,6 @@ function resolveDate(dateArg) {
     month: "2-digit",
     day: "2-digit"
   }).format(new Date());
-}
-
-function round(value, digits = 2) {
-  return Number(Number(value ?? 0).toFixed(digits));
 }
 
 function formatSigned(value, suffix = "") {

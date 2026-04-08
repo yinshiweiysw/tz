@@ -17,6 +17,7 @@ if str(LIB_DIR) not in sys.path:
     sys.path.append(str(LIB_DIR))
 
 from account_root import DEFAULT_PORTFOLIO_ROOT, resolve_account_id, resolve_portfolio_root  # noqa: E402
+from fund_name_normalizer import normalize_fund_name  # noqa: E402
 from portfolio_state_paths import load_preferred_portfolio_state, read_json_or_none  # noqa: E402
 
 PORTFOLIO_ROOT = resolve_portfolio_root()
@@ -97,25 +98,7 @@ def format_now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
-def normalize_name(value: str) -> str:
-    text = str(value or "")
-    replacements = {
-        "（": "(",
-        "）": ")",
-        " ": "",
-        "\u3000": "",
-        "(QDII)": "",
-        "（QDII）": "",
-        "ETF联接": "",
-        "发起式": "",
-        "混合型": "混合",
-        "持有期": "持有",
-        "QDII-LOF": "QDII",
-        "QDII-FOF-LOF": "QDII",
-    }
-    for source, target in replacements.items():
-        text = text.replace(source, target)
-    return text
+normalize_name = normalize_fund_name
 
 
 def load_target_pool(

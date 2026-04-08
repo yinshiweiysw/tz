@@ -17,6 +17,7 @@ if str(LIB_DIR) not in sys.path:
     sys.path.append(str(LIB_DIR))
 
 from account_root import resolve_account_id, resolve_portfolio_root  # noqa: E402
+from fund_name_normalizer import normalize_fund_name  # noqa: E402
 from portfolio_state_paths import load_preferred_portfolio_state, read_json_or_none  # noqa: E402
 PORTFOLIO_ROOT = resolve_portfolio_root()
 WATCHLIST_PATH = PORTFOLIO_ROOT / "fund-watchlist.json"
@@ -116,34 +117,7 @@ def format_now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
-def normalize_name(value: str) -> str:
-    text = str(value or "")
-    replacements = {
-        "（": "(",
-        "）": ")",
-        " ": "",
-        "\u3000": "",
-        "(QDII)": "",
-        "（QDII）": "",
-        "ETF发起式联接": "",
-        "ETF发起联接": "",
-        "ETF联接": "",
-        "联接": "",
-        "发起式": "",
-        "发起": "",
-        "人民币": "",
-        "混合型": "混合",
-        "持有期": "持有",
-        "QDII-LOF": "QDII",
-        "QDII-FOF-LOF": "QDII",
-        "-": "",
-        "_": "",
-        "/": "",
-        ".": "",
-    }
-    for source, target in replacements.items():
-        text = text.replace(source, target)
-    return text
+normalize_name = normalize_fund_name
 
 
 def load_target_pool(portfolio_state_payload: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -292,11 +266,10 @@ def compute_recent_max_drawdown(nav_series: pd.Series, window: int) -> tuple[flo
     if clean.empty:
         return None, None
 
-    recent = clean.tail(window)
-    rolling_peak = recent.cummax()
-    drawdown = recent / rolling_peak - 1.0
-    current_drawdown = drawdown.iloc[-1] if not drawdown.empty else None
-    max_drawdown = drawdown.min() if not drawdown.empty else None
+    full_history_drawdown = clean / clean.cummax() - 1.0
+    recent_drawdown = full_history_drawdown.tail(window)
+    current_drawdown = recent_drawdown.iloc[-1] if not recent_drawdown.empty else None
+    max_drawdown = recent_drawdown.min() if not recent_drawdown.empty else None
     return (
         round_or_none(max_drawdown * 100 if max_drawdown is not None else None, 2),
         round_or_none(current_drawdown * 100 if current_drawdown is not None else None, 2),
@@ -616,6 +589,12 @@ def generate_fund_signals_matrix(args: argparse.Namespace) -> dict[str, Any]:
                         "message": str(exc),
                     }
                 )
+
+    payload["_meta"] = {
+        "schema_version": "1.0",
+        "generated_at": format_now(),
+        "source_script": "generate_fund_signals_matrix.py",
+    }
 
     return payload
 

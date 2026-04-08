@@ -1,6 +1,4 @@
-function round(value, digits = 2) {
-  return Number(Number(value ?? 0).toFixed(digits));
-}
+import { round } from "./format_utils.mjs";
 
 function toFiniteNumber(value) {
   if (value === null || value === undefined || value === "") {
@@ -40,12 +38,27 @@ export function deriveDashboardAccountingSummary({
     0;
   const settledCashCny =
     toFiniteNumber(performanceSnapshot?.settled_cash_cny) ??
+    toFiniteNumber(cashLedger?.settled_cash_cny) ??
     toFiniteNumber(cashLedger?.available_cash_cny) ??
+    toFiniteNumber(portfolioStateSummary?.settled_cash_cny) ??
     toFiniteNumber(portfolioStateSummary?.available_cash_cny);
   const projectedSettledCashCny =
     toFiniteNumber(performanceSnapshot?.projected_settled_cash_cny) ??
     toFiniteNumber(cashLedger?.projected_settled_cash_cny) ??
     (settledCashCny !== null ? round(settledCashCny + pendingSellSettlementCny) : null);
+  const tradeAvailableCashCny =
+    toFiniteNumber(performanceSnapshot?.trade_available_cash_cny) ??
+    toFiniteNumber(cashLedger?.trade_available_cash_cny) ??
+    toFiniteNumber(portfolioStateSummary?.trade_available_cash_cny) ??
+    settledCashCny;
+  const cashLikeFundAssetsCny =
+    toFiniteNumber(performanceSnapshot?.cash_like_fund_assets_cny) ??
+    toFiniteNumber(cashLedger?.cash_like_fund_assets_cny) ??
+    toFiniteNumber(portfolioStateSummary?.cash_like_fund_assets_cny);
+  const liquiditySleeveAssetsCny =
+    toFiniteNumber(performanceSnapshot?.liquidity_sleeve_assets_cny) ??
+    toFiniteNumber(cashLedger?.liquidity_sleeve_assets_cny) ??
+    toFiniteNumber(portfolioStateSummary?.liquidity_sleeve_assets_cny);
 
   return {
     unrealizedHoldingProfitCny,
@@ -54,6 +67,9 @@ export function deriveDashboardAccountingSummary({
     pendingProfitEffectiveCny,
     pendingSellSettlementCny,
     settledCashCny,
-    projectedSettledCashCny
+    projectedSettledCashCny,
+    tradeAvailableCashCny,
+    cashLikeFundAssetsCny,
+    liquiditySleeveAssetsCny
   };
 }

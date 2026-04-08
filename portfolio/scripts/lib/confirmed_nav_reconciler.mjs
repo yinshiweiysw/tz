@@ -3,10 +3,12 @@ import {
   classifyFundConfirmation,
   summarizeFundConfirmationStates
 } from "./fund_confirmation_policy.mjs";
-
-function round(value, digits = 2) {
-  return Number(Number(value ?? 0).toFixed(digits));
-}
+import { round } from "./format_utils.mjs";
+import {
+  ensureHoldingCostBasis,
+  recalculateHoldingMetricsFromCostBasis,
+  resolveHoldingCostBasis
+} from "./holding_cost_basis.mjs";
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -142,7 +144,7 @@ export function computeConfirmedDailyPnl({
   const changePct = resolveChangePct(quote);
   const units = toFiniteNumber(confirmedUnits);
   const impliedUnits =
-    currentAmount !== null && currentNetValue !== null && currentNetValue > 0
+    units !== null && currentAmount !== null && currentNetValue !== null && currentNetValue > 0
       ? currentAmount / currentNetValue
       : null;
 
@@ -161,9 +163,11 @@ export function computeConfirmedDailyPnl({
       currentAmount > 0 &&
       Math.abs(storedAmount - currentAmount) / currentAmount <= 0.005;
     const effectiveUnits =
-      storedUnitsAligned && units !== null && units > 0
-        ? units
-        : impliedUnits;
+      units !== null && units > 0
+        ? storedUnitsAligned
+          ? units
+          : impliedUnits
+        : null;
     if (effectiveUnits === null || effectiveUnits <= 0) {
       return round((eligibleAmountValue * changePct) / 100);
     }
@@ -288,11 +292,9 @@ export function reconcileRawSnapshotWithConfirmedQuotes({
     Object.assign(position, canonicalPosition);
 
     const previousAmount = toFiniteNumber(position?.amount) ?? 0;
-    const previousHoldingPnl = toFiniteNumber(position?.holding_pnl);
-    const costBasis = previousHoldingPnl === null ? null : previousAmount - previousHoldingPnl;
-    const confirmedUnits =
-      toFiniteNumber(position?.confirmed_units) ??
-      (previousAmount > 0 ? previousAmount / currentNetValue : null);
+    ensureHoldingCostBasis(position);
+    const costBasis = resolveHoldingCostBasis(position);
+    const confirmedUnits = toFiniteNumber(position?.confirmed_units);
     const reconciledAmount =
       confirmedUnits !== null && confirmedUnits > 0
         ? round(confirmedUnits * currentNetValue)
@@ -308,9 +310,8 @@ export function reconcileRawSnapshotWithConfirmedQuotes({
       quote
     });
     if (costBasis !== null) {
-      position.holding_pnl = round(reconciledAmount - costBasis);
-      position.holding_pnl_rate_pct =
-        costBasis > 0 ? round(((reconciledAmount - costBasis) / costBasis) * 100) : 0;
+      position.holding_cost_basis_cny = costBasis;
+      recalculateHoldingMetricsFromCostBasis(position, { amount: reconciledAmount });
     }
     position.last_confirmed_nav = round(currentNetValue, 4);
     position.last_confirmed_nav_date =

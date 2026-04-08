@@ -1,8 +1,6 @@
 import { resolveFundQuoteSessionMode } from "./fund_market_session_policy.mjs";
 
-function round(value, digits = 2) {
-  return Number(Number(value ?? 0).toFixed(digits));
-}
+import { round } from "./format_utils.mjs";
 
 function toNumberOrNull(value, digits = 2) {
   const numeric = Number(value);
@@ -17,6 +15,10 @@ function isSameDate(left, right) {
 
 function isSameText(left, right) {
   return String(left ?? "").trim() !== "" && String(left ?? "").trim() === String(right ?? "").trim();
+}
+
+function isSnapshotFreshForAccounting(snapshotDate = null, today = null) {
+  return isSameText(snapshotDate, today);
 }
 
 function resolveQuoteMode({
@@ -69,6 +71,9 @@ export function resolveValuationLabel({ quoteFresh = false, quoteMode = null } =
   if (resolvedMode === "live_estimate") {
     return "盘中估值";
   }
+  if (resolvedMode === "reference_only") {
+    return "最近确认净值";
+  }
   if (resolvedMode === "close_reference" || resolvedMode === "today_close") {
     return "收盘参考";
   }
@@ -85,6 +90,13 @@ export function resolveQuoteStatusDisplay({
   if (resolvedMode === "live_estimate") {
     return {
       text: "盘中估值",
+      tone: "flat"
+    };
+  }
+
+  if (resolvedMode === "reference_only") {
+    return {
+      text: "参考涨跌",
       tone: "flat"
     };
   }
@@ -160,9 +172,22 @@ export function deriveEstimatedPnlDisplay({
   updateTime = null,
   intradayChangePct = null,
   estimatedDailyPnl = null,
+  referenceChangePct = null,
+  referenceDailyPnl = null,
+  observationKind = null,
   sessionPolicy = null,
   now = new Date()
 } = {}) {
+  if (observationKind === "reference_only") {
+    return {
+      quoteFresh: false,
+      quoteCurrent: false,
+      quoteMode: "reference_only",
+      displayedChangePct: toNumberOrNull(referenceChangePct),
+      displayedDailyPnl: toNumberOrNull(referenceDailyPnl)
+    };
+  }
+
   const quoteMode = resolveQuoteMode({ quoteDate, today, updateTime, sessionPolicy, now });
   const quoteFresh = quoteMode === "live_estimate";
   const quoteCurrent = quoteMode === "live_estimate" || quoteMode === "close_reference";
@@ -244,9 +269,17 @@ export function shouldApplyEstimatedPnlOverlay(
   quoteDate = null,
   today = null,
   updateTime = null,
-  { useConfirmedSnapshotDisplay = false, sessionPolicy = null, now = new Date() } = {}
+  { useConfirmedSnapshotDisplay = false, sessionPolicy = null, now = new Date(), observationKind = null } = {}
 ) {
   if (useConfirmedSnapshotDisplay) {
+    return false;
+  }
+
+  if (observationKind === "reference_only") {
+    return false;
+  }
+
+  if (!isSnapshotFreshForAccounting(snapshotDate, today)) {
     return false;
   }
 
@@ -265,6 +298,33 @@ export function shouldApplyEstimatedPnlOverlay(
 }
 
 export function summarizeTodayPnl(rows = [], totalFundAssetsRaw = 0) {
+  const currentRows = rows.filter(
+    (row) =>
+      row?.accountingOverlayAllowed !== false &&
+      row?.snapshotFreshForAccounting !== false &&
+      (row?.quoteCurrent === true || (row?.quoteCurrent === undefined && row?.quoteFresh === true)) &&
+      Number.isFinite(Number(row?.estimatedPnl))
+  );
+
+  if (currentRows.length === 0) {
+    return {
+      estimatedDailyPnl: null,
+      estimatedDailyPnlRatePct: null
+    };
+  }
+
+  const estimatedDailyPnlRaw = currentRows.reduce((sum, row) => sum + Number(row?.estimatedPnl ?? 0), 0);
+
+  return {
+    estimatedDailyPnl: toNumberOrNull(estimatedDailyPnlRaw),
+    estimatedDailyPnlRatePct:
+      Number(totalFundAssetsRaw) > 0
+        ? toNumberOrNull((estimatedDailyPnlRaw / Number(totalFundAssetsRaw)) * 100)
+        : null
+  };
+}
+
+export function summarizeObservationTodayPnl(rows = [], totalFundAssetsRaw = 0) {
   const currentRows = rows.filter(
     (row) =>
       (row?.quoteCurrent === true || (row?.quoteCurrent === undefined && row?.quoteFresh === true)) &&

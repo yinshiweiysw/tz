@@ -77,6 +77,16 @@ function resolveReferenceTime(planDate, hasDateOverride) {
   return new Date();
 }
 
+function resolvePlanningDate({ explicitDate, portfolioState }) {
+  return String(
+    explicitDate ||
+      portfolioState?.strategy_effective_date ||
+      portfolioState?.materialization?.reference_date ||
+      portfolioState?.snapshot_date ||
+      currentShanghaiDate()
+  ).slice(0, 10);
+}
+
 function summarizeSignalDates(regimeSignals) {
   const candidates = Object.values(regimeSignals?.signals ?? {})
     .map(
@@ -89,6 +99,17 @@ function summarizeSignalDates(regimeSignals) {
     .sort((left, right) => right.getTime() - left.getTime());
 
   return candidates[0] ?? null;
+}
+
+function summarizePortfolioStateTimestamp(portfolioState) {
+  return (
+    parseDateOnlyAtShanghaiClose(
+      portfolioState?.strategy_effective_date ??
+        portfolioState?.materialization?.reference_date ??
+        portfolioState?.snapshot_date ??
+        null
+    ) ?? parseTimestamp(portfolioState?.generated_at)
+  );
 }
 
 function resolveArtifactFreshness({
@@ -181,6 +202,98 @@ function buildFatalMessage(details) {
   return `🚨 致命风控拦截：底层量化信号已过期 (滞后 > 48小时)！为防止实盘盲下，已强制终止交易预案生成！${detailBlock}`;
 }
 
+function deriveSignalBlockingState(regimeSignals) {
+  const upstreamErrors = Array.isArray(regimeSignals?.errors) ? regimeSignals.errors : [];
+  const reasons = upstreamErrors
+    .map((item) => {
+      const symbol = String(item?.symbol ?? "").trim();
+      const message = String(item?.message ?? "").trim();
+      if (!symbol && !message) {
+        return "";
+      }
+      return symbol ? `${symbol}: ${message || "unknown upstream signal error"}` : message;
+    })
+    .filter(Boolean);
+
+  return {
+    blocked: reasons.length > 0,
+    planState: reasons.length > 0 ? "blocked_market_data" : "ready",
+    reasons,
+  };
+}
+
+function buildBlockedTradePlanPayload({
+  planDate,
+  accountId,
+  paths,
+  portfolioStateView,
+  riskBudget,
+  macroState,
+  regimeSignals,
+  blockingReasons,
+}) {
+  const generatedAt = new Date().toISOString();
+  return {
+    version: 3,
+    account_id: accountId,
+    plan_date: planDate,
+    generated_at: generatedAt,
+    layer_role: "trade_planner_v6_dual_track",
+    source: {
+      portfolio_snapshot: portfolioStateView.sourcePath ?? paths.portfolioStatePath,
+      portfolio_snapshot_source_kind: portfolioStateView.sourceKind ?? "unknown",
+      account_context: paths.accountContextPath,
+      watchlist: paths.watchlistPath,
+      asset_master: paths.assetMasterPath,
+      macro_state: paths.macroStatePath,
+      regime_router_signals: paths.regimeSignalsPath,
+    },
+    risk_budget: riskBudget ?? {},
+    macro_snapshot: {
+      one_liner: "上游市场数据存在硬错误，今日交易计划已被风控阻断。",
+      hs300_erp_pct: macroState?.factors?.hs300_erp?.value_pct ?? null,
+      cn_10y_yield_pct: macroState?.cn_10y_cgb_yield?.value_pct ?? null,
+    },
+    summary: {
+      plan_state: "blocked_market_data",
+      actionable_trade_count: 0,
+      suppressed_trade_count: 0,
+      gross_buy_cny: 0,
+      gross_sell_cny: 0,
+      net_cash_impact_cny: 0,
+    },
+    trades: [],
+    suppressed: [],
+    upstream_signal_errors: Array.isArray(regimeSignals?.errors) ? regimeSignals.errors : [],
+    blocking_reasons: blockingReasons,
+  };
+}
+
+function renderBlockedTradePlanMarkdown({ planDate, blockingReasons }) {
+  const reasons = Array.isArray(blockingReasons) ? blockingReasons : [];
+  const lines = [
+    `# ${planDate || "Next"} Trade Plan`,
+    "",
+    "## 状态",
+    "",
+    "- 交易计划已阻断：上游市场数据不可用，系统按 fail-closed 停止生成实盘指令。",
+    "",
+    "## 阻断原因",
+    "",
+  ];
+
+  if (reasons.length === 0) {
+    lines.push("- 未提供详细原因。");
+  } else {
+    for (const reason of reasons) {
+      lines.push(`- ${reason}`);
+    }
+  }
+
+  lines.push("", "## 执行结果", "", "- 今日不生成任何买卖指令。", "");
+  return lines.join("\n");
+}
+
 async function main() {
   const options = parseArgs(args);
   const portfolioRoot = resolvePortfolioRoot(options);
@@ -199,18 +312,17 @@ async function main() {
     readJsonOrNull(paths.speculativePlanPath)
   ]);
 
-  const planDate = String(options.date || portfolioState?.snapshot_date || currentShanghaiDate()).slice(0, 10);
+  const planDate = resolvePlanningDate({
+    explicitDate: options.date,
+    portfolioState
+  });
   const referenceTime = resolveReferenceTime(planDate, Boolean(options.date));
   const freshnessItems = [
     resolveArtifactFreshness({
       label: "portfolio_snapshot",
       payload: portfolioState,
-      generatedAt:
-        parseDateOnlyAtShanghaiClose(portfolioState?.snapshot_date) ??
-        parseTimestamp(portfolioState?.generated_at),
-      effectiveTimestamp:
-        parseDateOnlyAtShanghaiClose(portfolioState?.snapshot_date) ??
-        parseTimestamp(portfolioState?.generated_at)
+      generatedAt: summarizePortfolioStateTimestamp(portfolioState),
+      effectiveTimestamp: summarizePortfolioStateTimestamp(portfolioState)
     }),
     resolveArtifactFreshness({
       label: "macro_state",
@@ -273,6 +385,41 @@ async function main() {
 
   await mkdir(path.dirname(outputJsonPath), { recursive: true });
   await mkdir(path.dirname(reportPath), { recursive: true });
+
+  const signalBlocking = deriveSignalBlockingState(regimeSignals);
+  if (signalBlocking.blocked) {
+    const blockedPayload = buildBlockedTradePlanPayload({
+      planDate,
+      accountId,
+      paths,
+      portfolioStateView,
+      riskBudget: regimeSignals?.risk_budget ?? {},
+      macroState,
+      regimeSignals,
+      blockingReasons: signalBlocking.reasons,
+    });
+    const blockedMarkdown = renderBlockedTradePlanMarkdown({
+      planDate,
+      blockingReasons: signalBlocking.reasons,
+    });
+    const enhancedPayload = buildDualTradePlanPayload({
+      corePayload: blockedPayload,
+      speculativePlan,
+      opportunityPool: opportunityPool ?? {}
+    });
+    const enhancedMarkdown = renderDualTradePlanMarkdown({
+      planDate,
+      coreMarkdown: blockedMarkdown,
+      speculativePlan,
+      opportunitySummary: buildOpportunitySummary(opportunityPool ?? {})
+    });
+
+    await Promise.all([
+      writeFile(outputJsonPath, `${JSON.stringify(enhancedPayload, null, 2)}\n`, "utf8"),
+      writeFile(reportPath, `${enhancedMarkdown.trimEnd()}\n`, "utf8")
+    ]);
+    return;
+  }
 
   const tradeGeneratorPath = buildPortfolioPath(workspaceRoot, "portfolio", "scripts", "trade_generator.py");
   const commandArgs = [

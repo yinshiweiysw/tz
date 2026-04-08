@@ -8,6 +8,7 @@ import {
   readManifestState,
   updateManifestCanonicalEntrypoints
 } from "./manifest_state.mjs";
+import { buildPortfolioPath, defaultPortfolioRoot } from "./account_root.mjs";
 import { buildPortfolioStatePaths } from "./portfolio_state_view.mjs";
 
 test("updateManifestCanonicalEntrypoints preserves newer disk entries while applying requested updates", async () => {
@@ -147,4 +148,33 @@ test("updateManifestCanonicalEntrypoints keeps latest alias keys aligned when la
   assert.equal(updated.canonical_entrypoints.latest_snapshot, "/reports/legacy-latest-next.json");
   assert.equal(persisted.canonical_entrypoints.latest_compat_view, "/reports/legacy-latest-next.json");
   assert.equal(persisted.canonical_entrypoints.latest_snapshot, "/reports/legacy-latest-next.json");
+});
+
+test("updateManifestCanonicalEntrypoints repairs temporary market lake paths back to the canonical repo db", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "manifest-state-market-lake-"));
+  const manifestPath = path.join(tempDir, "state-manifest.json");
+
+  await writeFile(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        canonical_entrypoints: {
+          market_lake_db: "/var/folders/demo/T/market-lake-schema-temp/market_lake.db"
+        }
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  const updated = await updateManifestCanonicalEntrypoints({
+    manifestPath,
+    entries: {}
+  });
+
+  assert.equal(
+    updated.canonical_entrypoints.market_lake_db,
+    buildPortfolioPath(defaultPortfolioRoot, "data", "market_lake.db")
+  );
 });

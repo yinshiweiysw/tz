@@ -24,9 +24,10 @@ function readResearchOrderText(researchDecision = {}) {
 }
 
 function isRiskIncreasingTrade(trade = {}) {
-  return String(trade?.type ?? "")
+  const normalizedType = String(trade?.type ?? "")
     .trim()
-    .toLowerCase() === "buy";
+    .toLowerCase();
+  return normalizedType === "buy" || normalizedType === "conversion";
 }
 
 export function evaluateExecutionPermission({
@@ -87,4 +88,3 @@ export function evaluateExecutionPermission({
     researchTradePermission: tradePermission
   };
 }
-

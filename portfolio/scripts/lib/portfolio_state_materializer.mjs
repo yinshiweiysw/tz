@@ -3,8 +3,19 @@ import path from "node:path";
 
 import { buildPortfolioPath, defaultPortfolioRoot } from "./account_root.mjs";
 import { writeJsonAtomic } from "./atomic_json_state.mjs";
+import { round } from "./format_utils.mjs";
+import {
+  applyBuyToHoldingCostBasis,
+  applySellToHoldingCostBasis,
+  ensureHoldingCostBasis,
+  recalculateHoldingMetricsFromCostBasis,
+  resolveHoldingCostBasis,
+  transferConversionHoldingCostBasis
+} from "./holding_cost_basis.mjs";
 import { summarizeLedgerEntryLifecycles } from "./trade_lifecycle.mjs";
 import { nextTradingDay, secondTradingDay } from "./trading_calendar.mjs";
+
+export { round };
 
 export function nowIso() {
   return new Date().toISOString();
@@ -17,10 +28,6 @@ export function formatShanghaiDate(date = new Date()) {
     month: "2-digit",
     day: "2-digit"
   }).format(date);
-}
-
-export function round(value, digits = 2) {
-  return Number(Number(value ?? 0).toFixed(digits));
 }
 
 export function compareDateStrings(left, right) {
@@ -100,6 +107,69 @@ function inferCategoryFromName(name) {
     return "日本股市/QDII";
   }
   return "未分类";
+}
+
+const CASH_LIKE_CATEGORY_SET = new Set(["偏债混合", "债券", "货币"]);
+
+function isCashLikePosition(position) {
+  const executionType = String(position?.execution_type ?? "OTC").toUpperCase();
+  const bucket = String(position?.bucket ?? "").trim().toUpperCase();
+  const category = String(position?.category ?? "").trim();
+  const name = String(position?.name ?? "").trim();
+
+  if (executionType !== "OTC") {
+    return false;
+  }
+
+  return (
+    bucket === "CASH" ||
+    CASH_LIKE_CATEGORY_SET.has(category) ||
+    /债券|短债|货币|恒信债|宁景/u.test(name)
+  );
+}
+
+function isLiquiditySleevePosition(position) {
+  const bucket = String(position?.bucket ?? "").trim().toUpperCase();
+  return bucket === "CASH" || isCashLikePosition(position);
+}
+
+function deriveCashSemantics({
+  positions = [],
+  summary = {},
+  cashLedger = {},
+  availableCash = 0
+} = {}) {
+  const settledCashCny = round(Number(availableCash ?? 0));
+  const frozenCashCny = round(
+    Number(cashLedger?.frozen_cash_cny ?? summary?.frozen_cash_cny ?? 0)
+  );
+  const cashReserveCny = round(
+    Number(
+      cashLedger?.cash_reserve_override_cny ??
+        cashLedger?.cash_reserve_cny ??
+        summary?.cash_reserve_cny ??
+        0
+    )
+  );
+  const cashLikeFundAssetsCny = round(
+    positions
+      .filter((item) => item?.status === "active" && isCashLikePosition(item))
+      .reduce((sum, item) => sum + Number(item?.amount ?? 0), 0)
+  );
+  const liquiditySleeveAssetsCny = round(
+    positions
+      .filter((item) => item?.status === "active" && isLiquiditySleevePosition(item))
+      .reduce((sum, item) => sum + Number(item?.amount ?? 0), 0)
+  );
+
+  return {
+    settledCashCny,
+    tradeAvailableCashCny: round(Math.max(settledCashCny - frozenCashCny - cashReserveCny, 0)),
+    cashLikeFundAssetsCny,
+    liquiditySleeveAssetsCny,
+    frozenCashCny,
+    cashReserveCny
+  };
 }
 
 export function parseAmount(value) {
@@ -395,14 +465,8 @@ export async function ensureMaterializationFiles({
   }
 
   if (!(await fileExists(paths.portfolioStatePath))) {
-    await writeJson(paths.portfolioStatePath, {
-      schema_version: 1,
-      account_id: accountId,
-      generated_at: nowIso(),
-      status: "awaiting_materialization"
-    });
     changes.push({
-      action: "created_portfolio_state_placeholder",
+      action: "portfolio_state_missing_requires_materialization",
       path: paths.portfolioStatePath
     });
   }
@@ -413,6 +477,13 @@ export async function ensureMaterializationFiles({
 }
 
 function recalcRate(position) {
+  if (ensureHoldingCostBasis(position) !== null) {
+    recalculateHoldingMetricsFromCostBasis(position, {
+      amount: Number(position.amount ?? 0)
+    });
+    return position;
+  }
+
   const amount = Number(position.amount ?? 0);
   const pnl = Number(position.holding_pnl ?? 0);
   const estimatedCost = amount - pnl;
@@ -438,6 +509,7 @@ function ensureActivePosition(positions, name, normalized = {}) {
     daily_pnl: 0,
     holding_pnl: 0,
     holding_pnl_rate_pct: 0,
+    holding_cost_basis_cny: 0,
     category: normalized?.category ?? inferCategoryFromName(name),
     status: "active",
     execution_type: normalized?.execution_type ?? "OTC"
@@ -487,6 +559,7 @@ function ensureExchangePosition(positions, normalized = {}) {
 function applyBuy(positions, entry) {
   const normalized = entry?.normalized ?? {};
   const executionType = String(normalized?.execution_type ?? "OTC").toUpperCase();
+  const skipHoldingCostBasis = entry?.skipHoldingCostBasis === true;
 
   if (executionType === "EXCHANGE") {
     const position = ensureExchangePosition(positions, normalized);
@@ -541,6 +614,9 @@ function applyBuy(positions, entry) {
 
   const position = ensureActivePosition(positions, name, normalized);
   position.amount = round(Number(position.amount ?? 0) + amount);
+  if (!skipHoldingCostBasis) {
+    applyBuyToHoldingCostBasis(position, amount);
+  }
   position.status = "active";
   position.category = position.category ?? normalized?.category ?? inferCategoryFromName(name);
   position.dialogue_merge_status = "materialized_from_execution_ledger";
@@ -565,6 +641,7 @@ function applyBuy(positions, entry) {
 function applySell(positions, entry) {
   const normalized = entry?.normalized ?? {};
   const executionType = String(normalized?.execution_type ?? "OTC").toUpperCase();
+  const skipHoldingCostBasis = entry?.skipHoldingCostBasis === true;
 
   if (executionType === "EXCHANGE") {
     const position = ensureExchangePosition(positions, normalized);
@@ -583,6 +660,7 @@ function applySell(positions, entry) {
     const newShares = Math.max(oldShares - actualQuantity, 0);
     const newSellable = settlementRule === "T+0" ? newShares : Math.max(oldSellable - actualQuantity, 0);
     const amount = round(Number(normalized?.actual_notional_cny ?? actualQuantity * avgPrice));
+    const previousAmount = round(Number(position.amount ?? 0));
 
     position.amount = newShares > 0 ? round(newShares * avgPrice) : 0;
     position.shares = newShares;
@@ -593,7 +671,7 @@ function applySell(positions, entry) {
 
     if (newShares === 0) {
       position.status = "user_confirmed_sold";
-      position.last_seen_amount = round(Number(position.amount ?? 0) + amount);
+      position.last_seen_amount = previousAmount;
       position.sold_confirmed_by_user_on = entry?.effective_trade_date ?? null;
       position.daily_pnl = 0;
       position.holding_pnl = 0;
@@ -640,9 +718,21 @@ function applySell(positions, entry) {
 
   const remaining = Math.max(round(previousAmount - amount), 0);
   const factor = previousAmount > 0 ? remaining / previousAmount : 0;
+  if (!skipHoldingCostBasis) {
+    if (entryReflectsTradeInRawSnapshot(entry)) {
+      const currentCostBasis = resolveHoldingCostBasis(position);
+      if (currentCostBasis !== null) {
+        position.holding_cost_basis_cny = round(Math.max(currentCostBasis - amount, 0));
+      }
+    } else {
+      applySellToHoldingCostBasis(position, {
+        soldAmount: amount,
+        previousAmount
+      });
+    }
+  }
   position.amount = remaining;
   position.daily_pnl = round(Number(position.daily_pnl ?? 0) * factor);
-  position.holding_pnl = round(Number(position.holding_pnl ?? 0) * factor);
   position.dialogue_merge_status = "materialized_from_execution_ledger";
 
   if (remaining === 0) {
@@ -670,10 +760,42 @@ function applyConversion(positions, entry) {
   const normalized = entry?.normalized ?? {};
   const results = [];
 
+  if (String(normalized?.execution_type ?? "OTC").toUpperCase() !== "EXCHANGE") {
+    const fromName = String(normalized?.from_fund_name ?? "").trim();
+    const toName = String(normalized?.to_fund_name ?? "").trim();
+    const fromAmount = round(Number(normalized?.from_amount_cny ?? 0));
+    const toAmount = round(Number(normalized?.to_amount_cny ?? 0));
+    const fromPosition = fromName ? ensureActivePosition(positions, fromName, normalized) : null;
+    const toPosition = toName
+      ? ensureActivePosition(positions, toName, {
+          ...normalized,
+          fund_name: toName,
+          category: inferCategoryFromName(toName)
+        })
+      : null;
+
+    if (fromPosition && fromAmount > 0) {
+      ensureHoldingCostBasis(fromPosition);
+    }
+    if (toPosition) {
+      ensureHoldingCostBasis(toPosition);
+    }
+
+    if (fromPosition && toPosition && toAmount > 0) {
+      transferConversionHoldingCostBasis({
+        fromPosition,
+        toPosition,
+        fromAmount,
+        toAmount
+      });
+    }
+  }
+
   if (normalized?.from_fund_name && Number(normalized?.from_amount_cny ?? 0) > 0) {
     results.push(
       applySell(positions, {
         ...entry,
+        skipHoldingCostBasis: true,
         normalized: {
           fund_name: normalized.from_fund_name,
           amount_cny: normalized.from_amount_cny
@@ -686,6 +808,7 @@ function applyConversion(positions, entry) {
     results.push(
       applyBuy(positions, {
         ...entry,
+        skipHoldingCostBasis: true,
         normalized: {
           fund_name: normalized.to_fund_name,
           amount_cny: normalized.to_amount_cny,
@@ -763,6 +886,73 @@ function computeExposureSummary(positions) {
     commodity_weight_pct:
       totalFundAssets > 0 ? round((exposure.commodity_amount / totalFundAssets) * 100) : 0
   };
+}
+
+function buildOtcCompatibilityView(portfolioState) {
+  const otcPositions = cloneJson(
+    (portfolioState?.positions ?? []).filter(
+      (item) => String(item?.execution_type ?? "OTC").toUpperCase() !== "EXCHANGE" && item?.status === "active"
+    )
+  );
+  const otcPendingPositions = cloneJson(
+    (portfolioState?.pending_profit_effective_positions ?? []).filter(
+      (item) => String(item?.execution_type ?? "OTC").toUpperCase() !== "EXCHANGE"
+    )
+  );
+  const totalFundAssets = round(otcPositions.reduce((sum, item) => sum + Number(item?.amount ?? 0), 0));
+  const pendingBuyConfirm = round(otcPendingPositions.reduce((sum, item) => sum + Number(item?.amount ?? 0), 0));
+  const totalDailyPnl = round(otcPositions.reduce((sum, item) => sum + Number(item?.daily_pnl ?? 0), 0));
+  const totalHoldingPnl = round(otcPositions.reduce((sum, item) => sum + Number(item?.holding_pnl ?? 0), 0));
+  const pendingSellToArrive = round(Number(portfolioState?.summary?.pending_sell_to_arrive ?? 0));
+  const availableCash = round(
+    Number(portfolioState?.cash_ledger?.available_cash_cny ?? portfolioState?.summary?.available_cash_cny ?? 0)
+  );
+  const cashSemantics = deriveCashSemantics({
+    positions: otcPositions,
+    summary: portfolioState?.summary ?? {},
+    cashLedger: portfolioState?.cash_ledger ?? {},
+    availableCash
+  });
+
+  const latestCompat = cloneJson(portfolioState);
+  latestCompat.positions = otcPositions;
+  latestCompat.pending_profit_effective_positions = otcPendingPositions;
+  latestCompat.summary = {
+    ...(cloneJson(portfolioState?.summary) ?? {}),
+    total_fund_assets: totalFundAssets,
+    pending_buy_confirm: pendingBuyConfirm,
+    effective_exposure_after_pending_sell: totalFundAssets,
+    yesterday_profit: totalDailyPnl,
+    holding_profit: totalHoldingPnl,
+    unrealized_holding_profit_cny: totalHoldingPnl,
+    settled_cash_cny: cashSemantics.settledCashCny,
+    trade_available_cash_cny: cashSemantics.tradeAvailableCashCny,
+    cash_like_fund_assets_cny: cashSemantics.cashLikeFundAssetsCny,
+    liquidity_sleeve_assets_cny: cashSemantics.liquiditySleeveAssetsCny,
+    total_portfolio_assets_cny: round(totalFundAssets + availableCash + pendingBuyConfirm + pendingSellToArrive),
+  };
+  latestCompat.performance_snapshot = {
+    ...(cloneJson(portfolioState?.performance_snapshot) ?? {}),
+    daily_mark_to_market_profit_cny: totalDailyPnl,
+    unrealized_holding_profit_cny: totalHoldingPnl,
+    pending_profit_effective_cny: pendingBuyConfirm,
+    settled_cash_cny: cashSemantics.settledCashCny,
+    projected_settled_cash_cny: round(availableCash + pendingSellToArrive),
+    trade_available_cash_cny: cashSemantics.tradeAvailableCashCny,
+    cash_like_fund_assets_cny: cashSemantics.cashLikeFundAssetsCny,
+    liquidity_sleeve_assets_cny: cashSemantics.liquiditySleeveAssetsCny,
+  };
+  latestCompat.exposure_summary = computeExposureSummary(otcPositions);
+  latestCompat.compatibility_view = {
+    source: "portfolio_state_materializer",
+    generated_at: nowIso(),
+    scope: "otc_only",
+    excluded_exchange_positions: (portfolioState?.positions ?? []).filter(
+      (item) => String(item?.execution_type ?? "OTC").toUpperCase() === "EXCHANGE"
+    ).length,
+    excluded_non_active_positions: (portfolioState?.positions ?? []).filter((item) => item?.status !== "active").length,
+  };
+  return latestCompat;
 }
 
 function buildPendingPosition(entry) {
@@ -887,12 +1077,15 @@ function findRawPositionForLedgerFund(positions, normalized = {}) {
 function adjustPositionForRawUnwind(position, targetAmount) {
   const previousAmount = round(Number(position?.amount ?? 0));
   const nextAmount = Math.max(round(Number(targetAmount ?? 0)), 0);
+  const deltaAmount = round(nextAmount - previousAmount);
+  const currentCostBasis = resolveHoldingCostBasis(position);
   position.amount = nextAmount;
 
+  if (currentCostBasis !== null && deltaAmount !== 0) {
+    position.holding_cost_basis_cny = round(Math.max(currentCostBasis + deltaAmount, 0));
+  }
+
   if (previousAmount > 0 && nextAmount > 0) {
-    const factor = nextAmount / previousAmount;
-    position.daily_pnl = round(Number(position.daily_pnl ?? 0) * factor);
-    position.holding_pnl = round(Number(position.holding_pnl ?? 0) * factor);
     recalcRate(position);
     return;
   }
@@ -901,6 +1094,7 @@ function adjustPositionForRawUnwind(position, targetAmount) {
     position.daily_pnl = 0;
     position.holding_pnl = 0;
     position.holding_pnl_rate_pct = 0;
+    position.holding_cost_basis_cny = 0;
     return;
   }
 
@@ -945,12 +1139,16 @@ function unwindSameDayRawBuyReflection(positions, entry) {
 
   const previousAmount = round(Number(position.amount ?? 0));
   const adjustedAmount = Math.max(round(previousAmount - amount), 0);
-
   position.amount = adjustedAmount;
+  const currentCostBasis = resolveHoldingCostBasis(position);
+  if (currentCostBasis !== null) {
+    position.holding_cost_basis_cny = round(Math.max(currentCostBasis - amount, 0));
+  }
   if (adjustedAmount <= 0) {
     position.daily_pnl = 0;
     position.holding_pnl = 0;
     position.holding_pnl_rate_pct = 0;
+    position.holding_cost_basis_cny = 0;
   } else {
     recalcRate(position);
   }
@@ -1063,6 +1261,7 @@ export function materializePortfolioStateFromInputs({
   const raw = cloneJson(rawSnapshot ?? {});
   const effectiveDate = referenceDate || raw?.snapshot_date || formatShanghaiDate();
   const positions = cloneJson(raw?.positions ?? []);
+  positions.forEach((position) => ensureHoldingCostBasis(position));
   const pendingPositions = [];
   const sortedEntries = sortExecutionEntries(Array.isArray(executionLedger?.entries) ? executionLedger.entries : []);
   const overlayEntries = [];
@@ -1235,10 +1434,24 @@ export function materializePortfolioStateFromInputs({
     dialogue_adjusted_since_last_platform_snapshot: overlayEntries.length > 0,
     last_dialogue_merge_at: lastLedgerRecordedAt ?? rawSummary?.last_dialogue_merge_at ?? null,
     available_cash_cny: availableCash,
-    total_portfolio_assets_cny:
-      rawSummary?.total_portfolio_assets_cny ??
-      round(totalFundAssets + availableCash + pendingBuyConfirm + pendingSellToArrive)
+    settled_cash_cny: 0,
+    trade_available_cash_cny: 0,
+    cash_like_fund_assets_cny: 0,
+    liquidity_sleeve_assets_cny: 0,
+    total_portfolio_assets_cny: round(
+      totalFundAssets + availableCash + pendingBuyConfirm + pendingSellToArrive
+    )
   };
+  const cashSemantics = deriveCashSemantics({
+    positions,
+    summary,
+    cashLedger: rawCashLedger,
+    availableCash
+  });
+  summary.settled_cash_cny = cashSemantics.settledCashCny;
+  summary.trade_available_cash_cny = cashSemantics.tradeAvailableCashCny;
+  summary.cash_like_fund_assets_cny = cashSemantics.cashLikeFundAssetsCny;
+  summary.liquidity_sleeve_assets_cny = cashSemantics.liquiditySleeveAssetsCny;
 
   const exposureSummary = computeExposureSummary(positions);
   const recognitionNotes = Array.isArray(raw?.recognition_notes) ? [...raw.recognition_notes] : [];
@@ -1257,6 +1470,12 @@ export function materializePortfolioStateFromInputs({
   const cashLedger = {
     ...rawCashLedger,
     available_cash_cny: availableCash,
+    settled_cash_cny: cashSemantics.settledCashCny,
+    trade_available_cash_cny: cashSemantics.tradeAvailableCashCny,
+    cash_like_fund_assets_cny: cashSemantics.cashLikeFundAssetsCny,
+    liquidity_sleeve_assets_cny: cashSemantics.liquiditySleeveAssetsCny,
+    frozen_cash_cny: cashSemantics.frozenCashCny,
+    cash_reserve_cny: cashSemantics.cashReserveCny,
     pending_buy_confirm_cny: pendingBuyConfirm,
     pending_sell_to_arrive_cny: pendingSellToArrive,
     deployed_pending_profit_effective_cny: pendingBuyConfirm,
@@ -1276,8 +1495,11 @@ export function materializePortfolioStateFromInputs({
     cumulative_profit_cny: cumulativeProfit,
     pending_profit_effective_cny: pendingBuyConfirm,
     pending_sell_settlement_cny: pendingSellToArrive,
-    settled_cash_cny: availableCash,
+    settled_cash_cny: cashSemantics.settledCashCny,
     projected_settled_cash_cny: round(availableCash + pendingSellToArrive),
+    trade_available_cash_cny: cashSemantics.tradeAvailableCashCny,
+    cash_like_fund_assets_cny: cashSemantics.cashLikeFundAssetsCny,
+    liquidity_sleeve_assets_cny: cashSemantics.liquiditySleeveAssetsCny,
     accounting_basis: Number.isFinite(cumulativeProfit)
       ? "realized_cumulative_profit_cny = cumulative_profit_cny - unrealized_holding_profit_cny"
       : "unrealized_holding_profit_cny derived from active positions; realized cumulative unavailable because raw summary.cumulative_profit is missing"
@@ -1310,12 +1532,12 @@ export function materializePortfolioStateFromInputs({
     raw_snapshot_meta: cloneJson(raw?.snapshot_meta ?? {}),
     materialization
   };
+  if (overlayEntries.length > 0) {
+    portfolioState.materialization.snapshot_boundary_note =
+      "portfolio_state reflects latest_raw.json plus execution_ledger overlays; latest_raw.json remains the platform/raw snapshot boundary.";
+  }
 
-  const latestCompat = cloneJson(portfolioState);
-  latestCompat.compatibility_view = {
-    source: "portfolio_state_materializer",
-    generated_at: materialization.generated_at
-  };
+  const latestCompat = buildOtcCompatibilityView(portfolioState);
 
   return {
     portfolioState,
@@ -1498,7 +1720,20 @@ export async function materializePortfolioRoot({
     referenceDate: String(referenceDate ?? "").trim() || rawSnapshot?.snapshot_date || formatShanghaiDate(),
     paths
   });
+  const stampedExecutionLedger = cloneJson(executionLedger);
+  stampedExecutionLedger.as_of_snapshot_date = materialized.portfolioState.snapshot_date ?? null;
+  stampedExecutionLedger.updated_at = nowIso();
+  if (materialized.portfolioState?.materialization?.snapshot_boundary_note) {
+    stampedExecutionLedger.notes = Array.isArray(stampedExecutionLedger.notes)
+      ? stampedExecutionLedger.notes
+      : [];
+    const note = materialized.portfolioState.materialization.snapshot_boundary_note;
+    if (!stampedExecutionLedger.notes.includes(note)) {
+      stampedExecutionLedger.notes.push(note);
+    }
+  }
 
+  await writeJson(paths.executionLedgerPath, stampedExecutionLedger);
   await writeJson(paths.portfolioStatePath, materialized.portfolioState);
   await writeJson(paths.latestCompatPath, materialized.latestCompat);
 

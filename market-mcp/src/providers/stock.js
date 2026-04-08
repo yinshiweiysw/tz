@@ -201,6 +201,68 @@ function toNumber(value, scale = 1) {
   return number / scale;
 }
 
+function formatEastmoneyTimestamp(rawValue) {
+  const seconds = Number(rawValue);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return {
+      quoteDate: null,
+      quoteTime: null
+    };
+  }
+
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  });
+
+  const parts = {};
+  for (const part of formatter.formatToParts(new Date(seconds * 1000))) {
+    if (part.type !== "literal") {
+      parts[part.type] = part.value;
+    }
+  }
+
+  const quoteDate = `${parts.year}-${parts.month}-${parts.day}`;
+  const quoteTime = `${quoteDate} ${parts.hour}:${parts.minute}:${parts.second}`;
+  return {
+    quoteDate,
+    quoteTime
+  };
+}
+
+function formatObservedShanghaiDateTime(now = new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  });
+
+  const parts = {};
+  for (const part of formatter.formatToParts(now)) {
+    if (part.type !== "literal") {
+      parts[part.type] = part.value;
+    }
+  }
+
+  const quoteDate = `${parts.year}-${parts.month}-${parts.day}`;
+  const quoteTime = `${quoteDate} ${parts.hour}:${parts.minute}:${parts.second}`;
+  return {
+    quoteDate,
+    quoteTime
+  };
+}
+
 function parseKlineRow(row) {
   const [
     day,
@@ -563,7 +625,7 @@ export async function getStockQuote(stockCode) {
   const { data } = await http.get("https://push2.eastmoney.com/api/qt/stock/get", {
     params: {
       secid,
-      fields: "f43,f44,f45,f46,f47,f48,f57,f58,f60,f169,f170,f171,f168,f162",
+      fields: "f43,f44,f45,f46,f47,f48,f57,f58,f60,f124,f169,f170,f171,f168,f162",
       ut: "fa5fd1943c7b386f172d6893dbfba10b",
       _: Date.now()
     },
@@ -576,6 +638,11 @@ export async function getStockQuote(stockCode) {
   if (!quote) {
     throw new Error(`No quote data returned for ${normalized}`);
   }
+  const eastmoneyDateTime = formatEastmoneyTimestamp(quote.f124);
+  const resolvedDateTime =
+    eastmoneyDateTime.quoteDate && eastmoneyDateTime.quoteTime
+      ? eastmoneyDateTime
+      : formatObservedShanghaiDateTime(new Date());
 
   return {
     stockCode: normalized,
@@ -592,7 +659,9 @@ export async function getStockQuote(stockCode) {
     turnoverRate: toNumber(quote.f168, 100),
     peRatio: toNumber(quote.f162, 100),
     volume: toNumber(quote.f47),
-    amount: toNumber(quote.f48)
+    amount: toNumber(quote.f48),
+    quoteDate: resolvedDateTime.quoteDate,
+    quoteTime: resolvedDateTime.quoteTime
   };
 }
 

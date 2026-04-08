@@ -19,6 +19,15 @@ function normalizeFundCode(value) {
   return normalized || null;
 }
 
+function resolveProjectedFundKey(entry = {}) {
+  const code = normalizeFundCode(entry?.fund_code ?? entry?.code ?? entry?.symbol ?? null);
+  if (code) {
+    return `code:${code}`;
+  }
+  const name = normalizeName(entry?.name ?? entry?.fund_name ?? "");
+  return name ? `name:${name}` : null;
+}
+
 function buildHoldingIndex(positions = []) {
   const index = new Map();
   for (const position of positions) {
@@ -185,16 +194,12 @@ export function evaluateTradePreFlight({
       continue;
     }
 
-    const fundCode = normalizeFundCode(position?.fund_code ?? position?.code ?? position?.symbol ?? null);
-    const fundName = normalizeName(position?.name ?? "");
+    const projectedFundKey = resolveProjectedFundKey(position);
     const bucketKey = resolveTradeBucketKey(assetMaster, position);
     const themeKey = resolveThemeKey(position, bucketKey);
 
-    if (fundCode) {
-      projectedFundAmounts.set(`code:${fundCode}`, amount);
-    }
-    if (fundName) {
-      projectedFundAmounts.set(`name:${fundName}`, amount);
+    if (projectedFundKey) {
+      projectedFundAmounts.set(projectedFundKey, amount);
     }
     if (themeKey) {
       projectedThemeAmounts.set(themeKey, safeNumber(projectedThemeAmounts.get(themeKey), 0) + amount);
@@ -269,8 +274,7 @@ export function evaluateTradePreFlight({
     );
 
     const themeKey = resolveThemeKey(trade, bucketKey);
-    const fundCode = normalizeFundCode(trade?.fund_code ?? trade?.code ?? trade?.symbol ?? null);
-    const fundName = normalizeName(trade?.name ?? trade?.fund_name ?? "");
+    const projectedFundKey = resolveProjectedFundKey(trade);
     const nextFundAmount = Math.max(
       0,
       currentHolding +
@@ -281,11 +285,8 @@ export function evaluateTradePreFlight({
       safeNumber(projectedThemeAmounts.get(themeKey), 0) + defaultBucketDelta(trade)
     );
 
-    if (fundCode) {
-      projectedFundAmounts.set(`code:${fundCode}`, nextFundAmount);
-    }
-    if (fundName) {
-      projectedFundAmounts.set(`name:${fundName}`, nextFundAmount);
+    if (projectedFundKey) {
+      projectedFundAmounts.set(projectedFundKey, nextFundAmount);
     }
     if (themeKey) {
       projectedThemeAmounts.set(themeKey, nextThemeAmount);

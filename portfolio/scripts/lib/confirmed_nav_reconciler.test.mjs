@@ -34,7 +34,7 @@ test("computeConfirmedDailyPnl falls back to implied units when stored confirmed
   assert.equal(pnl, 996.81);
 });
 
-test("reconcileRawSnapshotWithConfirmedQuotes upgrades legacy identity, stores confirmed units, and rewrites summary totals", () => {
+test("reconcileRawSnapshotWithConfirmedQuotes upgrades legacy identity without inferring missing confirmed units and rewrites summary totals", () => {
   const rawSnapshot = {
     snapshot_date: "2026-04-01",
     summary: {
@@ -86,7 +86,7 @@ test("reconcileRawSnapshotWithConfirmedQuotes upgrades legacy identity, stores c
   assert.equal(position.symbol, "023764");
   assert.equal(position.fund_code, "023764");
   assert.equal(position.name, "华夏恒生互联网科技业ETF联接(QDII)D");
-  assert.ok(Number(position.confirmed_units) > 0);
+  assert.equal(position.confirmed_units, null);
   assert.equal(result.rawSnapshot.summary.total_fund_assets, position.amount);
   assert.equal(
     result.rawSnapshot.summary.total_portfolio_assets_cny,
@@ -164,7 +164,7 @@ test("reconcileRawSnapshotWithConfirmedQuotes partially updates confirmed funds 
 
   assert.equal(result.rawSnapshot.snapshot_date, "2026-04-02");
   assert.equal(result.rawSnapshot.positions[0].amount, 100);
-  assert.equal(result.rawSnapshot.positions[0].daily_pnl, 0.99);
+  assert.equal(result.rawSnapshot.positions[0].daily_pnl, 1);
   assert.equal(result.rawSnapshot.positions[1].amount, 200);
   assert.deepEqual(result.stats.stalePositions, [
     {
@@ -178,6 +178,110 @@ test("reconcileRawSnapshotWithConfirmedQuotes partially updates confirmed funds 
   assert.equal(result.stats.fullyConfirmedForDate, false);
   assert.equal(result.stats.updatedPositions, 1);
   assert.equal(result.stats.lateMissingFundCount, 1);
+});
+
+test("reconcileRawSnapshotWithConfirmedQuotes does not infer confirmed_units from current net value on first reconciliation", () => {
+  const rawSnapshot = {
+    snapshot_date: "2026-04-01",
+    summary: {
+      total_fund_assets: 10000,
+      effective_exposure_after_pending_sell: 10000,
+      yesterday_profit: 0,
+      holding_profit: 0,
+      available_cash_cny: 1000,
+      total_portfolio_assets_cny: 11000
+    },
+    cash_ledger: {
+      available_cash_cny: 1000
+    },
+    positions: [
+      {
+        name: "测试基金A",
+        code: "000001",
+        symbol: "000001",
+        fund_code: "000001",
+        amount: 10000,
+        holding_pnl: 0,
+        daily_pnl: 0,
+        status: "active",
+        execution_type: "OTC"
+      }
+    ],
+    recognition_notes: []
+  };
+
+  const result = reconcileRawSnapshotWithConfirmedQuotes({
+    rawSnapshot,
+    quotes: [
+      {
+        code: "000001",
+        name: "测试基金A",
+        netValueDate: "2026-04-02",
+        netValue: 2.1,
+        growthRate: 5
+      }
+    ],
+    asOfDate: "2026-04-02"
+  });
+
+  const position = result.rawSnapshot.positions[0];
+  assert.equal(position.confirmed_units, null);
+  assert.equal(position.amount, 10000);
+  assert.equal(position.daily_pnl, 500);
+});
+
+test("reconcileRawSnapshotWithConfirmedQuotes uses durable holding_cost_basis_cny instead of zero-locked holding_pnl", () => {
+  const rawSnapshot = {
+    snapshot_date: "2026-04-01",
+    summary: {
+      total_fund_assets: 10000,
+      effective_exposure_after_pending_sell: 10000,
+      yesterday_profit: 0,
+      holding_profit: 0,
+      available_cash_cny: 1000,
+      total_portfolio_assets_cny: 11000
+    },
+    cash_ledger: {
+      available_cash_cny: 1000
+    },
+    positions: [
+      {
+        name: "测试基金A",
+        code: "000001",
+        symbol: "000001",
+        fund_code: "000001",
+        amount: 10000,
+        holding_pnl: 0,
+        holding_pnl_rate_pct: 0,
+        holding_cost_basis_cny: 9000,
+        confirmed_units: 5000,
+        daily_pnl: 0,
+        status: "active",
+        execution_type: "OTC"
+      }
+    ],
+    recognition_notes: []
+  };
+
+  const result = reconcileRawSnapshotWithConfirmedQuotes({
+    rawSnapshot,
+    quotes: [
+      {
+        code: "000001",
+        name: "测试基金A",
+        netValueDate: "2026-04-02",
+        netValue: 2.2,
+        growthRate: 10
+      }
+    ],
+    asOfDate: "2026-04-02"
+  });
+
+  const position = result.rawSnapshot.positions[0];
+  assert.equal(position.amount, 11000);
+  assert.equal(position.holding_cost_basis_cny, 9000);
+  assert.equal(position.holding_pnl, 2000);
+  assert.equal(position.holding_pnl_rate_pct, 22.22);
 });
 
 test("reconcileRawSnapshotWithConfirmedQuotes accepts normal US QDII lag without flagging failure", () => {

@@ -6,6 +6,8 @@ import {
   buildResearchDriverLines,
   buildResearchFlowRadarLines,
   buildResearchFlowValidationLines,
+  buildResearchGoldFactorLines,
+  buildResearchHeadlineLines,
   buildUnifiedResearchSections,
   flattenResearchSections
 } from "./research_brain_render.mjs";
@@ -31,6 +33,42 @@ test("buildResearchFlowRadarLines renders liquidity regime and summary", () => {
 
   assert.ok(lines.some((line) => line.includes("stress")));
   assert.ok(lines.some((line) => line.includes("偏避险")));
+});
+
+test("buildResearchHeadlineLines renders analysis mode and top headlines", () => {
+  const lines = buildResearchHeadlineLines({
+    analysis_mode: "multi_source_confirmed",
+    top_headlines: [
+      {
+        source: "Reuters",
+        title: "Trump says Iran ceasefire talks continue",
+        published_at: "2026-04-08T09:20:00+08:00"
+      },
+      {
+        source: "WSJ",
+        title: "Ceasefire negotiations reshape risk appetite",
+        published_at: "2026-04-08T09:18:00+08:00"
+      }
+    ]
+  });
+
+  assert.ok(lines.some((line) => line.includes("multi_source_confirmed")));
+  assert.ok(lines.some((line) => line.includes("Reuters")));
+  assert.ok(lines.some((line) => line.includes("WSJ")));
+});
+
+test("buildResearchGoldFactorLines renders dominant driver and action bias", () => {
+  const lines = buildResearchGoldFactorLines({
+    dominantGoldDriver: "liquidity_deleveraging",
+    secondaryGoldDrivers: ["headline_geopolitics_overlay"],
+    goldRegime: "forced_liquidation",
+    goldActionBias: "avoid_chasing_dip",
+    goldRiskNotes: ["黄金下跌并非单纯避险失效，更可能是流动性挤兑下的被动卖出。"]
+  });
+
+  assert.ok(lines.some((line) => line.includes("liquidity_deleveraging")));
+  assert.ok(lines.some((line) => line.includes("avoid_chasing_dip")));
+  assert.ok(lines.some((line) => line.includes("流动性挤兑")));
 });
 
 test("buildResearchActionDecisionLines renders blocked trading explicitly", () => {
@@ -129,6 +167,45 @@ test("buildUnifiedResearchSections returns the shared research headings in stabl
       "## Desk Action Conclusion"
     ]
   );
+});
+
+test("buildUnifiedResearchSections adds headline and gold sections when research brain includes them", () => {
+  const sections = buildUnifiedResearchSections({
+    researchBrain: {
+      analysis_mode: "multi_source_confirmed",
+      top_headlines: [
+        {
+          source: "Reuters",
+          title: "Trump says Iran ceasefire talks continue",
+          published_at: "2026-04-08T09:20:00+08:00"
+        }
+      ],
+      gold_factor_model: {
+        dominantGoldDriver: "usd_liquidity_tailwind",
+        secondaryGoldDrivers: ["geopolitics_residual_bid"],
+        goldRegime: "macro_liquidity_bid",
+        goldActionBias: "buy_on_pullback_only",
+        goldRiskNotes: ["美元走弱抬升金价弹性。"]
+      },
+      event_driver: { status: "active_market_driver", primary_driver: "中东停火预期重估全球风险偏好" },
+      flow_macro_radar: {
+        liquidity_regime: "neutral",
+        confidence: 0.85,
+        summary: "流动性中性，需等待更清晰信号。"
+      },
+      actionable_decision: {
+        desk_conclusion: {
+          trade_permission: "allowed",
+          one_sentence_order: "允许围绕现有组合做选择性进攻。"
+        }
+      }
+    },
+    cnMarketSnapshot: {},
+    researchGuardLines: ["- 决策状态：ready。"]
+  });
+
+  assert.ok(sections.some((item) => item.heading === "## Headline Tape"));
+  assert.ok(sections.some((item) => item.heading === "## Gold Factor Model"));
 });
 
 test("flattenResearchSections expands headings and lines for downstream reports", () => {

@@ -3,8 +3,12 @@ import assert from "node:assert/strict";
 
 import {
   createLedgerEntriesFromTransactionContent,
+  ensureMaterializationFiles,
   materializePortfolioStateFromInputs
 } from "./portfolio_state_materializer.mjs";
+import { mkdtemp, mkdir, readFile } from "node:fs/promises";
+import path from "node:path";
+import { tmpdir } from "node:os";
 
 function buildFixture() {
   const rawSnapshot = {
@@ -147,6 +151,21 @@ test("same-day OTC buy reflected in raw snapshot stays pending on trade date", (
   assert.equal(state.trade_lifecycle_summary.amounts_by_stage.platform_confirmed_pending_profit, 5000);
 });
 
+test("ensureMaterializationFiles no longer creates a placeholder portfolio_state.json", async () => {
+  const portfolioRoot = await mkdtemp(path.join(tmpdir(), "portfolio-materializer-"));
+  await mkdir(path.join(portfolioRoot, "state"), { recursive: true });
+
+  const result = await ensureMaterializationFiles({
+    portfolioRoot,
+    accountId: "main",
+    seedMissing: false
+  });
+
+  const portfolioStateChange = result.changes.find((item) => item.path === result.paths.portfolioStatePath);
+  assert.equal(portfolioStateChange?.action, "portfolio_state_missing_requires_materialization");
+  await assert.rejects(() => readFile(result.paths.portfolioStatePath, "utf8"));
+});
+
 test("createLedgerEntriesFromTransactionContent preserves enriched trade metadata", () => {
   const entries = createLedgerEntriesFromTransactionContent({
     accountId: "main",
@@ -217,6 +236,165 @@ test("duplicate ledger entries are applied once", () => {
   assert.equal(active.amount, 10000);
   assert.equal(state.summary.pending_buy_confirm, 5000);
   assert.equal(state.trade_lifecycle_summary.total_entries, 1);
+});
+
+test("exchange full sell keeps pre-trade market value in last_seen_amount", () => {
+  const rawSnapshot = {
+    account_id: "main",
+    snapshot_date: "2026-04-03",
+    currency: "CNY",
+    summary: {
+      total_fund_assets: 12000,
+      pending_buy_confirm: 0,
+      pending_sell_to_arrive: 0,
+      effective_exposure_after_pending_sell: 12000,
+      yesterday_profit: 0,
+      holding_profit: 0,
+      cumulative_profit: 0,
+      available_cash_cny: 5000,
+      total_portfolio_assets_cny: 17000
+    },
+    raw_account_snapshot: {
+      total_fund_assets: 12000
+    },
+    cash_ledger: {
+      available_cash_cny: 5000,
+      pending_buy_confirm_cny: 0,
+      pending_sell_to_arrive_cny: 0
+    },
+    positions: [
+      {
+        name: "纳指ETF",
+        amount: 12000,
+        shares: 1000,
+        sellable_shares: 1000,
+        cost_price: 12,
+        daily_pnl: 0,
+        holding_pnl: 0,
+        holding_pnl_rate_pct: 0,
+        category: "美股ETF",
+        status: "active",
+        execution_type: "EXCHANGE",
+        settlement_rule: "T+0",
+        code: "513100",
+        symbol: "513100",
+        ticker: "513100"
+      }
+    ],
+    recognition_notes: []
+  };
+  const executionLedger = {
+    entries: [
+      {
+        id: "exchange-sell-1",
+        account_id: "main",
+        type: "sell",
+        status: "recorded",
+        recorded_at: "2026-04-03T07:00:00.000Z",
+        effective_trade_date: "2026-04-03",
+        source: "manual_transaction_file",
+        normalized: {
+          execution_type: "EXCHANGE",
+          fund_name: "纳指ETF",
+          symbol: "513100",
+          code: "513100",
+          ticker: "513100",
+          quantity: 1000,
+          actual_avg_price: 11,
+          actual_notional_cny: 11000,
+          settlement_rule: "T+0",
+          cash_effect_cny: 11000,
+        }
+      }
+    ]
+  };
+
+  const state = materializeWithFixture(rawSnapshot, executionLedger, "2026-04-03");
+  const position = state.positions.find((item) => item.symbol === "513100");
+
+  assert.equal(position.amount, 0);
+  assert.equal(position.last_seen_amount, 12000);
+});
+
+test("materializer recomputes total_portfolio_assets_cny instead of trusting stale raw summary totals", () => {
+  const { rawSnapshot, executionLedger } = buildFixture();
+  rawSnapshot.summary.total_portfolio_assets_cny = 99999;
+
+  const state = materializeWithFixture(rawSnapshot, executionLedger, "2026-04-01");
+
+  assert.equal(state.summary.total_portfolio_assets_cny, 20000);
+});
+
+test("materializer separates settled cash from cash-like sleeve assets", () => {
+  const rawSnapshot = {
+    account_id: "main",
+    snapshot_date: "2026-04-03",
+    currency: "CNY",
+    summary: {
+      total_fund_assets: 15000,
+      pending_buy_confirm: 0,
+      pending_sell_to_arrive: 0,
+      effective_exposure_after_pending_sell: 15000,
+      yesterday_profit: 0,
+      holding_profit: 300,
+      cumulative_profit: 300,
+      available_cash_cny: 5000,
+      total_portfolio_assets_cny: 20000
+    },
+    raw_account_snapshot: {
+      total_fund_assets: 15000
+    },
+    cash_ledger: {
+      available_cash_cny: 5000,
+      frozen_cash_cny: 1000,
+      cash_reserve_override_cny: 500,
+      pending_buy_confirm_cny: 0,
+      pending_sell_to_arrive_cny: 0
+    },
+    positions: [
+      {
+        name: "兴全恒信债券C",
+        amount: 3000,
+        holding_pnl: 20,
+        holding_pnl_rate_pct: 0.67,
+        category: "偏债混合",
+        bucket: "CASH",
+        status: "active",
+        execution_type: "OTC",
+        code: "016482",
+        symbol: "016482",
+        fund_code: "016482"
+      },
+      {
+        name: "测试权益基金",
+        amount: 12000,
+        holding_pnl: 280,
+        holding_pnl_rate_pct: 2.33,
+        category: "A股宽基",
+        bucket: "A_CORE",
+        status: "active",
+        execution_type: "OTC",
+        code: "007339",
+        symbol: "007339",
+        fund_code: "007339"
+      }
+    ],
+    recognition_notes: []
+  };
+
+  const state = materializeWithFixture(rawSnapshot, { entries: [] }, "2026-04-03");
+
+  assert.equal(state.summary.available_cash_cny, 5000);
+  assert.equal(state.summary.settled_cash_cny, 5000);
+  assert.equal(state.summary.trade_available_cash_cny, 3500);
+  assert.equal(state.summary.cash_like_fund_assets_cny, 3000);
+  assert.equal(state.summary.liquidity_sleeve_assets_cny, 3000);
+  assert.equal(state.cash_ledger.available_cash_cny, 5000);
+  assert.equal(state.cash_ledger.settled_cash_cny, 5000);
+  assert.equal(state.cash_ledger.trade_available_cash_cny, 3500);
+  assert.equal(state.cash_ledger.cash_like_fund_assets_cny, 3000);
+  assert.equal(state.cash_ledger.liquidity_sleeve_assets_cny, 3000);
+  assert.equal(state.performance_snapshot.settled_cash_cny, 5000);
 });
 
 test("older OTC buy still activates when newer raw snapshot has not yet included the trade", () => {
@@ -604,4 +782,159 @@ test("same-day OTC conversion reflected in raw snapshot is not double-counted", 
   assert.equal(fundA.amount, 10000);
   assert.equal(fundB.amount, 5000);
   assert.equal(state.summary.total_fund_assets, 15000);
+});
+
+test("materializer carries durable otc cost basis through later manual buys", () => {
+  const rawSnapshot = {
+    account_id: "main",
+    snapshot_date: "2026-04-02",
+    currency: "CNY",
+    summary: {
+      total_fund_assets: 50000,
+      pending_buy_confirm: 0,
+      pending_sell_to_arrive: 0,
+      effective_exposure_after_pending_sell: 50000,
+      yesterday_profit: 0,
+      holding_profit: 0,
+      cumulative_profit: 0,
+      available_cash_cny: 200000,
+      total_portfolio_assets_cny: 250000
+    },
+    raw_account_snapshot: {
+      total_fund_assets: 50000
+    },
+    cash_ledger: {
+      available_cash_cny: 200000,
+      pending_buy_confirm_cny: 0,
+      pending_sell_to_arrive_cny: 0
+    },
+    positions: [
+      {
+        name: "兴全恒信债券C",
+        amount: 50000,
+        daily_pnl: 0,
+        holding_pnl: 0,
+        holding_pnl_rate_pct: 0,
+        category: "偏债混合",
+        status: "active",
+        execution_type: "OTC",
+        code: "016482",
+        symbol: "016482",
+        fund_code: "016482"
+      }
+    ],
+    recognition_notes: []
+  };
+  const executionLedger = {
+    entries: [
+      {
+        id: "manual-buy-016482",
+        account_id: "main",
+        type: "buy",
+        status: "recorded",
+        recorded_at: "2026-04-02T07:00:00.000Z",
+        effective_trade_date: "2026-04-02",
+        profit_effective_on: "2026-04-03",
+        source: "manual_transaction_file",
+        normalized: {
+          fund_name: "兴全恒信债券C",
+          amount_cny: 20000,
+          category: "偏债混合",
+          execution_type: "OTC",
+          code: "016482",
+          symbol: "016482",
+          fund_code: "016482",
+          cash_effect_cny: -20000
+        }
+      }
+    ]
+  };
+
+  const state = materializeWithFixture(rawSnapshot, executionLedger, "2026-04-03");
+  const position = state.positions.find((item) => item.code === "016482");
+
+  assert.equal(position.amount, 70000);
+  assert.equal(position.holding_cost_basis_cny, 70000);
+  assert.equal(position.holding_pnl, 0);
+});
+
+test("materializer preserves transferred cost basis on otc fund conversion", () => {
+  const rawSnapshot = {
+    account_id: "main",
+    snapshot_date: "2026-03-25",
+    currency: "CNY",
+    summary: {
+      total_fund_assets: 31320.63,
+      pending_buy_confirm: 0,
+      pending_sell_to_arrive: 0,
+      effective_exposure_after_pending_sell: 31320.63,
+      yesterday_profit: 1548.88,
+      holding_profit: -1556.1,
+      cumulative_profit: -1556.1,
+      available_cash_cny: 1000,
+      total_portfolio_assets_cny: 32320.63
+    },
+    raw_account_snapshot: {
+      total_fund_assets: 31320.63
+    },
+    cash_ledger: {
+      available_cash_cny: 1000,
+      pending_buy_confirm_cny: 0,
+      pending_sell_to_arrive_cny: 0
+    },
+    positions: [
+      {
+        name: "国泰黄金ETF联接E",
+        amount: 2000,
+        daily_pnl: 0,
+        holding_pnl: 0,
+        holding_pnl_rate_pct: 0,
+        category: "黄金",
+        status: "active",
+        execution_type: "OTC",
+        code: "022502",
+        symbol: "022502",
+        fund_code: "022502"
+      },
+      {
+        name: "工银瑞信黄金ETF联接C",
+        amount: 29320.63,
+        daily_pnl: 1548.88,
+        holding_pnl: -1556.1,
+        holding_pnl_rate_pct: -5.04,
+        category: "黄金",
+        status: "active",
+        execution_type: "OTC"
+      }
+    ],
+    recognition_notes: []
+  };
+  const executionLedger = {
+    entries: [
+      {
+        id: "gold-conversion-1",
+        account_id: "main",
+        type: "conversion",
+        status: "recorded",
+        recorded_at: "2026-03-25T06:30:00.000Z",
+        effective_trade_date: "2026-03-25",
+        source: "manual_transaction_file",
+        normalized: {
+          execution_type: "OTC",
+          from_fund_name: "工银瑞信黄金ETF联接C",
+          from_amount_cny: 29320.63,
+          to_fund_name: "国泰黄金ETF联接E",
+          to_amount_cny: 34320.63,
+          cash_effect_cny: 0
+        }
+      }
+    ]
+  };
+
+  const state = materializeWithFixture(rawSnapshot, executionLedger, "2026-03-26");
+  const target = state.positions.find((item) => item.code === "022502");
+
+  assert.equal(target.amount, 36320.63);
+  assert.equal(target.holding_cost_basis_cny, 32876.73);
+  assert.equal(target.holding_pnl, 3443.9);
 });

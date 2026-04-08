@@ -70,6 +70,22 @@ function normalizeSpeculativeOverlay(speculativePlan = {}) {
   };
 }
 
+function normalizeNewsContext(researchBrain = {}) {
+  return {
+    analysis_mode: String(researchBrain?.analysis_mode ?? "").trim() || null,
+    degraded_reason: String(researchBrain?.analysis_degraded_reason ?? "").trim() || null,
+    top_headlines: asArray(researchBrain?.top_headlines)
+      .slice(0, 5)
+      .map((item) => ({
+        source: String(item?.source ?? item?.sourceId ?? "").trim() || null,
+        title: String(item?.title ?? item?.headline ?? "").trim() || null,
+        published_at: String(item?.published_at ?? item?.publishedAt ?? "").trim() || null,
+        url: String(item?.url ?? "").trim() || null
+      }))
+      .filter((item) => item.title)
+  };
+}
+
 export function buildDialogueAnalysisContract({
   researchBrain = {},
   cnMarketSnapshot = {},
@@ -100,6 +116,7 @@ export function buildDialogueAnalysisContract({
   const opportunityCandidates = normalizeTopCandidates(opportunityPool);
   const speculativeOverlay = normalizeSpeculativeOverlay(speculativePlan);
   const tradePlanSummary = normalizeTradePlanSummary(tradePlan);
+  const newsContext = normalizeNewsContext(researchBrain);
   const analystFocus = [];
 
   if (tradePlanSummary.first_trade?.symbol) {
@@ -123,6 +140,8 @@ export function buildDialogueAnalysisContract({
       readiness_level: researchBrain?.decision_readiness?.level ?? null
     },
     market_core: marketCore,
+    news_context: newsContext,
+    gold_factor_model: researchBrain?.gold_factor_model ?? null,
     portfolio_actions: portfolioActions,
     watchlist_actions: watchlistActions,
     opportunity_candidates: opportunityCandidates,

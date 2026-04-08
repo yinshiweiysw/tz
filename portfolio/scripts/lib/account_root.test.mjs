@@ -1,11 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdir, rm } from "node:fs/promises";
+import path from "node:path";
 
 import {
+  listDiscoveredPortfolioAccounts,
   defaultPortfolioRoot,
   isValidDiscoverableAccountId,
   resolveAccountId,
-  resolvePortfolioRoot
+  resolvePortfolioRoot,
+  portfolioUsersRoot
 } from "./account_root.mjs";
 
 test("resolveAccountId falls back to main when boolean user flag leaks in", () => {
@@ -29,4 +33,18 @@ test("isValidDiscoverableAccountId rejects boolean-like garbage and accepts norm
   assert.equal(isValidDiscoverableAccountId("undefined"), false);
   assert.equal(isValidDiscoverableAccountId("wenge"), true);
   assert.equal(isValidDiscoverableAccountId("main"), true);
+});
+
+test("listDiscoveredPortfolioAccounts includes account directories even before state anchors are restored", async () => {
+  const accountId = "__codex_test_discovery__";
+  const accountRoot = path.join(portfolioUsersRoot, accountId);
+
+  await mkdir(path.join(accountRoot, "reports"), { recursive: true });
+
+  try {
+    const accounts = await listDiscoveredPortfolioAccounts({ includeMain: false });
+    assert.equal(accounts.some((item) => item.id === accountId), true);
+  } finally {
+    await rm(accountRoot, { recursive: true, force: true });
+  }
 });

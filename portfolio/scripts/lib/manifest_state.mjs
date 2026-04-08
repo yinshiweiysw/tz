@@ -1,6 +1,8 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { buildPortfolioPath, defaultPortfolioRoot } from "./account_root.mjs";
+
 export async function readManifestState(manifestPath) {
   if (!manifestPath) {
     return {};
@@ -46,6 +48,33 @@ function normalizeLatestCompatAlias(canonicalEntrypoints = {}, entries = {}) {
   return canonical;
 }
 
+function normalizeMarketLakeDbPath(candidate) {
+  const text = String(candidate ?? "").trim();
+  const canonicalRepoDb = buildPortfolioPath(defaultPortfolioRoot, "data", "market_lake.db");
+
+  if (!text) {
+    return canonicalRepoDb;
+  }
+
+  if (
+    text.startsWith("/var/folders/") ||
+    text.startsWith("/tmp/") ||
+    text.includes("/market-lake-schema-")
+  ) {
+    return canonicalRepoDb;
+  }
+
+  return text;
+}
+
+function normalizeCanonicalEntrypoints(canonicalEntrypoints = {}, entries = {}) {
+  const canonical = normalizeLatestCompatAlias(canonicalEntrypoints, entries);
+  return {
+    ...canonical,
+    market_lake_db: normalizeMarketLakeDbPath(canonical.market_lake_db)
+  };
+}
+
 function buildMergedManifest(baseManifest = {}, onDiskManifest = {}, entries = {}) {
   const base = normalizeManifest(baseManifest);
   const onDisk = normalizeManifest(onDiskManifest);
@@ -59,7 +88,7 @@ function buildMergedManifest(baseManifest = {}, onDiskManifest = {}, entries = {
   return {
     ...base,
     ...onDisk,
-    canonical_entrypoints: normalizeLatestCompatAlias(mergedCanonical, incomingEntries)
+    canonical_entrypoints: normalizeCanonicalEntrypoints(mergedCanonical, incomingEntries)
   };
 }
 

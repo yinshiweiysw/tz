@@ -15,6 +15,7 @@ if str(LIB_DIR) not in sys.path:
     sys.path.append(str(LIB_DIR))
 
 from account_root import resolve_account_id, resolve_portfolio_root  # noqa: E402
+from fund_name_normalizer import normalize_fund_name  # noqa: E402
 from portfolio_state_paths import load_preferred_portfolio_state  # noqa: E402
 
 
@@ -124,41 +125,6 @@ def round_or_none(value: Any, digits: int = 4) -> float | None:
     return round(numeric, digits)
 
 
-def normalize_fund_name(value: str) -> str:
-    text = str(value or "")
-    replacements = {
-        "（": "(",
-        "）": ")",
-        " ": "",
-        "\u3000": "",
-        "(QDII)": "",
-        "（QDII）": "",
-        "QDII-FOF-LOF": "QDII",
-        "QDII-LOF": "QDII",
-        "ETF发起式联接": "",
-        "ETF发起联接": "",
-        "ETF联接": "",
-        "ETF发起": "",
-        "联接": "",
-        "发起式": "",
-        "发起": "",
-        "人民币": "",
-        "混合型": "混合",
-        "持有期": "持有",
-        "-": "",
-        "_": "",
-        "/": "",
-        ".": "",
-        "(": "",
-        ")": "",
-        "[": "",
-        "]": "",
-    }
-    for source, target in replacements.items():
-        text = text.replace(source, target)
-    return text
-
-
 class TradePlanner:
     def __init__(
         self,
@@ -201,7 +167,7 @@ class TradePlanner:
         self.current_positions_total_cny = round_money(
             sum(safe_float(position.get("current_position_cny")) or 0.0 for position in self.current_positions.values())
         )
-        self.total_portfolio_value = self._resolve_total_portfolio_value()
+        self.total_portfolio_value, self.total_portfolio_value_source = self._resolve_total_portfolio_value()
         self.cash_estimate, self.cash_estimate_source = self._resolve_cash_estimate()
         self.pending_buy_confirm = round_money(
             self.portfolio_state.get("summary", {}).get("pending_buy_confirm")
@@ -219,8 +185,10 @@ class TradePlanner:
             max(self.liquid_cash_estimate - self.required_cash_reserve_cny, 0.0)
         )
         self.cash_sweeper = self._load_cash_sweeper_config()
+        self._reset_velocity_tracker()
 
     def plan(self, *, plan_date: str) -> dict[str, Any]:
+        self._reset_velocity_tracker()
         decisions: list[dict[str, Any]] = []
 
         for symbol, signal in (self.signals_payload.get("signals") or {}).items():
@@ -272,12 +240,13 @@ class TradePlanner:
                     if self.cash_sweeper
                     else None
                 ),
-                "total_portfolio_value_method": "account_context.reported_total_assets_range_cny.min -> portfolio_state.summary.total_fund_assets",
+                "total_portfolio_value_method": self.total_portfolio_value_source,
             },
             "risk_budget": self.risk_budget,
             "macro_snapshot": macro_snapshot,
             "portfolio_context": {
                 "total_portfolio_value_cny": self.total_portfolio_value,
+                "total_portfolio_value_source": self.total_portfolio_value_source,
                 "current_active_positions_value_cny": self.current_positions_total_cny,
                 "cash_estimate_cny": self.cash_estimate,
                 "cash_estimate_source": self.cash_estimate_source,
@@ -302,6 +271,17 @@ class TradePlanner:
                 "sweeper_committed_cny": round_money(cash_tracker.get("sweeper_committed_cny")),
                 "sweeper_triggered": bool(cash_tracker.get("sweeper_triggered")),
                 "execution_order": cash_tracker.get("execution_order", []),
+            },
+            "velocity_guardrail": {
+                "buy_limit_cny": MAX_DAILY_BUY,
+                "buy_used_cny": round_money(self.velocity_usage["buy"]),
+                "buy_remaining_cny": round_money(self.velocity_remaining["buy"]),
+                "accumulate_limit_cny": MAX_DAILY_ACCUMULATE,
+                "accumulate_used_cny": round_money(self.velocity_usage["accumulate"]),
+                "accumulate_remaining_cny": round_money(self.velocity_remaining["accumulate"]),
+                "sell_limit_cny": abs(MAX_DAILY_SELL),
+                "sell_used_cny": round_money(self.velocity_usage["sell"]),
+                "sell_remaining_cny": round_money(self.velocity_remaining["sell"]),
             },
             "summary": {
                 "actionable_trade_count": len(actionable_trades),
@@ -374,6 +354,16 @@ class TradePlanner:
             f"- 动态现金防线：{format_ratio_pct(payload['portfolio_context']['required_cash_reserve_pct'])} / {format_money(payload['portfolio_context']['required_cash_reserve_cny'])} 元",
             f"- 扣除防线后的起始可用现金：{format_money(payload['portfolio_context']['initial_available_cash_cny'])} 元",
             f"- 动态记账后的剩余可用现金：{format_money(payload['cash_guardrail']['ending_available_cash_cny'])} 元",
+            (
+                f"- Buy 日度限额：{format_money(payload['velocity_guardrail']['buy_limit_cny'])} 元，"
+                f"已用 {format_money(payload['velocity_guardrail']['buy_used_cny'])} 元，"
+                f"剩余 {format_money(payload['velocity_guardrail']['buy_remaining_cny'])} 元"
+            ),
+            (
+                f"- Sell 日度限额：{format_money(payload['velocity_guardrail']['sell_limit_cny'])} 元，"
+                f"已用 {format_money(payload['velocity_guardrail']['sell_used_cny'])} 元，"
+                f"剩余 {format_money(payload['velocity_guardrail']['sell_remaining_cny'])} 元"
+            ),
             f"- 摩擦成本阈值：{format_money(payload['parameters']['min_trade_amount_cny'])} 元",
             (
                 f"- 尾款归集阈值：{format_money(payload['parameters']['cash_sweeper_threshold_cny'])} 元"
@@ -666,6 +656,23 @@ class TradePlanner:
             "sweeper_triggered": sweeper is not None,
             "execution_order": execution_order,
         }
+
+    def _reset_velocity_tracker(self) -> None:
+        self.velocity_remaining = {
+            "buy": round_money(MAX_DAILY_BUY),
+            "accumulate": round_money(MAX_DAILY_ACCUMULATE),
+            "sell": round_money(abs(MAX_DAILY_SELL)),
+        }
+        self.velocity_usage = {
+            "buy": 0.0,
+            "accumulate": 0.0,
+            "sell": 0.0,
+        }
+
+    def _consume_velocity_budget(self, bucket: str, amount: float) -> None:
+        executed = round_money(max(amount, 0.0))
+        self.velocity_remaining[bucket] = round_money(max(self.velocity_remaining[bucket] - executed, 0.0))
+        self.velocity_usage[bucket] = round_money(self.velocity_usage[bucket] + executed)
 
     def _decision_execution_sort_key(self, decision: dict[str, Any]) -> tuple[int, int, int, str]:
         action = str(decision.get("execution_action") or "Hold")
@@ -979,30 +986,59 @@ class TradePlanner:
             }
         return positions_by_symbol
 
-    def _resolve_total_portfolio_value(self) -> float:
+    def _resolve_total_portfolio_value(self) -> tuple[float, str]:
+        summary = self.portfolio_state.get("summary", {})
+        cash_ledger = self.portfolio_state.get("cash_ledger", {})
+        state_candidates = [
+            ("portfolio_state.summary.total_portfolio_assets_cny", summary.get("total_portfolio_assets_cny")),
+            ("portfolio_state.summary.total_assets_cny", summary.get("total_assets_cny")),
+            ("portfolio_state.summary.total_portfolio_value_cny", summary.get("total_portfolio_value_cny")),
+        ]
+        for label, candidate in state_candidates:
+            numeric = safe_float(candidate)
+            if numeric is not None and numeric > 0:
+                return round_money(numeric), label
+
+        invested_assets = safe_float(summary.get("total_fund_assets") or summary.get("effective_exposure_after_pending_sell"))
+        settled_cash = safe_float(summary.get("settled_cash_cny"))
+        if settled_cash is None:
+            settled_cash = safe_float(cash_ledger.get("settled_cash_cny"))
+        if invested_assets is not None and invested_assets > 0 and settled_cash is not None and settled_cash >= 0:
+            return (
+                round_money(invested_assets + settled_cash),
+                "portfolio_state.summary.total_fund_assets_plus_settled_cash",
+            )
+
         reported_min = safe_float(
             self.account_context.get("reported_total_assets_range_cny", {}).get("min")
         )
         if reported_min is not None and reported_min > 0:
-            return round_money(reported_min)
+            return round_money(reported_min), "account_context.reported_total_assets_range_cny.min"
 
-        portfolio_total = safe_float(self.portfolio_state.get("summary", {}).get("total_fund_assets"))
+        portfolio_total = safe_float(summary.get("total_fund_assets"))
         if portfolio_total is not None and portfolio_total > 0:
-            return round_money(portfolio_total)
+            return round_money(portfolio_total), "portfolio_state.summary.total_fund_assets"
 
-        raise ValueError("unable to resolve total portfolio value from account context or portfolio_state summary")
+        raise ValueError("unable to resolve total portfolio value from canonical portfolio_state or account context fallback")
 
     def _resolve_cash_estimate(self) -> tuple[float, str]:
-        portfolio_summary_cash = safe_float(self.portfolio_state.get("summary", {}).get("available_cash_cny"))
-        if portfolio_summary_cash is not None and portfolio_summary_cash >= 0:
-            return round_money(portfolio_summary_cash), "portfolio_state.summary.available_cash_cny"
-
-        portfolio_cash_ledger = safe_float(self.portfolio_state.get("cash_ledger", {}).get("available_cash_cny"))
-        if portfolio_cash_ledger is not None and portfolio_cash_ledger >= 0:
-            return round_money(portfolio_cash_ledger), "portfolio_state.cash_ledger.available_cash_cny"
-
-        fallback_cash = safe_float(self.account_context.get("reported_cash_estimate_cny")) or 0.0
-        return round_money(max(fallback_cash, 0.0)), "account_context.reported_cash_estimate_cny"
+        summary = self.portfolio_state.get("summary", {})
+        cash_ledger = self.portfolio_state.get("cash_ledger", {})
+        candidates = [
+            ("portfolio_state.summary.trade_available_cash_cny", summary.get("trade_available_cash_cny")),
+            ("portfolio_state.cash_ledger.trade_available_cash_cny", cash_ledger.get("trade_available_cash_cny")),
+            ("portfolio_state.summary.settled_cash_cny", summary.get("settled_cash_cny")),
+            ("portfolio_state.cash_ledger.settled_cash_cny", cash_ledger.get("settled_cash_cny")),
+            ("portfolio_state.summary.available_cash_cny", summary.get("available_cash_cny")),
+            ("portfolio_state.cash_ledger.available_cash_cny", cash_ledger.get("available_cash_cny")),
+            ("account_context.reported_cash_estimate_cny", self.account_context.get("reported_cash_estimate_cny")),
+            ("account_context.available_cash_cny", self.account_context.get("available_cash_cny")),
+        ]
+        for label, candidate in candidates:
+            numeric = safe_float(candidate)
+            if numeric is not None and numeric >= 0:
+                return round_money(numeric), label
+        return 0.0, "fallback_zero"
 
     def _build_trade_decision(self, symbol: str, signal: dict[str, Any]) -> dict[str, Any]:
         position = self._resolve_signal_position(symbol, signal)
@@ -1061,7 +1097,7 @@ class TradePlanner:
             return max(0, min(int(round(safe_float(explicit) or 0)), int(current_shares)))
         if settlement_rule == "T+0":
             return max(int(current_shares), 0)
-        return 0
+        return max(int(current_shares), 0)
 
     def _floor_sellable_quantity(self, sellable_shares: int, lot_size: int) -> int:
         if sellable_shares <= 0:
@@ -1623,31 +1659,51 @@ class TradePlanner:
             return raw_delta, None, False
 
         if raw_action == "Accumulate" and raw_delta > 0:
-            filtered_delta = min(raw_delta, MAX_DAILY_ACCUMULATE)
+            global_remaining = self.velocity_remaining["buy"]
+            accumulate_remaining = self.velocity_remaining["accumulate"]
+            filtered_delta = min(raw_delta, MAX_DAILY_ACCUMULATE, global_remaining, accumulate_remaining)
+            self._consume_velocity_budget("buy", filtered_delta)
+            self._consume_velocity_budget("accumulate", filtered_delta)
             if filtered_delta < raw_delta:
                 return (
                     round_money(filtered_delta),
-                    f"原始调仓缺口为 {format_money(raw_delta)} 元，受限于 Accumulate 单日定投上限，按 {format_money(filtered_delta)} 元执行。",
+                    (
+                        f"原始调仓缺口为 {format_money(raw_delta)} 元，受限于 Accumulate 单日定投限额 "
+                        f"{format_money(MAX_DAILY_ACCUMULATE)} 元，且全局日度 Buy 剩余额度仅 "
+                        f"{format_money(global_remaining)} 元，故按 {format_money(filtered_delta)} 元执行。"
+                    ),
                     True,
                 )
             return round_money(filtered_delta), None, False
 
         if execution_action == "Buy" and raw_delta > 0:
-            filtered_delta = min(raw_delta, MAX_DAILY_BUY)
+            global_remaining = self.velocity_remaining["buy"]
+            filtered_delta = min(raw_delta, MAX_DAILY_BUY, global_remaining)
+            self._consume_velocity_budget("buy", filtered_delta)
             if filtered_delta < raw_delta:
                 return (
                     round_money(filtered_delta),
-                    f"原始调仓缺口为 {format_money(raw_delta)} 元，受限于 Buy 单日上限，按 {format_money(filtered_delta)} 元执行。",
+                    (
+                        f"原始调仓缺口为 {format_money(raw_delta)} 元，受限于 Buy 单资产日度限额 "
+                        f"{format_money(MAX_DAILY_BUY)} 元，且全局日度剩余额度仅 "
+                        f"{format_money(global_remaining)} 元，故按 {format_money(filtered_delta)} 元执行。"
+                    ),
                     True,
                 )
             return round_money(filtered_delta), None, False
 
         if execution_action == "Sell" and raw_delta < 0:
-            filtered_delta = max(raw_delta, MAX_DAILY_SELL)
+            global_remaining = self.velocity_remaining["sell"]
+            filtered_delta = -min(abs(raw_delta), abs(MAX_DAILY_SELL), global_remaining)
+            self._consume_velocity_budget("sell", abs(filtered_delta))
             if filtered_delta > raw_delta:
                 return (
                     round_money(filtered_delta),
-                    f"原始调仓缺口为 {format_money(abs(raw_delta))} 元，受限于 Sell 单日上限，按 {format_money(abs(filtered_delta))} 元执行。",
+                    (
+                        f"原始调仓缺口为 {format_money(abs(raw_delta))} 元，受限于 Sell 单资产日度限额 "
+                        f"{format_money(abs(MAX_DAILY_SELL))} 元，且全局日度剩余额度仅 "
+                        f"{format_money(global_remaining)} 元，故按 {format_money(abs(filtered_delta))} 元执行。"
+                    ),
                     True,
                 )
             return round_money(filtered_delta), None, False
@@ -1775,17 +1831,42 @@ def save_text(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def is_path_within_root(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except Exception:
+        return False
+
+
 def update_manifest(*, manifest_path: Path, output_json_path: Path, report_path: Path) -> None:
     if not manifest_path.exists():
         return
 
     manifest = read_json(manifest_path)
     canonical = manifest.setdefault("canonical_entrypoints", {})
+    portfolio_root = manifest_path.parent.resolve()
     canonical["trade_planner_script"] = str(SCRIPT_DIR / "trade_generator.py")
     canonical["next_trade_generator_script"] = str(SCRIPT_DIR / "generate_next_trade_plan.mjs")
-    canonical["latest_trade_plan_v4_json"] = str(output_json_path)
-    canonical["latest_trade_plan_v4_report"] = str(report_path)
-    canonical["latest_next_trade_generator"] = str(report_path)
+    if is_path_within_root(output_json_path, portfolio_root):
+        canonical["latest_trade_plan_v4_json"] = str(output_json_path)
+    else:
+        canonical.setdefault(
+            "latest_trade_plan_v4_json",
+            str(portfolio_root / "data" / "trade_plan_v4.json"),
+        )
+    if is_path_within_root(report_path, portfolio_root):
+        canonical["latest_trade_plan_v4_report"] = str(report_path)
+        canonical["latest_next_trade_generator"] = str(report_path)
+    else:
+        canonical.setdefault(
+            "latest_trade_plan_v4_report",
+            str(portfolio_root / "reports" / f"{current_cn_date()}-next-trade-plan-regime-v4.md"),
+        )
+        canonical.setdefault(
+            "latest_next_trade_generator",
+            str(portfolio_root / "reports" / f"{current_cn_date()}-next-trade-plan-regime-v4.md"),
+        )
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 

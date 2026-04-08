@@ -1,4 +1,5 @@
 import {
+  resolveAssetDefinition,
   resolveBucketKey,
   resolveBucketLabel,
   resolveThemeKey,
@@ -6,12 +7,7 @@ import {
 } from "./asset_master.mjs";
 import { normalizeIpsConstraints } from "./ips_constraints.mjs";
 
-function round(value, digits = 2) {
-  if (!Number.isFinite(value)) {
-    return null;
-  }
-  return Number(Number(value).toFixed(digits));
-}
+import { round } from "./format_utils.mjs";
 
 function normalizeName(value) {
   return String(value ?? "")
@@ -43,6 +39,14 @@ function toPositiveAmount(value) {
 function toPositiveOrNull(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+}
+
+function normalizeDrawdownPercent(value) {
+  const numeric = toFiniteNumber(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  return Math.min(numeric, 0);
 }
 
 function buildSignalLookup(signalMatrix = {}) {
@@ -111,8 +115,8 @@ function buildMatchedPositionRow(position, signal, assetMaster) {
     return null;
   }
 
-  const currentDrawdown = toFiniteNumber(signal?.indicators?.current_drawdown_60d_percent);
-  const maxDrawdown = toFiniteNumber(signal?.indicators?.max_drawdown_60d_percent);
+  const currentDrawdown = normalizeDrawdownPercent(signal?.indicators?.current_drawdown_60d_percent);
+  const maxDrawdown = normalizeDrawdownPercent(signal?.indicators?.max_drawdown_60d_percent);
 
   if (!Number.isFinite(currentDrawdown) || !Number.isFinite(maxDrawdown)) {
     return null;
@@ -144,8 +148,48 @@ function resolveTotalAssetsCny(totalAssetsCny, activePositions) {
   return toPositiveOrNull(inferred) ?? 0;
 }
 
+function resolvePositionLimitContext(position, assetMaster, totalAssetsCny, investedAssetsCny, singleFundMaxPct) {
+  const assetDefinition = resolveAssetDefinition(assetMaster, position) ?? {};
+  const totalLimitPct = toPositiveOrNull(assetDefinition?.position_limits?.max_pct_of_total_assets);
+  if (totalLimitPct && totalAssetsCny) {
+    return {
+      maxPct: totalLimitPct,
+      denominatorCny: totalAssetsCny,
+      weightBasis: "pct_of_total_assets"
+    };
+  }
+
+  const investedLimitPct = toPositiveOrNull(assetDefinition?.position_limits?.max_pct_of_invested_assets);
+  if (investedLimitPct && investedAssetsCny) {
+    return {
+      maxPct: investedLimitPct,
+      denominatorCny: investedAssetsCny,
+      weightBasis: "pct_of_invested_assets"
+    };
+  }
+
+  if (totalAssetsCny && Number.isFinite(singleFundMaxPct) && singleFundMaxPct > 0) {
+    return {
+      maxPct: singleFundMaxPct,
+      denominatorCny: totalAssetsCny,
+      weightBasis: "pct_of_total_assets"
+    };
+  }
+
+  return null;
+}
+
 function buildSingleFundBreaches(activePositions, totalAssetsCny, singleFundMaxPct, assetMaster) {
-  if (!totalAssetsCny || !Number.isFinite(singleFundMaxPct) || singleFundMaxPct <= 0) {
+  const investedAssetsCny = activePositions.reduce(
+    (sum, position) => sum + Number(position?.amount ?? 0),
+    0
+  );
+
+  if (
+    (!totalAssetsCny && !investedAssetsCny) ||
+    (!Number.isFinite(singleFundMaxPct) || singleFundMaxPct <= 0) &&
+      !Array.isArray(assetMaster?.assets)
+  ) {
     return [];
   }
 
@@ -156,8 +200,18 @@ function buildSingleFundBreaches(activePositions, totalAssetsCny, singleFundMaxP
         return null;
       }
 
-      const weightPct = (amount / totalAssetsCny) * 100;
-      if (weightPct <= singleFundMaxPct * 100 + 1e-6) {
+      const limitContext = resolvePositionLimitContext(
+        position,
+        assetMaster,
+        totalAssetsCny,
+        investedAssetsCny,
+        singleFundMaxPct
+      );
+      if (!limitContext?.denominatorCny || !limitContext?.maxPct) {
+        return null;
+      }
+      const weightPct = (amount / limitContext.denominatorCny) * 100;
+      if (weightPct <= limitContext.maxPct * 100 + 1e-6) {
         return null;
       }
 
@@ -168,7 +222,8 @@ function buildSingleFundBreaches(activePositions, totalAssetsCny, singleFundMaxP
         name: position?.name ?? null,
         amount_cny: round(amount),
         weight_pct: round(weightPct),
-        max_pct: round(singleFundMaxPct * 100, 2),
+        weight_basis: limitContext.weightBasis,
+        max_pct: round(limitContext.maxPct * 100, 2),
         bucket_key: bucketKey,
         bucket_label: resolveBucketLabel(assetMaster, bucketKey),
         theme_key: themeKey,
@@ -391,25 +446,43 @@ export function buildPortfolioRiskState({
     (sum, position) => sum + Number(position.amount_cny ?? 0),
     0
   );
+  const downsideCurrentPositions = matchedPositions.filter(
+    (position) => Number(position.current_drawdown_60d_percent ?? 0) < 0
+  );
+  const downsideCurrentAmount = downsideCurrentPositions.reduce(
+    (sum, position) => sum + Number(position.amount_cny ?? 0),
+    0
+  );
+  const downsideMaxPositions = matchedPositions.filter(
+    (position) => Number(position.max_drawdown_60d_percent ?? 0) < 0
+  );
+  const downsideMaxAmount = downsideMaxPositions.reduce(
+    (sum, position) => sum + Number(position.amount_cny ?? 0),
+    0
+  );
   const totalAssets = resolveTotalAssetsCny(totalAssetsCny, activePositions);
   const weightedCurrentDrawdown =
-    matchedPositions.length && investedMatchedAmount
-      ? matchedPositions.reduce(
+    matchedPositions.length && downsideCurrentAmount
+      ? downsideCurrentPositions.reduce(
           (sum, position) =>
             sum +
             Number(position.amount_cny ?? 0) * Number(position.current_drawdown_60d_percent ?? 0),
           0
-        ) / investedMatchedAmount
-      : null;
+        ) / downsideCurrentAmount
+      : matchedPositions.length
+        ? 0
+        : null;
   const weightedMaxDrawdown =
-    matchedPositions.length && investedMatchedAmount
-      ? matchedPositions.reduce(
+    matchedPositions.length && downsideMaxAmount
+      ? downsideMaxPositions.reduce(
           (sum, position) =>
             sum +
             Number(position.amount_cny ?? 0) * Number(position.max_drawdown_60d_percent ?? 0),
           0
-        ) / investedMatchedAmount
-      : null;
+        ) / downsideMaxAmount
+      : matchedPositions.length
+        ? 0
+        : null;
   const currentDrawdownPct =
     Number.isFinite(weightedCurrentDrawdown) ? Math.abs(weightedCurrentDrawdown) / 100 : null;
   const drawdownStatus = buildDrawdownStatus(currentDrawdownPct, normalizedIpsConstraints);

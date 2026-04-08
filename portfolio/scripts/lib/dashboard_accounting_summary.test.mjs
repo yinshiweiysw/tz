@@ -35,7 +35,10 @@ test("deriveDashboardAccountingSummary prefers live unrealized pnl and performan
     pendingProfitEffectiveCny: 2500,
     pendingSellSettlementCny: 3500,
     settledCashCny: 14000,
-    projectedSettledCashCny: 17500
+    projectedSettledCashCny: 17500,
+    tradeAvailableCashCny: 14000,
+    cashLikeFundAssetsCny: null,
+    liquiditySleeveAssetsCny: null
   });
 });
 
@@ -63,6 +66,42 @@ test("deriveDashboardAccountingSummary falls back through cash ledger and portfo
     pendingProfitEffectiveCny: 1200,
     pendingSellSettlementCny: 4500,
     settledCashCny: 10000,
-    projectedSettledCashCny: 14500
+    projectedSettledCashCny: 14500,
+    tradeAvailableCashCny: 10000,
+    cashLikeFundAssetsCny: null,
+    liquiditySleeveAssetsCny: null
+  });
+});
+
+test("deriveDashboardAccountingSummary exposes separated cash semantics when present", () => {
+  const summary = deriveDashboardAccountingSummary({
+    portfolioStateSummary: {
+      holding_profit: 200,
+      settled_cash_cny: 8000,
+      trade_available_cash_cny: 6500,
+      cash_like_fund_assets_cny: 70000,
+      liquidity_sleeve_assets_cny: 70000
+    },
+    performanceSnapshot: {},
+    cashLedger: {
+      available_cash_cny: 8000,
+      settled_cash_cny: 8000,
+      trade_available_cash_cny: 6400,
+      cash_like_fund_assets_cny: 70000,
+      liquidity_sleeve_assets_cny: 70000
+    }
+  });
+
+  assert.deepEqual(summary, {
+    unrealizedHoldingProfitCny: 200,
+    unrealizedHoldingProfitRatePct: null,
+    realizedCumulativeProfitCny: null,
+    pendingProfitEffectiveCny: 0,
+    pendingSellSettlementCny: 0,
+    settledCashCny: 8000,
+    projectedSettledCashCny: 8000,
+    tradeAvailableCashCny: 6400,
+    cashLikeFundAssetsCny: 70000,
+    liquiditySleeveAssetsCny: 70000
   });
 });

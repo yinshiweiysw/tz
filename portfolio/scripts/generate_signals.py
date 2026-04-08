@@ -19,6 +19,7 @@ if str(LIB_DIR) not in sys.path:
     sys.path.append(str(LIB_DIR))
 
 from account_root import DEFAULT_PORTFOLIO_ROOT, resolve_account_id, resolve_portfolio_root  # noqa: E402
+from portfolio_state_paths import load_preferred_portfolio_state  # noqa: E402
 
 PORTFOLIO_ROOT = resolve_portfolio_root()
 DEFAULT_ASSET_MASTER_PATH = PORTFOLIO_ROOT / "config" / "asset_master.json"
@@ -87,6 +88,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--portfolio-root", default="")
     parser.add_argument("--asset-master", default="")
     parser.add_argument("--account-context", default="")
+    parser.add_argument("--portfolio-state", default="")
     parser.add_argument("--macro-state", default="")
     parser.add_argument("--db", default="")
     parser.add_argument("--output", default="")
@@ -155,6 +157,19 @@ def update_manifest(*, manifest_path: Path, output_path: Path) -> None:
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def validate_required_tables(connection: sqlite3.Connection) -> None:
+    required_tables = {"daily_prices"}
+    rows = connection.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table'"
+    ).fetchall()
+    existing_tables = {str(row[0]) for row in rows}
+    missing_tables = sorted(required_tables - existing_tables)
+    if missing_tables:
+        raise RuntimeError(
+            f"market_lake schema incomplete: missing {', '.join(missing_tables)}"
+        )
+
+
 class SignalRouter:
     def __init__(
         self,
@@ -162,6 +177,9 @@ class SignalRouter:
         account_context_path: Path,
         macro_state_path: Path,
         db_path: Path,
+        portfolio_state_path: Path | None = None,
+        portfolio_state_payload: dict[str, Any] | None = None,
+        portfolio_state_source_kind: str | None = None,
         *,
         policy_overrides: dict[str, Any] | None = None,
     ) -> None:
@@ -169,9 +187,19 @@ class SignalRouter:
         self.account_context_path = account_context_path
         self.macro_state_path = macro_state_path
         self.db_path = db_path
+        self.portfolio_state_path = portfolio_state_path
         self.asset_master = read_json(asset_master_path)
         self.account_context = read_json(account_context_path)
         self.macro_state = read_json(macro_state_path)
+        if portfolio_state_payload is not None:
+            self.portfolio_state = portfolio_state_payload
+        elif portfolio_state_path and portfolio_state_path.exists():
+            self.portfolio_state = read_json(portfolio_state_path)
+        else:
+            self.portfolio_state = {}
+        self.portfolio_state_source_kind = portfolio_state_source_kind or (
+            "portfolio_state" if self.portfolio_state else None
+        )
         self.policy = {**DEFAULT_POLICY, **(policy_overrides or {})}
         self.short_signal_window = DEFAULT_SHORT_SIGNAL_WINDOW
         self.atr_window = DEFAULT_ATR_WINDOW
@@ -185,7 +213,7 @@ class SignalRouter:
         configured_order = self.asset_master.get("bucket_order") or list(self.bucket_configs)
         self.bucket_order = [bucket_key for bucket_key in configured_order if bucket_key in self.bucket_configs]
         self.assets_by_bucket = self._group_assets_by_bucket()
-        self.total_portfolio_value = self._resolve_total_portfolio_value()
+        self.total_portfolio_value, self.total_portfolio_value_source = self._resolve_total_portfolio_value()
         self.dynamic_risk_budget: dict[str, Any] = {}
 
     def route_all(self) -> dict[str, Any]:
@@ -196,6 +224,8 @@ class SignalRouter:
             "source": {
                 "asset_master": str(self.asset_master_path),
                 "account_context": str(self.account_context_path),
+                "portfolio_state": str(self.portfolio_state_path) if self.portfolio_state_path else None,
+                "portfolio_state_source_kind": self.portfolio_state_source_kind,
                 "macro_state": str(self.macro_state_path),
                 "market_lake_db": str(self.db_path),
             },
@@ -206,6 +236,7 @@ class SignalRouter:
 
         raw_signals: list[dict[str, Any]] = []
         with sqlite3.connect(self.db_path) as connection:
+            validate_required_tables(connection)
             for asset in self.assets:
                 if asset.get("signal_enabled") is False:
                     continue
@@ -655,7 +686,7 @@ class SignalRouter:
                 if signal_date:
                     signal_dates.append(signal_date)
                 if signal.get("regime_type") == "macro_momentum" and None not in {current_price, long_ma}:
-                    trend_gate_passed = current_price >= long_ma
+                    trend_gate_passed = trend_gate_passed or current_price >= long_ma
 
             state[bucket_key] = {
                 "trend_gate_passed": trend_gate_passed,
@@ -861,10 +892,14 @@ class SignalRouter:
 
         if quote_symbol.startswith(("SH", "SZ")) and quote_symbol[2:].isdigit():
             normalized = quote_symbol.lower()
+        elif quote_symbol.startswith("BJ") and quote_symbol[2:].isdigit():
+            normalized = quote_symbol.lower()
         elif quote_symbol.endswith(".SH"):
             normalized = f"sh{quote_symbol.split('.')[0]}"
-        elif quote_symbol.endswith(".SZ") or quote_symbol.endswith(".BJ"):
+        elif quote_symbol.endswith(".SZ"):
             normalized = f"sz{quote_symbol.split('.')[0]}"
+        elif quote_symbol.endswith(".BJ"):
+            normalized = f"bj{quote_symbol.split('.')[0]}"
         elif quote_symbol.isdigit():
             normalized = f"sh{quote_symbol}" if quote_symbol[0] in {"5", "6"} else f"sz{quote_symbol}"
         else:
@@ -904,13 +939,47 @@ class SignalRouter:
             "name": fields[1] if len(fields) > 1 else None,
         }
 
-    def _resolve_total_portfolio_value(self) -> float:
+    def _resolve_total_portfolio_value(self) -> tuple[float, str]:
+        summary = self.portfolio_state.get("summary") or {}
+        cash_ledger = self.portfolio_state.get("cash_ledger") or {}
+
+        state_candidates = [
+            (
+                summary.get("total_portfolio_assets_cny"),
+                "portfolio_state.summary.total_portfolio_assets_cny",
+            ),
+            (
+                summary.get("total_assets_cny"),
+                "portfolio_state.summary.total_assets_cny",
+            ),
+            (
+                summary.get("total_portfolio_value_cny"),
+                "portfolio_state.summary.total_portfolio_value_cny",
+            ),
+        ]
+        for candidate, label in state_candidates:
+            numeric = safe_float(candidate)
+            if numeric is not None and numeric > 0:
+                return round_money(numeric), label
+
+        invested_assets = safe_float(
+            summary.get("total_fund_assets") or summary.get("effective_exposure_after_pending_sell")
+        )
+        settled_cash = safe_float(summary.get("settled_cash_cny"))
+        if settled_cash is None:
+            settled_cash = safe_float(cash_ledger.get("settled_cash_cny"))
+        if invested_assets is not None and invested_assets > 0 and settled_cash is not None and settled_cash >= 0:
+            return (
+                round_money(invested_assets + settled_cash),
+                "portfolio_state.summary.total_fund_assets_plus_settled_cash",
+            )
+
         reported_min = safe_float(
             self.account_context.get("reported_total_assets_range_cny", {}).get("min")
         )
         if reported_min is None or reported_min <= 0:
             raise ValueError("account_context missing valid reported_total_assets_range_cny.min")
-        return round_money(reported_min)
+        return round_money(reported_min), "account_context.reported_total_assets_range_cny.min"
 
     def _load_price_history(self, connection: sqlite3.Connection, symbol: str) -> pd.DataFrame:
         query = """
@@ -1063,12 +1132,28 @@ def main() -> int:
             )
         )
     )
+    portfolio_state_payload = {}
+    portfolio_state_path: Path | None = None
+    portfolio_state_source_kind: str | None = None
+    try:
+        portfolio_state_payload, portfolio_state_path, portfolio_state_source_kind, _ = load_preferred_portfolio_state(
+            portfolio_root=portfolio_root,
+            manifest=manifest,
+            explicit_portfolio_state=args.portfolio_state,
+        )
+    except FileNotFoundError:
+        portfolio_state_payload = {}
+        portfolio_state_path = None
+        portfolio_state_source_kind = None
     output_path = Path(args.output) if args.output else portfolio_root / "signals" / "regime_router_signals.json"
     router = SignalRouter(
         asset_master_path=asset_master_path,
         account_context_path=account_context_path,
         macro_state_path=macro_state_path,
         db_path=db_path,
+        portfolio_state_path=portfolio_state_path,
+        portfolio_state_payload=portfolio_state_payload,
+        portfolio_state_source_kind=portfolio_state_source_kind,
     )
     payload = router.route_all()
 

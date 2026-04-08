@@ -806,6 +806,11 @@ def generate_snapshot(trade_date: str) -> dict:
         "guardrails": guardrails(),
         "sections": sections,
     }
+    snapshot["_meta"] = {
+        "schema_version": "1.0",
+        "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "source_script": "generate_cn_market_snapshot.py",
+    }
     snapshot["notes"] = build_notes(snapshot)
     return snapshot
 

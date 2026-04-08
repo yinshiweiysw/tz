@@ -67,14 +67,6 @@ async function pathExists(targetPath) {
   }
 }
 
-async function hasDiscoverableAccountState(portfolioRoot) {
-  return (
-    (await pathExists(buildPortfolioPath(portfolioRoot, "latest.json"))) ||
-    (await pathExists(buildPortfolioPath(portfolioRoot, "snapshots", "latest_raw.json"))) ||
-    (await pathExists(buildPortfolioPath(portfolioRoot, "state-manifest.json")))
-  );
-}
-
 export async function listDiscoveredPortfolioAccounts({ includeMain = true } = {}) {
   const accounts = [];
 
@@ -100,9 +92,6 @@ export async function listDiscoveredPortfolioAccounts({ includeMain = true } = {
 
   for (const accountId of userDirs) {
     const portfolioRoot = path.join(portfolioUsersRoot, accountId);
-    if (!(await hasDiscoverableAccountState(portfolioRoot))) {
-      continue;
-    }
     accounts.push({
       id: accountId,
       portfolioRoot

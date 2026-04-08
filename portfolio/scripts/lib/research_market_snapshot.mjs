@@ -12,7 +12,11 @@ const SNAPSHOT_CONFIG = {
   ],
   global_indices: [
     { label: "标普500", code: "usINX" },
-    { label: "纳斯达克100", code: "usNDX" }
+    { label: "纳斯达克100", code: "usNDX" },
+    { label: "日经225", code: "znb_NKY" },
+    { label: "韩国KOSPI", code: "znb_KOSPI" },
+    { label: "标普500期货", code: "hf_ES" },
+    { label: "纳指100期货", code: "hf_NQ" }
   ],
   commodities: [
     { label: "COMEX黄金", code: "hf_XAU" },

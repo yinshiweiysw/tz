@@ -1,13 +1,7 @@
+import { round } from "./format_utils.mjs";
+
 function normalizeArray(value) {
   return Array.isArray(value) ? value.filter(Boolean) : [];
-}
-
-function round(value, digits = 2) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return null;
-  }
-
-  return Number(Number(value).toFixed(digits));
 }
 
 function formatSigned(value, suffix = "") {
@@ -41,6 +35,57 @@ export function buildResearchDriverLines(eventDriver = {}) {
       ? [`- 证据链：${evidence.map((item) => item?.headline ?? item?.source ?? "未知").join("；")}`]
       : ["- 证据链：暂无"]
     )
+  ];
+}
+
+export function buildResearchHeadlineLines(newsContext = {}) {
+  const headlines = normalizeArray(newsContext?.top_headlines ?? newsContext?.topHeadlines).slice(0, 3);
+  const coverage = newsContext?.news_coverage ?? newsContext?.coverage ?? {};
+  const mode = String(newsContext?.analysis_mode ?? newsContext?.analysisMode ?? "").trim();
+  const degradedReason =
+    String(newsContext?.analysis_degraded_reason ?? newsContext?.degradedReason ?? "").trim() || null;
+  const totalStories = Number(coverage?.totalStories ?? headlines.length ?? 0);
+  const uniqueSources = Number(coverage?.uniqueSourceCount ?? 0);
+  const trustedSources = Number(coverage?.trustedSourceCount ?? 0);
+  const displayUniqueSources = uniqueSources > 0 ? uniqueSources : headlines.length > 0 ? 1 : 0;
+  if (!mode && !degradedReason && headlines.length === 0 && totalStories <= 0) {
+    return [];
+  }
+
+  return [
+    `- 分析模式：${mode || "unavailable"}`,
+    `- 覆盖概览：stories=${totalStories}，sources=${displayUniqueSources}，trusted=${trustedSources}`,
+    ...(degradedReason ? [`- 降级原因：${degradedReason}`] : []),
+    ...(headlines.length > 0
+      ? headlines.map((item) => {
+          const source = String(item?.source ?? item?.sourceId ?? "unknown").trim() || "unknown";
+          const title = String(item?.title ?? item?.headline ?? "").trim() || "未命名新闻";
+          const publishedAt = String(item?.published_at ?? item?.publishedAt ?? "").trim() || "--";
+          return `- 头条：${source}｜${title}｜${publishedAt}`;
+        })
+      : ["- 头条：暂无"])
+  ];
+}
+
+export function buildResearchGoldFactorLines(goldFactorModel = {}) {
+  const secondaryDrivers = normalizeArray(goldFactorModel?.secondaryGoldDrivers).slice(0, 4);
+  const riskNotes = normalizeArray(goldFactorModel?.goldRiskNotes).slice(0, 3);
+  const dominantDriver = String(goldFactorModel?.dominantGoldDriver ?? "").trim();
+  const goldRegime = String(goldFactorModel?.goldRegime ?? "").trim();
+  const actionBias = String(goldFactorModel?.goldActionBias ?? "").trim();
+
+  if (!dominantDriver && !goldRegime && !actionBias && secondaryDrivers.length === 0 && riskNotes.length === 0) {
+    return [];
+  }
+
+  return [
+    `- 主驱动：${dominantDriver || "mixed_inputs"}`,
+    `- 市场状态：${goldRegime || "unclear"}`,
+    `- 操作偏置：${actionBias || "observe"}`,
+    ...(secondaryDrivers.length > 0
+      ? [`- 次级驱动：${secondaryDrivers.join("、")}`]
+      : []),
+    ...(riskNotes.length > 0 ? riskNotes.map((item) => `- 风险提示：${item}`) : [])
   ];
 }
 
@@ -138,6 +183,14 @@ export function buildUnifiedResearchSections({
     {
       heading: "## Active Market Driver",
       lines: buildResearchDriverLines(researchBrain?.event_driver)
+    },
+    {
+      heading: "## Headline Tape",
+      lines: buildResearchHeadlineLines(researchBrain)
+    },
+    {
+      heading: "## Gold Factor Model",
+      lines: buildResearchGoldFactorLines(researchBrain?.gold_factor_model)
     },
     {
       heading: "## Flow & Macro Radar",

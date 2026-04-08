@@ -8,9 +8,7 @@ function normalizeText(value) {
   return String(value ?? "").trim();
 }
 
-function round(value, digits = 2) {
-  return Number(Number(value ?? 0).toFixed(digits));
-}
+import { round } from "./format_utils.mjs";
 
 function resolveAssetIdentity({ asset = null, position = null } = {}) {
   const market = normalizeText(asset?.market ?? position?.market).toUpperCase();
@@ -107,7 +105,7 @@ export function classifyFundConfirmation({
     }
   } else if (profile.profile === "global_qdii") {
     expectedConfirmedDate = findPreviousTradingDateBefore({
-      market: profile.market,
+      market: "CN_A",
       date: normalizedTargetDate
     });
 
@@ -123,11 +121,20 @@ export function classifyFundConfirmation({
       state = "confirmed";
     }
   } else {
-    expectedConfirmedDate = normalizedTargetDate;
+    const latestTradingDate = findLatestTradingDateOnOrBefore({
+      market: profile.market,
+      date: normalizedTargetDate
+    });
+    expectedConfirmedDate = latestTradingDate ?? normalizedTargetDate;
     if (!normalizedConfirmedNavDate) {
       state = "source_missing";
     } else if (normalizedConfirmedNavDate === normalizedTargetDate) {
       state = "confirmed";
+    } else if (
+      normalizedConfirmedNavDate === expectedConfirmedDate &&
+      expectedConfirmedDate !== normalizedTargetDate
+    ) {
+      state = "holiday_delay";
     } else {
       state = "late_missing";
     }

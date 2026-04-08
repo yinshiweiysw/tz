@@ -6,6 +6,10 @@
 
 - `state-manifest.json`
   无记忆续跑时的统一入口文件
+- `data/agent_runtime_context.json`
+  新 agent 的统一事实层入口，包含资金、持仓、桶缺口、市场上下文与系统健康状态
+- `data/strategy_decision_contract.json`
+  新 agent 的统一决策合同入口，包含 regime、交易许可、桶级动作边界与执行护栏
 - `snapshots/latest_raw.json`
   原始平台/插件快照，只保留外部世界的原始口径
 - `ledger/execution_ledger.json`
@@ -16,6 +20,8 @@
   兼容物化视图；仅为旧脚本/旧面板保留
 - `OPERATING_PROTOCOL.md`
   日常更新与一致性规则
+- `docs/AI_AGENT_DISPATCH_PROTOCOL.md`
+  新 AI-agent / 新线程的统一调度协议；定义“用户一句话 -> 读取哪些状态 -> 调用哪些脚本 -> 输出什么”
 - `journal/daily/YYYY-MM-DD.md`
   每日重要交易与聊天纪要
 - `scorecards/SCORING_RUBRIC.md`
@@ -185,16 +191,19 @@ node /Users/yinshiwei/codex/tz/portfolio/scripts/generate_next_trade_plan.mjs --
 如果后续是一个全新的 Codex 会话，没有任何上下文记忆，优先按下面顺序读取：
 
 1. `state-manifest.json`
-2. `state/portfolio_state.json`
-3. `OPERATING_PROTOCOL.md`
-4. 当天最新的 `journal/daily`
-5. 当天最新的 `transactions` 与 `reports`
-6. 如需核对写入因果链，再读 `ledger/execution_ledger.json` 与 `snapshots/latest_raw.json`
-7. 如需快速判断仓位风险，再读 `risk_dashboard.json`
-8. 如需知道一笔重要交易为什么成立，再读对应的 `trade_cards`
-9. 如需知道当前到底在赌什么、什么时候算错，再读 `hypotheses.md`
-10. 如需最快速进入状态，先读当天的 `daily_briefs`
-11. 如需先判断市场主线和风格，再读当天的 `market_briefs`
+2. `data/agent_runtime_context.json`
+3. `data/strategy_decision_contract.json`
+4. `docs/AI_AGENT_DISPATCH_PROTOCOL.md`
+5. `state/portfolio_state.json`
+6. `OPERATING_PROTOCOL.md`
+5. 当天最新的 `journal/daily`
+6. 当天最新的 `transactions` 与 `reports`
+7. 如需核对写入因果链，再读 `ledger/execution_ledger.json` 与 `snapshots/latest_raw.json`
+8. 如需快速判断仓位风险，再读 `risk_dashboard.json`
+9. 如需知道一笔重要交易为什么成立，再读对应的 `trade_cards`
+10. 如需知道当前到底在赌什么、什么时候算错，再读 `hypotheses.md`
+11. 如需最快速进入状态，先读当天的 `daily_briefs`
+12. 如需先判断市场主线和风格，再读当天的 `market_briefs`
 
 ## 实时净值
 

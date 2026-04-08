@@ -14,6 +14,7 @@ import { loadIpsConstraints } from "./lib/ips_constraints.mjs";
 import { buildPortfolioRiskState } from "./lib/portfolio_risk_state.mjs";
 import { loadCanonicalPortfolioState, readJsonOrNull } from "./lib/portfolio_state_view.mjs";
 import { buildCanonicalPortfolioView } from "./lib/portfolio_canonical_view.mjs";
+import { round } from "./lib/format_utils.mjs";
 const RISK_RESONANCE_THRESHOLD = 0.6;
 const HEDGE_DISCOVERY_THRESHOLD = -0.6;
 
@@ -37,10 +38,6 @@ function parseArgs(argv) {
   return result;
 }
 
-function round(value, digits = 2) {
-  return Number(Number(value ?? 0).toFixed(digits));
-}
-
 function pct(amount, base) {
   if (!base || !Number.isFinite(base)) {
     return null;
@@ -50,6 +47,38 @@ function pct(amount, base) {
 
 function sumAmounts(items) {
   return round(items.reduce((sum, item) => sum + Number(item.amount ?? 0), 0));
+}
+
+export function deriveRiskCapitalContext({ latest = {}, accountContext = {} } = {}) {
+  const summary = latest?.summary ?? {};
+  const cashLedger = latest?.cash_ledger ?? {};
+  const investedAssetsCny =
+    Number(summary?.total_fund_assets ?? 0) ||
+    Number(summary?.effective_exposure_after_pending_sell ?? 0) ||
+    0;
+  const settledCashCny =
+    Number(summary?.settled_cash_cny ?? cashLedger?.settled_cash_cny ?? summary?.available_cash_cny ?? cashLedger?.available_cash_cny ?? accountContext?.available_cash_cny ?? accountContext?.reported_cash_estimate_cny ?? 0) ||
+    0;
+  const tradeAvailableCashCny =
+    Number(summary?.trade_available_cash_cny ?? cashLedger?.trade_available_cash_cny ?? settledCashCny) ||
+    0;
+  const cashLikeFundAssetsCny =
+    Number(summary?.cash_like_fund_assets_cny ?? cashLedger?.cash_like_fund_assets_cny ?? 0) || 0;
+  const liquiditySleeveAssetsCny =
+    Number(summary?.liquidity_sleeve_assets_cny ?? cashLedger?.liquidity_sleeve_assets_cny ?? cashLikeFundAssetsCny) || 0;
+  const totalAssetsCny =
+    Number(summary?.total_portfolio_assets_cny ?? summary?.total_assets_cny ?? accountContext?.total_assets_cny ?? accountContext?.reported_total_assets_range_cny?.min ?? investedAssetsCny + settledCashCny) ||
+    0;
+
+  return {
+    total_assets_cny: round(totalAssetsCny),
+    invested_assets_cny: round(investedAssetsCny),
+    settled_cash_cny: round(settledCashCny),
+    trade_available_cash_cny: round(tradeAvailableCashCny),
+    cash_like_fund_assets_cny: round(cashLikeFundAssetsCny),
+    liquidity_sleeve_assets_cny: round(liquiditySleeveAssetsCny),
+    reported_cash_estimate_cny: Number(accountContext?.reported_cash_estimate_cny ?? 0) || 0
+  };
 }
 
 function effectiveCountFromBuckets(buckets) {
@@ -695,14 +724,21 @@ function buildStressScenarios(bucketBreakdown, investedCapital, estimatedTotalCa
   });
 }
 
-function buildView(label, positions, capitalContext = null) {
+export function buildView(label, positions, capitalContext = null) {
   const investedCapital = round(
     positions.reduce((sum, item) => sum + Number(item.amount ?? 0), 0)
   );
   const categoryBreakdown = aggregateByCategory(positions);
   const bucketBreakdown = aggregateByBucket(positions);
-  const reportedCash = Number(capitalContext?.reported_cash_estimate_cny ?? 0);
-  const estimatedTotalCapital = reportedCash > 0 ? round(investedCapital + reportedCash) : null;
+  const settledCash = Number(capitalContext?.settled_cash_cny ?? 0);
+  const tradeAvailableCash = Number(capitalContext?.trade_available_cash_cny ?? settledCash);
+  const liquiditySleeveAssets = Number(capitalContext?.liquidity_sleeve_assets_cny ?? 0);
+  const estimatedTotalCapital =
+    Number(capitalContext?.total_assets_cny ?? 0) > 0
+      ? round(Number(capitalContext.total_assets_cny))
+      : settledCash > 0
+        ? round(investedCapital + settledCash)
+        : null;
   const top = topPositions(positions, investedCapital);
   const largestPosition = top[0] ?? null;
   const top3Weight = round(
@@ -770,11 +806,25 @@ function buildView(label, positions, capitalContext = null) {
     label,
     invested_capital_cny: investedCapital,
     estimated_total_capital_cny: estimatedTotalCapital,
+    capital_semantics: {
+      settled_cash_cny: round(settledCash),
+      trade_available_cash_cny: round(tradeAvailableCash),
+      liquidity_sleeve_assets_cny: round(liquiditySleeveAssets),
+      cash_like_fund_assets_cny: round(Number(capitalContext?.cash_like_fund_assets_cny ?? 0))
+    },
+    denominator_labels: {
+      bucket_weights: "pct_of_invested_assets",
+      top_positions: "pct_of_invested_assets",
+      cash_weights: "pct_of_total_assets"
+    },
     category_breakdown_cny: categoryBreakdown,
     bucket_breakdown_cny: bucketBreakdown,
     bucket_weights_pct_of_invested_capital: Object.fromEntries(
       Object.entries(bucketBreakdown).map(([bucketKey, amount]) => [bucketKey, pct(amount, investedCapital)])
     ),
+    cash_pct_of_total_assets: pct(settledCash, estimatedTotalCapital),
+    trade_available_cash_pct_of_total_assets: pct(tradeAvailableCash, estimatedTotalCapital),
+    liquidity_sleeve_pct_of_total_assets: pct(liquiditySleeveAssets, estimatedTotalCapital),
     concentration: {
       largest_position: largestPosition,
       top3_weight_pct_of_invested_capital: top3Weight
@@ -843,11 +893,15 @@ export async function runRiskDashboardBuild(rawOptions = {}) {
   const canonicalPositions = (latest.positions ?? []).filter((item) => item.status === "active");
   const manualBuys = pendingManual.manualTrades ?? [];
   const workingPositions = buildWorkingPositions(canonicalPositions, manualBuys);
-  const canonicalView = buildView("canonical_latest_snapshot", canonicalPositions, accountContext);
+  const capitalContext = deriveRiskCapitalContext({
+    latest,
+    accountContext
+  });
+  const canonicalView = buildView("canonical_latest_snapshot", canonicalPositions, capitalContext);
   const workingView = buildView(
     "working_view_including_user_reported_manual_buys",
     workingPositions,
-    accountContext
+    capitalContext
   );
   const l2SignalAlerts = buildL2SignalAlerts(canonicalPositions, signalMatrix);
   const valuationAlerts = buildValuationAlerts(indexValuationMatrix);
@@ -863,7 +917,8 @@ export async function runRiskDashboardBuild(rawOptions = {}) {
     ipsConstraints,
     totalAssetsCny:
       Number(
-        latest?.summary?.total_portfolio_assets_cny ??
+        capitalContext?.total_assets_cny ??
+          latest?.summary?.total_portfolio_assets_cny ??
           latest?.summary?.total_assets_cny ??
           accountContext?.total_assets_cny ??
           0
@@ -904,6 +959,11 @@ export async function runRiskDashboardBuild(rawOptions = {}) {
     correlation_cluster_breaches: portfolioRisk.correlation_cluster_breaches,
     capital_context: {
       ...accountContext,
+      settled_cash_cny: capitalContext.settled_cash_cny,
+      trade_available_cash_cny: capitalContext.trade_available_cash_cny,
+      cash_like_fund_assets_cny: capitalContext.cash_like_fund_assets_cny,
+      liquidity_sleeve_assets_cny: capitalContext.liquidity_sleeve_assets_cny,
+      total_assets_cny: capitalContext.total_assets_cny,
       inferred_total_assets_from_working_holdings_plus_reported_cash_cny:
         workingView.estimated_total_capital_cny
     },
@@ -914,7 +974,8 @@ export async function runRiskDashboardBuild(rawOptions = {}) {
       manualBuys.length > 0
         ? "Working view adds user-reported manual buys that have not yet been merged into the canonical state."
         : "There are currently no pending manual buy files outside the canonical state.",
-      "Cash and total assets in account_context.json are user-reported approximate values and may differ from a fresh full-account screenshot."
+      "真钱现金与流动性防线已拆分：settled_cash_cny 不等于现金类基金资产，风险口径不再把债券基金当作可用现金。",
+      "若 canonical state 已提供 total_portfolio_assets_cny / settled_cash_cny，将优先于 account_context.json 的工作估计值。"
     ],
     methodology_notes: [
       "组合波动率、桶级 MRC 与相关性矩阵全部来自 quant_metrics_engine.json 的真实 60 日收益率协方差运算。",

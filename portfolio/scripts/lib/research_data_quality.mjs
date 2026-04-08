@@ -1,10 +1,4 @@
-function round(value, digits = 2) {
-  if (!Number.isFinite(Number(value))) {
-    return null;
-  }
-
-  return Number(Number(value).toFixed(digits));
-}
+import { round } from "./format_utils.mjs";
 
 function compareDateStrings(left, right) {
   if (!left && !right) {

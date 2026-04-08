@@ -48,7 +48,7 @@
       "label": "全球动量",
       "short_label": "全球",
       "target": 0.14,
-      "min": 0.0,
+      "min": 0,
       "max": 0.2,
       "risk_role": "growth",
       "driver": "趋势均线",
@@ -94,7 +94,7 @@
       "label": "战术刺客",
       "short_label": "战术",
       "target": 0.06,
-      "min": 0.0,
+      "min": 0,
       "max": 0.1,
       "risk_role": "tactical",
       "driver": "波动率",
@@ -103,8 +103,8 @@
       "buy_gate": "frozen"
     },
     "CASH": {
-      "label": "现金防线",
-      "short_label": "现金",
+      "label": "流动性防线",
+      "short_label": "流动",
       "target": 0.34,
       "min": 0.15,
       "max": 0.45,
@@ -409,6 +409,10 @@
           "max_atr_threshold": 0.035,
           "kill_switch_enabled": false
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.18,
+        "max_pct_of_invested_assets": 0.28
       }
     },
     {
@@ -433,6 +437,10 @@
           "max_atr_threshold": 0.04,
           "kill_switch_enabled": false
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.18,
+        "max_pct_of_invested_assets": 0.28
       }
     },
     {
@@ -457,6 +465,10 @@
           "max_atr_threshold": 0.04,
           "kill_switch_enabled": false
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.18,
+        "max_pct_of_invested_assets": 0.28
       }
     },
     {
@@ -481,6 +493,10 @@
           "max_atr_threshold": 0.06,
           "kill_switch_enabled": false
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.12,
+        "max_pct_of_invested_assets": 0.18
       }
     },
     {
@@ -505,6 +521,10 @@
           "max_atr_threshold": 0.065,
           "kill_switch_enabled": false
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.12,
+        "max_pct_of_invested_assets": 0.18
       }
     },
     {
@@ -529,6 +549,10 @@
           "max_atr_threshold": 0.06,
           "kill_switch_enabled": false
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.12,
+        "max_pct_of_invested_assets": 0.18
       }
     },
     {
@@ -553,6 +577,10 @@
           "max_atr_threshold": 0.06,
           "kill_switch_enabled": false
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.12,
+        "max_pct_of_invested_assets": 0.18
       }
     },
     {
@@ -577,6 +605,10 @@
           "max_atr_threshold": 0.055,
           "kill_switch_enabled": false
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.12,
+        "max_pct_of_invested_assets": 0.18
       }
     },
     {
@@ -601,6 +633,10 @@
           "max_atr_threshold": 0.07,
           "kill_switch_enabled": false
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.12,
+        "max_pct_of_invested_assets": 0.18
       }
     },
     {
@@ -630,6 +666,10 @@
           "max_atr_threshold": 0.06,
           "kill_switch_enabled": false
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.12,
+        "max_pct_of_invested_assets": 0.18
       }
     },
     {
@@ -654,6 +694,10 @@
           "max_atr_threshold": 0.028,
           "kill_switch_enabled": false
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.12,
+        "max_pct_of_invested_assets": 0.18
       }
     },
     {
@@ -679,6 +723,10 @@
           "max_atr_threshold": 0.03,
           "kill_switch_enabled": false
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.12,
+        "max_pct_of_invested_assets": 0.18
       }
     },
     {
@@ -688,7 +736,7 @@
       "bucket": "HEDGE",
       "hedge_sleeve_type": "core_gold",
       "portfolio_role": "纯黄金核心仓",
-      "bucket_target_bias": 5.0,
+      "bucket_target_bias": 5,
       "market": "CN",
       "category": "黄金",
       "strategy_regime": {
@@ -706,6 +754,10 @@
           "max_atr_threshold": 0.05,
           "kill_switch_enabled": false
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.15,
+        "max_pct_of_invested_assets": 0.2
       }
     },
     {
@@ -715,7 +767,7 @@
       "bucket": "HEDGE",
       "hedge_sleeve_type": "commodity_satellite",
       "portfolio_role": "商品卫星仓",
-      "bucket_target_bias": 1.0,
+      "bucket_target_bias": 1,
       "portfolio_weight_cap": 0.03,
       "market": "GLB",
       "category": "大宗商品/QDII",
@@ -734,6 +786,10 @@
           "max_atr_threshold": 0.07,
           "kill_switch_enabled": false
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.15,
+        "max_pct_of_invested_assets": 0.2
       }
     },
     {
@@ -762,6 +818,10 @@
           "max_atr_threshold": 0.08,
           "kill_switch_enabled": true
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.08,
+        "max_pct_of_invested_assets": 0.12
       }
     },
     {
@@ -786,6 +846,10 @@
           "max_atr_threshold": 0.085,
           "kill_switch_enabled": true
         }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.08,
+        "max_pct_of_invested_assets": 0.12
       }
     },
     {
@@ -795,7 +859,11 @@
       "bucket": "CASH",
       "market": "CN",
       "category": "偏债混合",
-      "signal_enabled": false
+      "signal_enabled": false,
+      "position_limits": {
+        "max_pct_of_total_assets": 0.18,
+        "max_pct_of_invested_assets": 0.25
+      }
     },
     {
       "symbol": "016482",
@@ -804,7 +872,11 @@
       "bucket": "CASH",
       "market": "CN",
       "category": "偏债混合",
-      "signal_enabled": false
+      "signal_enabled": false,
+      "position_limits": {
+        "max_pct_of_total_assets": 0.18,
+        "max_pct_of_invested_assets": 0.25
+      }
     }
   ],
   "portfolio_backtest": {
@@ -812,7 +884,7 @@
     "lookback_days": 1250,
     "warmup_days": 120,
     "execution_model": "signal_on_close_execute_next_day_close",
-    "annual_cash_yield_pct": 2.0,
+    "annual_cash_yield_pct": 2,
     "bucket_representatives": {
       "A_CORE": {
         "symbol": "007339",

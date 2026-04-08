@@ -177,3 +177,43 @@ test("ignores previous close reference rows when counting cross-asset confirmati
     ["关税与贸易摩擦冲击全球风险偏好", "纳斯达克100期货"]
   );
 });
+
+test("prefers corroborated higher-tier stories over lower-tier telegraph noise", () => {
+  const result = buildResearchEventDriver({
+    stories: [
+      {
+        title: "Reuters: Trump says Iran ceasefire talks continue for two weeks",
+        summary: "Ceasefire timeline remains the dominant macro headline.",
+        published_at: "2026-04-08T09:20:00+08:00",
+        source: "Reuters",
+        sourceId: "reuters_world",
+        tier: 1
+      },
+      {
+        title: "WSJ: Ceasefire negotiations reshape risk appetite",
+        summary: "Cross-asset risk rebound continues.",
+        published_at: "2026-04-08T09:18:00+08:00",
+        source: "WSJ",
+        sourceId: "wsj_world",
+        tier: 1
+      },
+      {
+        title: "盘面直播：题材快速拉升",
+        content: "低质量噪音。",
+        published_at: "2026-04-08T09:19:00+08:00",
+        source: "telegraph",
+        sourceId: "cls_telegraph",
+        tier: 3
+      }
+    ],
+    marketSnapshot: {
+      global_indices: [{ label: "纳斯达克100期货", pct_change: 1.2 }],
+      commodities: [{ label: "COMEX黄金", pct_change: 0.6 }],
+      rates_fx: [{ label: "美元指数", pct_change: -0.8 }]
+    }
+  });
+
+  assert.equal(result.status, "active_market_driver");
+  assert.match(result.primary_driver ?? "", /停火|关税|贸易|中东|风险偏好/u);
+  assert.equal(result.evidence.some((item) => item.source === "Reuters"), true);
+});

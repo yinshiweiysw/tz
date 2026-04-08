@@ -57,3 +57,27 @@ test("restricted research permission rejects buy", () => {
   assert.match(result.blockingReasons[0], /restricted/i);
 });
 
+test("restricted research permission also rejects conversion orders", () => {
+  const result = evaluateExecutionPermission({
+    structuralGate: { allowed: true, blockingReasons: [], warnings: [] },
+    researchDecision: {
+      actionable_decision: {
+        desk_conclusion: {
+          trade_permission: "restricted"
+        }
+      }
+    },
+    proposedTrades: [
+      {
+        type: "conversion",
+        source_fund_code: "016482",
+        fund_code: "023764",
+        amount_cny: 1000
+      }
+    ]
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.mode, "research_restricted");
+  assert.match(result.blockingReasons[0], /conversion|restricted/i);
+});

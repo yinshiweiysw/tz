@@ -2,7 +2,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { getMarketTelegraph } from "../../market-mcp/src/providers/stock.js";
 import {
   buildPortfolioPath,
   defaultPortfolioRoot,
@@ -20,6 +19,8 @@ import {
   deriveResearchSectionConfidence
 } from "./lib/research_data_quality.mjs";
 import { buildResearchEventDriver } from "./lib/research_event_driver.mjs";
+import { buildResearchGoldFactorModel } from "./lib/research_gold_factor_model.mjs";
+import { aggregateResearchNews } from "./lib/research_news_aggregator.mjs";
 import { buildResearchFreshnessGuard } from "./lib/research_freshness_guard.mjs";
 import { buildResearchFlowMacroRadar } from "./lib/research_flow_macro_radar.mjs";
 import { getComparableChangePercent } from "./lib/market_schedule_guard.mjs";
@@ -270,25 +271,6 @@ function findSnapshotMove(rows = [], matcher) {
   return getComparableChangePercent(row);
 }
 
-function normalizeTelegraph(item = {}) {
-  return {
-    title: String(item?.title ?? "").trim(),
-    content: String(item?.content ?? "").trim(),
-    source: String(item?.source ?? item?.channel ?? "telegraph").trim(),
-    published_at: item?.published_at ?? item?.publishedAt ?? item?.created_at ?? null,
-    subjects: Array.isArray(item?.subjects) ? item.subjects : []
-  };
-}
-
-async function loadTelegraphEvidence(telegraphFetcher = getMarketTelegraph) {
-  try {
-    const items = await telegraphFetcher(20);
-    return Array.isArray(items) ? items.map((item) => normalizeTelegraph(item)).filter((item) => item.title || item.content) : [];
-  } catch {
-    return [];
-  }
-}
-
 function deriveHkFlowSnapshot({ marketSnapshot = {}, cnMarketSnapshot = {} } = {}) {
   const hsiMove = findSnapshotMove(marketSnapshot.hong_kong_indices ?? [], (label) => label.includes("恒生指数"));
   const hstechMove = findSnapshotMove(marketSnapshot.hong_kong_indices ?? [], (label) => label.includes("恒生科技"));
@@ -381,7 +363,11 @@ export async function runResearchBrainBuild(rawOptions = {}) {
     macroStateFallback: payloads.macroState,
     now
   });
-  const telegraphs = await loadTelegraphEvidence(rawOptions.telegraphFetcher);
+  const newsAggregation = await aggregateResearchNews({
+    now,
+    sourceIds: rawOptions.newsSourceIds,
+    sourceLoaders: rawOptions.sourceLoaders
+  });
   const freshnessGuard = buildResearchFreshnessGuard({
     now,
     sessionInfo: sessionContext,
@@ -405,8 +391,12 @@ export async function runResearchBrainBuild(rawOptions = {}) {
       cnMarketSnapshot: payloads.cnMarketSnapshot
     });
   const eventDriver = buildResearchEventDriver({
-    telegraphs,
+    stories: newsAggregation.stories,
     marketSnapshot
+  });
+  const goldFactorModel = buildResearchGoldFactorModel({
+    marketSnapshot,
+    eventDriver
   });
   const flowMacroRadar = buildResearchFlowMacroRadar({
     macroState: payloads.macroState,
@@ -492,6 +482,13 @@ export async function runResearchBrainBuild(rawOptions = {}) {
     data_quality_flags: dataQualityFlags,
     blocked_reason: blockedReason,
     event_driver: eventDriver,
+    gold_factor_model: goldFactorModel,
+    news_source_health: newsAggregation.sourceHealth,
+    news_coverage: newsAggregation.coverage,
+    news_story_count: newsAggregation.stories.length,
+    top_headlines: newsAggregation.topHeadlines,
+    analysis_mode: newsAggregation.analysisMode,
+    analysis_degraded_reason: newsAggregation.degradedReason,
     flow_macro_radar: flowMacroRadar,
     market_data_quality: marketDataQuality,
     driver_expectation_matrix: driverExpectationMatrix,

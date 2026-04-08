@@ -1,12 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-function round(value, digits = 2) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return null;
-  }
-
-  return Number(Number(value).toFixed(digits));
-}
+import { round } from "./format_utils.mjs";
 
 function formatSigned(value, suffix = "") {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {

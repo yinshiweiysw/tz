@@ -27,6 +27,7 @@ import { updateManifestCanonicalEntrypoints } from "./lib/manifest_state.mjs";
 import { ensureReportContext } from "./lib/report_context.mjs";
 import { loadCanonicalPortfolioState } from "./lib/portfolio_state_view.mjs";
 import { buildCanonicalPortfolioView } from "./lib/portfolio_canonical_view.mjs";
+import { round } from "./lib/format_utils.mjs";
 
 const args = process.argv.slice(2);
 
@@ -59,10 +60,6 @@ function resolveDate(dateArg) {
   }).format(new Date());
 }
 
-function round(value, digits = 2) {
-  return Number(Number(value ?? 0).toFixed(digits));
-}
-
 async function readJsonOrNull(filePath) {
   if (!filePath) {
     return null;
@@ -72,6 +69,23 @@ async function readJsonOrNull(filePath) {
     return JSON.parse(await readFile(filePath, "utf8"));
   } catch {
     return null;
+  }
+}
+
+async function readOptionalText(filePath, fallback = "") {
+  return readFile(filePath, "utf8").catch(() => fallback);
+}
+
+async function readOptionalJson(filePath, fallback = {}) {
+  const text = await readOptionalText(filePath, "");
+  if (!text) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return fallback;
   }
 }
 
@@ -698,14 +712,14 @@ const latest =
     sourceKind: latestView.sourceKind,
     sourcePath: latestView.sourcePath
   });
-const riskDashboard = payloads.riskDashboard ?? JSON.parse(await readFile(riskDashboardPath, "utf8"));
+const riskDashboard = payloads.riskDashboard ?? (await readOptionalJson(riskDashboardPath, {}));
 const macroRadar = payloads.macroRadar ?? null;
 const performanceAttribution = payloads.performanceAttribution ?? null;
 const quantMetrics = payloads.quantMetrics ?? null;
 const researchBrain = payloads.researchBrain ?? null;
 
 const [hypothesesMarkdown, watchlistQuotes] = await Promise.all([
-  readFile(hypothesesPath, "utf8"),
+  readOptionalText(hypothesesPath, ""),
   getFundWatchlistQuotes(watchlistPath).catch(() => ({ items: [], estimatedDailyPnlCny: null }))
 ]);
 const assetMasterPath =
@@ -720,7 +734,7 @@ const resolvedJournalPath =
     : fallbackJournalPath && (await pathExists(fallbackJournalPath))
       ? fallbackJournalPath
       : journalPath;
-const journalMarkdown = await readFile(resolvedJournalPath, "utf8").catch(() => "");
+const journalMarkdown = await readOptionalText(resolvedJournalPath, "");
 const cnMarketSnapshot = payloads.cnMarketSnapshot ?? (await loadCnMarketSnapshotFromManifest(manifest));
 
 const nextTradePlanPath = await resolveFirstExistingPath(
@@ -730,7 +744,7 @@ const nextTradePlanPath = await resolveFirstExistingPath(
     manifest
   })
 );
-const nextTradePlanMarkdown = await readFile(nextTradePlanPath, "utf8").catch(() => "");
+const nextTradePlanMarkdown = await readOptionalText(nextTradePlanPath, "");
 
 const summary = latest.summary ?? {};
 const workingView = pickWorkingView(riskDashboard);

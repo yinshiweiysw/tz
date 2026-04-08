@@ -22,6 +22,7 @@ if str(LIB_DIR) not in sys.path:
 
 from account_root import PORTFOLIO_USERS_ROOT  # noqa: E402
 from account_root import DEFAULT_PORTFOLIO_ROOT, resolve_portfolio_root  # noqa: E402
+from fund_name_normalizer import normalize_fund_name  # noqa: E402
 
 PORTFOLIO_ROOT = DEFAULT_PORTFOLIO_ROOT
 WATCHLIST_PATH = PORTFOLIO_ROOT / "fund-watchlist.json"
@@ -112,6 +113,9 @@ class DailyPriceRecord(BaseModel):
         return numeric
 
 
+DailyPriceRecord.model_rebuild(_types_namespace={"date": date})
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Ingest local market data lake from AkShare funds and yfinance global symbols."
@@ -120,6 +124,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--db", default="")
     parser.add_argument("--period", default=DEFAULT_YFINANCE_PERIOD)
     parser.add_argument("--fund-indicator", default=DEFAULT_FUND_INDICATOR)
+    parser.add_argument(
+        "--bootstrap-schema-only",
+        action="store_true",
+        help="Create / verify the shared SQLite schema without fetching remote market data.",
+    )
     parser.add_argument(
         "--only-symbols",
         default="",
@@ -198,6 +207,77 @@ def collect_watchlist_specs() -> list[tuple[str, Path]]:
                 specs.append((child.name, watchlist_path))
 
     return specs
+
+
+def load_asset_master_assets() -> list[dict[str, Any]]:
+    if not ASSET_MASTER_PATH.exists():
+        return []
+    payload = read_json(ASSET_MASTER_PATH)
+    assets = payload.get("assets")
+    if not isinstance(assets, list):
+        return []
+    return [asset for asset in assets if isinstance(asset, dict)]
+
+
+def extract_positions_from_payload(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, dict):
+        candidates = payload.get("positions") or payload.get("funds") or []
+    elif isinstance(payload, list):
+        candidates = payload
+    else:
+        candidates = []
+    return [item for item in candidates if isinstance(item, dict)]
+
+
+def iter_historical_snapshot_paths() -> list[Path]:
+    candidates: list[Path] = []
+    holdings_dir = PORTFOLIO_ROOT / "holdings"
+    if holdings_dir.exists():
+        candidates.extend(sorted(holdings_dir.glob("*.json")))
+
+    candidates.extend(
+        sorted(
+            path
+            for path in PORTFOLIO_ROOT.glob("latest*.json")
+            if path.name != "latest.json"
+        )
+    )
+
+    deduped: list[Path] = []
+    seen: set[Path] = set()
+    for path in candidates:
+        if path in seen or not path.exists():
+            continue
+        seen.add(path)
+        deduped.append(path)
+    return deduped
+
+
+def build_fund_name_code_lookup() -> dict[str, str]:
+    lookup: dict[str, str] = {}
+
+    if WATCHLIST_PATH.exists():
+        payload = read_json(WATCHLIST_PATH)
+        for item in payload.get("watchlist", []):
+            code = str(item.get("code") or "").strip()
+            name = str(item.get("name") or "").strip()
+            if code and code.isdigit() and name:
+                lookup[normalize_fund_name(name)] = code
+
+    for asset in load_asset_master_assets():
+        symbol = str(asset.get("symbol") or "").strip()
+        name = str(asset.get("name") or "").strip()
+        execution_type = str(asset.get("execution_type") or "OTC").upper()
+        if symbol and symbol.isdigit() and execution_type != "EXCHANGE" and name:
+            lookup.setdefault(normalize_fund_name(name), symbol)
+
+    return lookup
+
+
+def merge_source_tags(existing_value: str | None, *new_tags: str) -> str:
+    tags = {tag for tag in str(existing_value or "").split(",") if tag}
+    tags.update(tag for tag in new_tags if tag)
+    return ",".join(sorted(tags))
 
 
 def normalize_download_frame(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
@@ -485,6 +565,57 @@ def collect_fund_specs() -> list[dict[str, Any]]:
                 "source_tags": ",".join(sorted(tag for tag in merged_tags if tag)),
             }
 
+    for asset in load_asset_master_assets():
+        execution_type = str(asset.get("execution_type") or "OTC").upper()
+        symbol = str(asset.get("symbol") or "").strip()
+        if execution_type == "EXCHANGE" or not symbol or not symbol.isdigit():
+            continue
+
+        existing = deduped.get(symbol)
+        bucket = str(asset.get("bucket") or "").strip()
+        regime_type = str((asset.get("strategy_regime") or {}).get("type") or "").strip()
+        deduped[symbol] = {
+            "symbol": symbol,
+            "name": asset.get("name") or (existing or {}).get("name"),
+            "provider": "akshare",
+            "asset_type": "cn_fund",
+            "close_source": DEFAULT_FUND_INDICATOR,
+            "source_tags": merge_source_tags(
+                (existing or {}).get("source_tags"),
+                "asset_master",
+                "provider:akshare_fund_open_fund_info_em",
+                f"bucket:{bucket}" if bucket else "",
+                f"regime:{regime_type}" if regime_type else "",
+            ),
+        }
+
+    historical_name_lookup = build_fund_name_code_lookup()
+    for snapshot_path in iter_historical_snapshot_paths():
+        payload = load_optional_json(snapshot_path)
+        for item in extract_positions_from_payload(payload):
+            symbol = str(
+                item.get("fund_code")
+                or item.get("code")
+                or item.get("symbol")
+                or historical_name_lookup.get(normalize_fund_name(str(item.get("name") or "").strip()), "")
+            ).strip()
+            if not symbol or not symbol.isdigit():
+                continue
+
+            existing = deduped.get(symbol)
+            deduped[symbol] = {
+                "symbol": symbol,
+                "name": item.get("name") or (existing or {}).get("name"),
+                "provider": "akshare",
+                "asset_type": "cn_fund",
+                "close_source": DEFAULT_FUND_INDICATOR,
+                "source_tags": merge_source_tags(
+                    (existing or {}).get("source_tags"),
+                    "historical_snapshot",
+                    f"historical_file:{snapshot_path.name}",
+                ),
+            }
+
     return sorted(deduped.values(), key=lambda item: item["symbol"])
 
 
@@ -522,6 +653,36 @@ def collect_yfinance_specs() -> list[dict[str, Any]]:
                 },
             )
             entry["source_tags"].add(f"qdii_proxy:{key}")
+
+    for asset in load_asset_master_assets():
+        execution_type = str(asset.get("execution_type") or "OTC").upper()
+        raw_symbol = str(
+            asset.get("signal_proxy_symbol")
+            or (asset.get("ticker") if execution_type == "EXCHANGE" else asset.get("symbol"))
+            or asset.get("symbol")
+            or ""
+        ).strip()
+        if not raw_symbol or raw_symbol.isdigit():
+            continue
+        normalized_symbol = raw_symbol.upper()
+        entry = specs_by_symbol.setdefault(
+            normalized_symbol,
+            {
+                "symbol": normalized_symbol,
+                "name": asset.get("name"),
+                "provider": "yfinance",
+                "asset_type": "global_market",
+                "field_preference": ["Adj Close", "Close"],
+                "source_tags": set(),
+            },
+        )
+        bucket = str(asset.get("bucket") or "").strip()
+        regime_type = str((asset.get("strategy_regime") or {}).get("type") or "").strip()
+        entry["source_tags"].add("asset_master")
+        if bucket:
+            entry["source_tags"].add(f"bucket:{bucket}")
+        if regime_type:
+            entry["source_tags"].add(f"regime:{regime_type}")
 
     result: list[dict[str, Any]] = []
     for spec in specs_by_symbol.values():
@@ -638,8 +799,22 @@ def ensure_schema(connection: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_daily_prices_symbol_date
           ON daily_prices(symbol, date);
+        CREATE TABLE IF NOT EXISTS macro_indicators (
+          date TEXT PRIMARY KEY,
+          pe_ttm REAL,
+          cn_10y_rate REAL,
+          erp_pct REAL,
+          updated_at TEXT NOT NULL
+        );
         """
     )
+
+
+def fetch_table_counts(connection: sqlite3.Connection) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for table_name in ("daily_prices", "macro_indicators"):
+        counts[table_name] = int(connection.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0])
+    return counts
 
 
 def build_fund_records(spec: dict[str, Any], indicator: str) -> list[DailyPriceRecord]:
@@ -659,15 +834,20 @@ def build_fund_records(spec: dict[str, Any], indicator: str) -> list[DailyPriceR
         raise ValueError("fund history is empty after cleaning")
 
     records: list[DailyPriceRecord] = []
+    previous_close: float | None = None
     for _, row in working.iterrows():
+        close_value = float(row[nav_column])
+        open_value = previous_close if previous_close is not None else close_value
+        high_value = max(open_value, close_value)
+        low_value = min(open_value, close_value)
         record = DailyPriceRecord(
             symbol=spec["symbol"],
             date=row["净值日期"],
-            open=row[nav_column],
-            high=row[nav_column],
-            low=row[nav_column],
-            close=row[nav_column],
-            adj_close=row[nav_column],
+            open=open_value,
+            high=high_value,
+            low=low_value,
+            close=close_value,
+            adj_close=close_value,
             volume=None,
             provider=spec["provider"],
             asset_type=spec["asset_type"],
@@ -676,6 +856,7 @@ def build_fund_records(spec: dict[str, Any], indicator: str) -> list[DailyPriceR
             source_tags=spec.get("source_tags"),
         )
         records.append(record)
+        previous_close = close_value
 
     return records
 
@@ -814,11 +995,40 @@ def build_cn_exchange_etf_records(spec: dict[str, Any]) -> list[DailyPriceRecord
     if working.empty:
         raise ValueError("ETF history is empty after cleaning")
 
+    adjusted_close_by_date: dict[date, float] = {}
+    if close_source == "fund_etf_hist_em":
+        try:
+            adjusted_df = ak.fund_etf_hist_em(
+                symbol=spec["symbol"],
+                period="daily",
+                start_date=start_date,
+                end_date=end_date,
+                adjust="qfq",
+            )
+            if adjusted_df is not None and not adjusted_df.empty:
+                adjusted_working = adjusted_df.rename(columns=rename_map)
+                if "date" in adjusted_working.columns and "close" in adjusted_working.columns:
+                    adjusted_working["date"] = pd.to_datetime(adjusted_working["date"], errors="coerce")
+                    adjusted_working["close"] = pd.to_numeric(adjusted_working["close"], errors="coerce")
+                    adjusted_working = (
+                        adjusted_working.dropna(subset=["date", "close"])
+                        .loc[lambda frame: frame["date"].dt.strftime("%Y%m%d").between(start_date, end_date)]
+                        .drop_duplicates(subset=["date"], keep="last")
+                    )
+                    adjusted_close_by_date = {
+                        row["date"].date(): float(row["close"])
+                        for _, row in adjusted_working.iterrows()
+                    }
+        except Exception as exc:
+            print(f"[warn] failed to load qfq ETF history for {spec['symbol']}: {exc}")
+
     records: list[DailyPriceRecord] = []
     for _, row in working.iterrows():
         volume_value = row.get("volume")
         if volume_value is not None and (pd.isna(volume_value) or not math.isfinite(float(volume_value))):
             volume_value = None
+        close_value = float(row["close"])
+        adj_close_value = adjusted_close_by_date.get(row["date"].date(), close_value)
 
         records.append(
             DailyPriceRecord(
@@ -827,8 +1037,8 @@ def build_cn_exchange_etf_records(spec: dict[str, Any]) -> list[DailyPriceRecord
                 open=row["open"],
                 high=row["high"],
                 low=row["low"],
-                close=row["close"],
-                adj_close=row["close"],
+                close=close_value,
+                adj_close=adj_close_value,
                 volume=float(volume_value) if volume_value is not None else None,
                 provider=spec["provider"],
                 asset_type=spec["asset_type"],
@@ -841,27 +1051,91 @@ def build_cn_exchange_etf_records(spec: dict[str, Any]) -> list[DailyPriceRecord
     return records
 
 
+def daily_price_source_priority(close_source: str | None) -> int:
+    normalized = str(close_source or "").strip().lower()
+    priorities = {
+        "fund_etf_hist_em": 30,
+        "fund_etf_hist_sina": 10,
+    }
+    return priorities.get(normalized, 20 if normalized else 0)
+
+
+def daily_price_quality_signature(record: DailyPriceRecord | dict[str, Any]) -> tuple[int, int, int]:
+    close_source = record.close_source if isinstance(record, DailyPriceRecord) else record.get("close_source")
+    close_value = record.close if isinstance(record, DailyPriceRecord) else record.get("close")
+    adj_close_value = record.adj_close if isinstance(record, DailyPriceRecord) else record.get("adj_close")
+    volume_value = record.volume if isinstance(record, DailyPriceRecord) else record.get("volume")
+    adjusted_quality = int(
+        close_value is not None
+        and adj_close_value is not None
+        and math.isfinite(float(close_value))
+        and math.isfinite(float(adj_close_value))
+        and not math.isclose(float(close_value), float(adj_close_value), rel_tol=1e-9, abs_tol=1e-9)
+    )
+    completeness = sum(
+        1
+        for value in (
+            record.open if isinstance(record, DailyPriceRecord) else record.get("open"),
+            record.high if isinstance(record, DailyPriceRecord) else record.get("high"),
+            record.low if isinstance(record, DailyPriceRecord) else record.get("low"),
+            close_value,
+            adj_close_value,
+            volume_value,
+        )
+        if value is not None
+    )
+    return (daily_price_source_priority(close_source), adjusted_quality, completeness)
+
+
+def should_replace_daily_price(existing_row: sqlite3.Row | tuple[Any, ...], incoming: DailyPriceRecord) -> bool:
+    existing = {
+        "open": existing_row[0],
+        "high": existing_row[1],
+        "low": existing_row[2],
+        "close": existing_row[3],
+        "adj_close": existing_row[4],
+        "volume": existing_row[5],
+        "close_source": existing_row[6],
+        "source_tags": existing_row[7],
+    }
+    return daily_price_quality_signature(incoming) >= daily_price_quality_signature(existing)
+
+
 def upsert_records(connection: sqlite3.Connection, records: list[DailyPriceRecord]) -> int:
     timestamp = format_now()
-    payload = [
-        (
-            record.symbol,
-            record.date.isoformat(),
-            record.open,
-            record.high,
-            record.low,
-            record.close,
-            record.adj_close,
-            record.volume,
-            record.provider,
-            record.asset_type,
-            record.name,
-            record.close_source,
-            record.source_tags,
-            timestamp,
+    payload = []
+    for record in records:
+        existing_row = connection.execute(
+            """
+            SELECT open, high, low, close, adj_close, volume, close_source, source_tags
+            FROM daily_prices
+            WHERE symbol = ? AND date = ?
+            """,
+            (record.symbol, record.date.isoformat()),
+        ).fetchone()
+        if existing_row is not None and not should_replace_daily_price(existing_row, record):
+            continue
+        payload.append(
+            (
+                record.symbol,
+                record.date.isoformat(),
+                record.open,
+                record.high,
+                record.low,
+                record.close,
+                record.adj_close,
+                record.volume,
+                record.provider,
+                record.asset_type,
+                record.name,
+                record.close_source,
+                record.source_tags,
+                timestamp,
+            )
         )
-        for record in records
-    ]
+
+    if not payload:
+        return 0
 
     connection.executemany(
         """
@@ -935,6 +1209,22 @@ def main() -> int:
 
     with sqlite3.connect(db_path) as connection:
         ensure_schema(connection)
+        if args.bootstrap_schema_only:
+            table_counts = fetch_table_counts(connection)
+            update_manifest(db_path)
+            print(
+                json.dumps(
+                    {
+                        "dbPath": str(db_path),
+                        "bootstrapSchemaOnly": True,
+                        "tables": sorted(table_counts),
+                        "tableRowCounts": table_counts,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return 0
 
         for spec in fund_specs:
             try:
@@ -996,7 +1286,7 @@ def main() -> int:
                     }
                 )
 
-        total_rows = connection.execute("SELECT COUNT(*) FROM daily_prices").fetchone()[0]
+        table_counts = fetch_table_counts(connection)
 
     update_manifest(db_path)
     print(
@@ -1011,7 +1301,8 @@ def main() -> int:
                 "exchangeSymbolsWritten": exchange_symbols_written,
                 "symbolsWritten": written_symbols,
                 "rowsWrittenThisRun": written_rows,
-                "totalRowsInLake": total_rows,
+                "tableRowCounts": table_counts,
+                "totalRowsInLake": table_counts["daily_prices"],
                 "errorCount": len(errors),
                 "errors": errors[:10],
             },

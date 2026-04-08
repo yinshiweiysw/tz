@@ -1,6 +1,4 @@
-function round(value, digits = 2) {
-  return Number(Number(value ?? 0).toFixed(digits));
-}
+import { round } from "./format_utils.mjs";
 
 function compareDateStrings(left, right) {
   const leftText = String(left ?? "").trim();

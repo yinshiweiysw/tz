@@ -104,6 +104,7 @@ export function resolveNightlyConfirmedNavReadiness({
   morningCutoffHour = 8,
   selfHealInFlight = false
 } = {}) {
+  void selfHealInFlight;
   const normalizedSnapshotDate = normalizeSnapshotDate(snapshotDate);
   const today = formatShanghaiDate(now);
   const hour = getShanghaiHour(now);
@@ -122,51 +123,51 @@ export function resolveNightlyConfirmedNavReadiness({
   const stats = accountRun?.stats ?? {};
   const normalLagCount =
     Number(stats?.normalLagFundCount ?? 0) + Number(stats?.holidayDelayFundCount ?? 0);
-  const hardFailureCount =
-    Number(stats?.lateMissingFundCount ?? 0) + Number(stats?.sourceMissingFundCount ?? 0);
+  const lateMissingCount = Number(stats?.lateMissingFundCount ?? 0);
+  const sourceMissingCount = Number(stats?.sourceMissingFundCount ?? 0);
+  const hardFailureCount = lateMissingCount + sourceMissingCount;
+
+  const basePayload = {
+    shouldTriggerSelfHeal: false,
+    targetDate: normalizeSnapshotDate(accountRun?.snapshotDate) ?? effectiveTargetDate,
+    accountRun
+  };
+
+  if (!accountRun) {
+    return {
+      ...basePayload,
+      state: "blocked",
+      reason: `nightly_confirmed_nav_status_missing_for_${effectiveTargetDate ?? "unknown_date"}`
+    };
+  }
+
+  if (hardFailureCount > 0) {
+    return {
+      ...basePayload,
+      state: sourceMissingCount > 0 ? "source_missing" : "late_missing",
+      reason: String(accountRun?.error ?? statusPayload?.fatalError ?? "").trim() || null
+    };
+  }
+
+  if (normalLagCount > 0) {
+    return {
+      ...basePayload,
+      state: "partially_confirmed_normal_lag",
+      reason: null
+    };
+  }
 
   if (accountRun?.success === true) {
     return {
+      ...basePayload,
       state: "confirmed_nav_ready",
-      shouldTriggerSelfHeal: false,
-      targetDate: normalizeSnapshotDate(accountRun?.snapshotDate) ?? effectiveTargetDate,
-      accountRun,
       reason: null
     };
   }
-
-  if (selfHealInFlight) {
-    return {
-      state: "self_heal_running",
-      shouldTriggerSelfHeal: false,
-      targetDate: effectiveTargetDate,
-      accountRun,
-      reason: null
-    };
-  }
-
-  const runType = String(accountRun?.runType ?? statusPayload?.runType ?? "").trim();
-  if (accountRun?.success === false && runType === "self_heal_on_read") {
-    return {
-      state: "self_heal_failed",
-      shouldTriggerSelfHeal: false,
-      targetDate: normalizeSnapshotDate(accountRun?.snapshotDate) ?? effectiveTargetDate,
-      accountRun,
-      reason: String(accountRun?.error ?? statusPayload?.fatalError ?? "self_heal_failed").trim()
-    };
-  }
-
-  const shouldTriggerSelfHeal = Boolean(
-    effectiveTargetDate &&
-      effectiveTargetDate.localeCompare(today) < 0 &&
-      hour >= morningCutoffHour
-  );
 
   return {
-    state: "temporary_live_valuation",
-    shouldTriggerSelfHeal,
-    targetDate: effectiveTargetDate,
-    accountRun,
-    reason: accountRun?.success === false ? String(accountRun?.error ?? "").trim() || null : null
+    ...basePayload,
+    state: "blocked",
+    reason: String(accountRun?.error ?? statusPayload?.fatalError ?? "").trim() || null
   };
 }
