@@ -150,6 +150,62 @@ test("buildManualBuyTransactionContent builds OTC trades with next-day profit ef
   );
 });
 
+test("buildManualBuyTransactionContent keeps QDII buys on T+2 profit schedule", () => {
+  const lookup = createFundLookup({
+    positions: [],
+    pendingPositions: [],
+    watchlistItems: [
+      {
+        code: "019736",
+        name: "宝盈纳斯达克100指数发起(QDII)A人民币"
+      }
+    ]
+  });
+
+  const payload = buildManualBuyTransactionContent({
+    tradeDate: "2026-04-08",
+    buyItems: parseBuySpec("019736:2000"),
+    executionType: "OTC",
+    submittedBeforeCutoff: true,
+    cutoffTimeLocal: "15:00",
+    rawSnapshotIncludesTrade: true,
+    lookup
+  });
+
+  assert.equal(payload.executed_buy_transactions.length, 1);
+  assert.equal(payload.executed_buy_transactions[0].fund_code, "019736");
+  assert.equal(payload.executed_buy_transactions[0].profit_effective_on, "2026-04-10");
+  assert.equal(payload.executed_buy_transactions[0].lifecycle_stage, "platform_confirmed_pending_profit");
+});
+
+test("buildManualBuyTransactionContent delays after-cutoff QDII buys until the third trading day", () => {
+  const lookup = createFundLookup({
+    positions: [],
+    pendingPositions: [],
+    watchlistItems: [
+      {
+        code: "019736",
+        name: "宝盈纳斯达克100指数发起(QDII)A人民币"
+      }
+    ]
+  });
+
+  const payload = buildManualBuyTransactionContent({
+    tradeDate: "2026-04-03",
+    buyItems: parseBuySpec("019736:2000"),
+    executionType: "OTC",
+    submittedBeforeCutoff: false,
+    cutoffTimeLocal: "15:00",
+    rawSnapshotIncludesTrade: true,
+    lookup
+  });
+
+  assert.equal(payload.executed_buy_transactions.length, 1);
+  assert.equal(payload.executed_buy_transactions[0].fund_code, "019736");
+  assert.equal(payload.executed_buy_transactions[0].profit_effective_on, "2026-04-09");
+  assert.equal(payload.executed_buy_transactions[0].lifecycle_stage, "platform_confirmed_pending_profit");
+});
+
 test("buildManualBuyTransactionContent keeps exchange trades out of pending profit schedule", () => {
   const lookup = createFundLookup({
     positions: [],

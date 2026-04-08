@@ -51,7 +51,10 @@ import {
   buildCanonicalPortfolioView,
   selectCanonicalPortfolioPayload
 } from "./lib/portfolio_canonical_view.mjs";
-import { resolveHoldingCostBasis } from "./lib/holding_cost_basis.mjs";
+import {
+  deriveCanonicalHoldingSnapshot,
+  resolveHoldingCostBasis
+} from "./lib/holding_cost_basis.mjs";
 import {
   readNightlyConfirmedNavStatus,
   resolveNightlyConfirmedNavReadiness
@@ -530,8 +533,11 @@ function deriveLedgerDailyChangePct(position, amount) {
 }
 
 function buildRow(position, resolved, quote, today, profitLock = null, options = {}) {
-  const amount = Number(position?.amount ?? 0);
-  const confirmedUnits = Number(position?.confirmed_units ?? NaN);
+  const canonicalSnapshot = deriveCanonicalHoldingSnapshot(position, {
+    nav: quote?.confirmedNav ?? quote?.netValue
+  });
+  const amount = Number(canonicalSnapshot.amountCny ?? position?.amount ?? 0);
+  const confirmedUnits = Number(canonicalSnapshot.units ?? position?.confirmed_units ?? NaN);
   const sessionPolicy =
     options?.sessionPolicy ?? resolveFundMarketSessionPolicy({ asset: options?.assetMeta, position });
   const now = options?.now ?? new Date();
@@ -582,14 +588,11 @@ function buildRow(position, resolved, quote, today, profitLock = null, options =
     Number.isFinite(estimateDriftPct) && Number.isFinite(eligibleAmountRaw)
       ? round((eligibleAmountRaw * estimateDriftPct) / 100)
       : null;
-  const resolvedCostBasis = resolveHoldingCostBasis(position);
+  const resolvedCostBasis = canonicalSnapshot.costBasisCny ?? resolveHoldingCostBasis(position);
   const costBasis = toNumberOrNull(resolvedCostBasis);
-  const holdingPnl =
-    Number.isFinite(amount) && Number.isFinite(Number(resolvedCostBasis))
-      ? toNumberOrNull(amount - Number(resolvedCostBasis))
-      : toNumberOrNull(position?.holding_pnl);
+  const holdingPnl = toNumberOrNull(canonicalSnapshot.holdingPnlCny ?? position?.holding_pnl);
   const holdingPnlRatePct =
-    toNumberOrNull(position?.holding_pnl_rate_pct) ??
+    toNumberOrNull(canonicalSnapshot.holdingPnlRatePct ?? position?.holding_pnl_rate_pct) ??
     (Number.isFinite(holdingPnl) && Number.isFinite(costBasis) && Number(costBasis) > 0
       ? toNumberOrNull((Number(holdingPnl) / Number(costBasis)) * 100)
       : null);
@@ -728,13 +731,14 @@ export function annotateRowConfirmation(
   row,
   position,
   assetMeta,
-  { confirmedTargetDate = null, currentDate = null } = {}
+  { confirmedTargetDate = null, currentDate = null, now = new Date() } = {}
 ) {
   const confirmation = classifyFundConfirmation({
     targetDate: confirmedTargetDate,
     confirmedNavDate: row?.confirmedNavDate ?? position?.last_confirmed_nav_date ?? null,
     asset: assetMeta,
-    position
+    position,
+    now
   });
 
   const overnightCarry = deriveOvernightCarryDisplay({
@@ -891,14 +895,20 @@ function applyLiveQuoteOverlay(row, snapshotDate, today, options = {}) {
   );
   const overlayPnlRaw = overlayAllowed ? Number(row?.estimatedPnl ?? NaN) : NaN;
   const appliedOverlayRaw = Number.isFinite(overlayPnlRaw) ? overlayPnlRaw : 0;
+  const quoteMode = String(row?.quoteMode ?? "").trim();
+  const keepLedgerValuation = ["close_reference", "reference_only", "confirmed_nav", "unavailable"].includes(
+    quoteMode
+  );
   const canUseObservableUnits =
     Number.isFinite(inferredObservableUnitsRaw) &&
     inferredObservableUnitsRaw > 0 &&
     Number.isFinite(valuationRaw) &&
-    ["live_estimate", "close_reference", "today_close"].includes(String(row?.quoteMode ?? "").trim());
+    ["live_estimate", "today_close"].includes(quoteMode);
   const observableAmountRaw = canUseObservableUnits ? round(inferredObservableUnitsRaw * valuationRaw) : NaN;
   const liveAmountRaw =
-    Number.isFinite(observableAmountRaw)
+    keepLedgerValuation
+      ? ledgerAmountRaw
+      : Number.isFinite(observableAmountRaw)
       ? observableAmountRaw
       : overlayAllowed && row?.quoteFresh === true
       ? Number(
@@ -914,7 +924,9 @@ function applyLiveQuoteOverlay(row, snapshotDate, today, options = {}) {
         )
       : ledgerAmountRaw + appliedOverlayRaw;
   const liveHoldingPnlRaw =
-    Number.isFinite(costBasisRaw) && Number.isFinite(liveAmountRaw)
+    keepLedgerValuation && Number.isFinite(ledgerHoldingPnlRaw)
+      ? ledgerHoldingPnlRaw
+      : Number.isFinite(costBasisRaw) && Number.isFinite(liveAmountRaw)
       ? liveAmountRaw - costBasisRaw
       : Number.isFinite(ledgerHoldingPnlRaw)
       ? ledgerHoldingPnlRaw + appliedOverlayRaw
@@ -1994,7 +2006,8 @@ export async function buildLivePayload(refreshMs, requestedAccountId, deps = {})
       dashboardMeta.assetMeta,
       {
         confirmedTargetDate: confirmationTargetDate,
-        currentDate: today
+        currentDate: today,
+        now: buildNow
       }
     );
     const referenceQuote = pickBestReferenceQuote(
@@ -2032,7 +2045,8 @@ export async function buildLivePayload(refreshMs, requestedAccountId, deps = {})
           dashboardMeta.assetMeta,
           {
             confirmedTargetDate: confirmationTargetDate,
-            currentDate: today
+            currentDate: today,
+            now: buildNow
           }
         ),
         bucketKey: dashboardMeta.bucketKey,
@@ -2058,7 +2072,8 @@ export async function buildLivePayload(refreshMs, requestedAccountId, deps = {})
           dashboardMeta.assetMeta,
           {
             confirmedTargetDate: confirmationTargetDate,
-            currentDate: today
+            currentDate: today,
+            now: buildNow
           }
         ),
         bucketKey: dashboardMeta.bucketKey,
@@ -2291,210 +2306,19 @@ function isConfirmedPayloadReadyForWriteback(payload, nextSnapshotDate) {
 }
 
 export async function materializeLatestMarkToMarket(portfolioRoot, payload) {
-  try {
-    if (!isAutoMarkToMarketWritebackEnabled()) {
-      return {
-        updated: false,
-        disabledReason: "auto_mark_to_market_writeback_disabled",
-        snapshotDate: payload?.snapshotDate ?? null
-      };
-    }
-
-    const accountId = resolveAccountId({ portfolioRoot });
-    const paths = buildDualLedgerPaths(portfolioRoot);
-    const accountContextPath = buildPortfolioPath(portfolioRoot, "account_context.json");
-    const seeded = await materializePortfolioRoot({
-      portfolioRoot,
-      accountId,
-      referenceDate: formatDateInShanghai(new Date()),
-      seedMissing: true
-    });
-    const [rawSnapshot, accountContext] = await Promise.all([
-      readJson(paths.latestRawPath),
-      readJson(accountContextPath).catch(() => null)
-    ]);
-
-    const currentSnapshotDate = String(rawSnapshot?.snapshot_date ?? "").trim();
-    const nextSnapshotDate = resolveAutoMaterializeSnapshotDate(payload?.rows ?? [], currentSnapshotDate);
-    if (!nextSnapshotDate) {
-      return {
-        updated: false,
-        snapshotDate: currentSnapshotDate || null,
-        ensuredChanges: seeded.ensuredChanges
-      };
-    }
-
-    if (!isConfirmedPayloadReadyForWriteback(payload, nextSnapshotDate)) {
-      return {
-        updated: false,
-        disabledReason: "confirmed_nav_not_ready_for_writeback",
-        snapshotDate: currentSnapshotDate || null,
-        nextSnapshotDate,
-        ensuredChanges: seeded.ensuredChanges
-      };
-    }
-
-    const rowByName = new Map(
-      (Array.isArray(payload?.rows) ? payload.rows : [])
-        .filter((row) => !row?.isSyntheticCash)
-        .map((row) => [normalizeName(row?.name), row])
-        .filter(([name]) => name)
-    );
-    const ledgerRows = [...rowByName.values()];
-    const ledgerTotalFundAssetsRaw = ledgerRows.reduce(
-      (sum, row) => sum + Number(row?.ledgerAmount ?? row?.amount ?? 0),
-      0
-    );
-    const ledgerHoldingProfitRaw = ledgerRows.reduce(
-      (sum, row) =>
-        sum +
-        (Number.isFinite(Number(row?.ledgerHoldingPnl))
-          ? Number(row.ledgerHoldingPnl)
-          : Number.isFinite(Number(row?.holdingPnl))
-            ? Number(row.holdingPnl)
-            : 0),
-      0
-    );
-    const availableCashRaw = Number(payload?.summary?.availableCashCny ?? rawSnapshot?.summary?.available_cash_cny ?? 0);
-    const ledgerTotalPortfolioAssetsRaw = ledgerTotalFundAssetsRaw + (Number.isFinite(availableCashRaw) ? availableCashRaw : 0);
-
-    let updatedPositions = 0;
-    for (const position of Array.isArray(rawSnapshot?.positions) ? rawSnapshot.positions : []) {
-      if (position?.status !== "active" || position?.execution_type === "EXCHANGE") {
-        continue;
-      }
-
-      const row = rowByName.get(normalizeName(position?.name));
-      if (!row) {
-        continue;
-      }
-
-      if (Number.isFinite(Number(row?.ledgerAmount ?? row?.amount))) {
-        position.amount = round(Number(row?.ledgerAmount ?? row?.amount));
-      }
-      if (Number.isFinite(Number(row?.ledgerHoldingPnl ?? row?.holdingPnl))) {
-        position.holding_pnl = round(Number(row?.ledgerHoldingPnl ?? row?.holdingPnl));
-      }
-      if (Number.isFinite(Number(row?.ledgerHoldingPnlRatePct ?? row?.holdingPnlRatePct))) {
-        position.holding_pnl_rate_pct = round(
-          Number(row?.ledgerHoldingPnlRatePct ?? row?.holdingPnlRatePct)
-        );
-      }
-      updatedPositions += 1;
-    }
-
-    rawSnapshot.snapshot_date = nextSnapshotDate;
-    rawSnapshot.summary = rawSnapshot.summary ?? {};
-    rawSnapshot.summary.total_fund_assets = round(
-      Number(ledgerTotalFundAssetsRaw || rawSnapshot.summary.total_fund_assets || 0)
-    );
-    rawSnapshot.summary.effective_exposure_after_pending_sell = round(
-      Number(ledgerTotalFundAssetsRaw || rawSnapshot.summary.effective_exposure_after_pending_sell || 0)
-    );
-    rawSnapshot.summary.yesterday_profit = coercePersistedTodayPnl(payload?.summary?.estimatedDailyPnl);
-    rawSnapshot.summary.holding_profit = round(
-      Number(ledgerHoldingProfitRaw || rawSnapshot.summary.holding_profit || 0)
-    );
-    rawSnapshot.summary.available_cash_cny = round(
-      Number(payload?.summary?.availableCashCny ?? rawSnapshot.summary.available_cash_cny ?? 0)
-    );
-    rawSnapshot.summary.total_portfolio_assets_cny = round(
-      Number(ledgerTotalPortfolioAssetsRaw || rawSnapshot.summary.total_portfolio_assets_cny || 0)
-    );
-    rawSnapshot.summary.last_auto_mark_to_market_at = payload?.generatedAt ?? new Date().toISOString();
-    rawSnapshot.summary.performance_precision = "auto_mark_to_market_live_valuation";
-
-    rawSnapshot.cash_ledger = rawSnapshot.cash_ledger ?? {};
-    rawSnapshot.cash_ledger.available_cash_cny = round(
-      Number(payload?.summary?.availableCashCny ?? rawSnapshot.cash_ledger.available_cash_cny ?? 0)
-    );
-
-    rawSnapshot.raw_account_snapshot = rawSnapshot.raw_account_snapshot ?? {};
-    rawSnapshot.raw_account_snapshot.total_fund_assets = rawSnapshot.summary.total_fund_assets;
-    rawSnapshot.raw_account_snapshot.pending_buy_confirm = round(
-      Number(rawSnapshot.raw_account_snapshot.pending_buy_confirm ?? rawSnapshot.summary.pending_buy_confirm ?? 0)
-    );
-    rawSnapshot.raw_account_snapshot.pending_sell_to_arrive = round(
-      Number(
-        rawSnapshot.raw_account_snapshot.pending_sell_to_arrive ??
-          rawSnapshot.summary.pending_sell_to_arrive ??
-          0
-      )
-    );
-    rawSnapshot.raw_account_snapshot.effective_exposure_after_pending_sell =
-      rawSnapshot.summary.effective_exposure_after_pending_sell;
-
-    rawSnapshot.recognition_notes = Array.isArray(rawSnapshot.recognition_notes)
-      ? rawSnapshot.recognition_notes
-      : [];
-    const autoNote = `${nextSnapshotDate} 自动按实时基金估值完成日度市值更新；共刷新 ${updatedPositions} 只 active OTC 基金。`;
-    if (!rawSnapshot.recognition_notes.includes(autoNote)) {
-      rawSnapshot.recognition_notes.push(autoNote);
-    }
-
-    rawSnapshot.snapshot_meta = {
-      ...(rawSnapshot.snapshot_meta ?? {}),
-      source_kind: rawSnapshot.snapshot_meta?.source_kind ?? "compat_seed_from_latest",
-      last_auto_mark_to_market_at: payload?.generatedAt ?? new Date().toISOString()
-    };
-
-    await writeFile(paths.latestRawPath, `${JSON.stringify(rawSnapshot, null, 2)}\n`, "utf8");
-    await materializePortfolioRoot({
-      portfolioRoot,
-      accountId,
-      referenceDate: nextSnapshotDate,
-      seedMissing: true
-    });
-
-    if (accountContext && typeof accountContext === "object") {
-      accountContext.as_of = nextSnapshotDate;
-      if (Number.isFinite(Number(payload?.summary?.availableCashCny))) {
-        accountContext.available_cash_cny = round(Number(payload.summary.availableCashCny));
-        accountContext.reported_cash_estimate_cny = round(Number(payload.summary.availableCashCny));
-      }
-      if (Number.isFinite(Number(payload?.summary?.totalPortfolioAssets))) {
-        const totalAssets = round(Number(payload.summary.totalPortfolioAssets));
-        accountContext.reported_total_assets_range_cny = {
-          min: totalAssets,
-          max: totalAssets
-        };
-      }
-      if (Array.isArray(accountContext.broker_accounts)) {
-        for (const brokerAccount of accountContext.broker_accounts) {
-          if (brokerAccount?.account_id === "fund_otc") {
-            brokerAccount.cash_cny = round(Number(payload?.summary?.availableCashCny ?? brokerAccount.cash_cny ?? 0));
-            brokerAccount.market_value_cny = round(Number(payload?.summary?.totalFundAssets ?? brokerAccount.market_value_cny ?? 0));
-            brokerAccount.notes = `${nextSnapshotDate} 自动按实时基金估值更新 OTC 市值。`;
-          }
-        }
-      }
-      await writeFile(accountContextPath, `${JSON.stringify(accountContext, null, 2)}\n`, "utf8");
-    }
-
-    payload.snapshotDate = nextSnapshotDate;
-    return {
-      updated: true,
-      snapshotDate: nextSnapshotDate,
-      updatedPositions,
-      ensuredChanges: seeded.ensuredChanges
-    };
-  } catch (error) {
-    console.warn(
-      JSON.stringify(
-        {
-          status: "auto_mark_to_market_failed",
-          portfolioRoot,
-          message: String(error?.message ?? error)
-        },
-        null,
-        2
-      )
-    );
+  if (!isAutoMarkToMarketWritebackEnabled()) {
     return {
       updated: false,
+      disabledReason: "auto_mark_to_market_writeback_disabled",
       snapshotDate: payload?.snapshotDate ?? null
     };
   }
+
+  return {
+    updated: false,
+    disabledReason: "canonical_truth_writeback_retired",
+    snapshotDate: payload?.snapshotDate ?? null
+  };
 }
 
 export async function runLiveFundsSnapshotBuild(rawOptions = {}) {

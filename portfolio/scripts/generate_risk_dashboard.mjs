@@ -46,7 +46,22 @@ function pct(amount, base) {
 }
 
 function sumAmounts(items) {
-  return round(items.reduce((sum, item) => sum + Number(item.amount ?? 0), 0));
+  return round(items.reduce((sum, item) => sum + Number(resolvePositionAmount(item) ?? 0), 0));
+}
+
+function resolvePositionAmount(position) {
+  const units = Number(position?.units ?? position?.confirmed_units ?? NaN);
+  const nav = Number(position?.last_confirmed_nav ?? NaN);
+  if (Number.isFinite(units) && units >= 0 && Number.isFinite(nav) && nav > 0) {
+    return round(units * nav);
+  }
+
+  const amount = Number(position?.amount ?? NaN);
+  if (Number.isFinite(amount)) {
+    return round(amount);
+  }
+
+  return 0;
 }
 
 export function deriveRiskCapitalContext({ latest = {}, accountContext = {} } = {}) {
@@ -586,7 +601,7 @@ function aggregateByCategory(positions) {
 
   for (const position of positions) {
     const category = position.category ?? "未分类";
-    result[category] = round(Number(result[category] ?? 0) + Number(position.amount ?? 0));
+    result[category] = round(Number(result[category] ?? 0) + Number(resolvePositionAmount(position) ?? 0));
   }
 
   return result;
@@ -597,7 +612,7 @@ function aggregateByBucket(positions) {
 
   for (const position of positions) {
     const bucketKey = bucketKeyFromPosition(position);
-    result[bucketKey] = round(Number(result[bucketKey] ?? 0) + Number(position.amount ?? 0));
+    result[bucketKey] = round(Number(result[bucketKey] ?? 0) + Number(resolvePositionAmount(position) ?? 0));
   }
 
   return result;
@@ -606,13 +621,13 @@ function aggregateByBucket(positions) {
 function topPositions(positions, base) {
   return positions
     .slice()
-    .sort((left, right) => Number(right.amount ?? 0) - Number(left.amount ?? 0))
+    .sort((left, right) => Number(resolvePositionAmount(right) ?? 0) - Number(resolvePositionAmount(left) ?? 0))
     .slice(0, 5)
     .map((item) => ({
       name: item.name,
-      amount: round(item.amount),
+      amount: round(resolvePositionAmount(item)),
       category: item.category ?? null,
-      weight_pct_of_invested_capital: pct(Number(item.amount ?? 0), base)
+      weight_pct_of_invested_capital: pct(Number(resolvePositionAmount(item) ?? 0), base)
     }));
 }
 
@@ -726,7 +741,7 @@ function buildStressScenarios(bucketBreakdown, investedCapital, estimatedTotalCa
 
 export function buildView(label, positions, capitalContext = null) {
   const investedCapital = round(
-    positions.reduce((sum, item) => sum + Number(item.amount ?? 0), 0)
+    positions.reduce((sum, item) => sum + Number(resolvePositionAmount(item) ?? 0), 0)
   );
   const categoryBreakdown = aggregateByCategory(positions);
   const bucketBreakdown = aggregateByBucket(positions);

@@ -203,7 +203,85 @@ test("materializeLatestMarkToMarket refuses to advance snapshot when confirmed n
     });
 
     assert.equal(result.updated, false);
-    assert.equal(result.disabledReason, "confirmed_nav_not_ready_for_writeback");
+    assert.equal(result.disabledReason, "canonical_truth_writeback_retired");
+
+    const persisted = JSON.parse(await readFile(rawSnapshotPath, "utf8"));
+    assert.deepEqual(persisted, originalRawSnapshot);
+  } finally {
+    if (previousFlag === undefined) {
+      delete process.env.FUNDS_DASHBOARD_ENABLE_AUTO_MARK_TO_MARKET;
+    } else {
+      process.env.FUNDS_DASHBOARD_ENABLE_AUTO_MARK_TO_MARKET = previousFlag;
+    }
+  }
+});
+
+test("materializeLatestMarkToMarket stays read-only even when explicit writeback flag is enabled", async () => {
+  const portfolioRoot = await mkdtemp(path.join(os.tmpdir(), "funds-dashboard-writeback-retired-"));
+  await mkdir(path.join(portfolioRoot, "snapshots"), { recursive: true });
+
+  const previousFlag = process.env.FUNDS_DASHBOARD_ENABLE_AUTO_MARK_TO_MARKET;
+  process.env.FUNDS_DASHBOARD_ENABLE_AUTO_MARK_TO_MARKET = "1";
+
+  try {
+    const rawSnapshotPath = path.join(portfolioRoot, "snapshots", "latest_raw.json");
+    const originalRawSnapshot = {
+      account_id: "main",
+      snapshot_date: "2026-04-02",
+      positions: [
+        {
+          name: "兴全恒信债券C",
+          code: "016482",
+          symbol: "016482",
+          fund_code: "016482",
+          amount: 50000,
+          holding_pnl: 0,
+          holding_pnl_rate_pct: 0,
+          status: "active",
+          execution_type: "OTC"
+        }
+      ],
+      summary: {
+        total_fund_assets: 50000,
+        available_cash_cny: 1000,
+        total_portfolio_assets_cny: 51000
+      },
+      cash_ledger: {
+        available_cash_cny: 1000
+      }
+    };
+    await writeFile(rawSnapshotPath, `${JSON.stringify(originalRawSnapshot, null, 2)}\n`, "utf8");
+
+    const result = await materializeLatestMarkToMarket(portfolioRoot, {
+      snapshotDate: "2026-04-02",
+      generatedAt: "2026-04-03T07:30:00.000Z",
+      confirmedNavStatus: {
+        state: "confirmed_nav_ready",
+        targetDate: "2026-04-03"
+      },
+      summary: {
+        availableCashCny: 1000,
+        totalPortfolioAssets: 71000,
+        estimatedDailyPnl: 120
+      },
+      rows: [
+        {
+          name: "兴全恒信债券C",
+          code: "016482",
+          amount: 50120,
+          ledgerAmount: 50000,
+          holdingPnl: 120,
+          ledgerHoldingPnl: 0,
+          holdingPnlRatePct: 0.24,
+          ledgerHoldingPnlRatePct: 0,
+          quoteDate: "2026-04-03",
+          quoteMode: "close_reference"
+        }
+      ]
+    });
+
+    assert.equal(result.updated, false);
+    assert.equal(result.disabledReason, "canonical_truth_writeback_retired");
 
     const persisted = JSON.parse(await readFile(rawSnapshotPath, "utf8"));
     assert.deepEqual(persisted, originalRawSnapshot);
@@ -898,6 +976,312 @@ test("buildLivePayload updates observable amount from confirmed units even when 
     assert.equal(targetRow.holdingPnl, 579.12);
     assert.equal(payload.summary.totalFundAssets, 21579.12);
     assert.equal(payload.summary.estimatedCurrentFundAssets, 21579.12);
+  } finally {
+    if (previousPortfolioRoot === undefined) {
+      delete process.env.PORTFOLIO_ROOT;
+    } else {
+      process.env.PORTFOLIO_ROOT = previousPortfolioRoot;
+    }
+  }
+});
+
+test("buildLivePayload derives ledger amount from confirmed units and confirmed nav instead of stale stored amount", async () => {
+  const portfolioRoot = await mkdtemp(path.join(os.tmpdir(), "funds-dashboard-canonical-ledger-"));
+  await mkdir(path.join(portfolioRoot, "state"), { recursive: true });
+  await mkdir(path.join(portfolioRoot, "config"), { recursive: true });
+  await mkdir(path.join(portfolioRoot, "data"), { recursive: true });
+
+  const previousPortfolioRoot = process.env.PORTFOLIO_ROOT;
+
+  try {
+    process.env.PORTFOLIO_ROOT = portfolioRoot;
+
+    await writeFile(
+      path.join(portfolioRoot, "fund-watchlist.json"),
+      `${JSON.stringify({ account_id: "main", as_of: "2026-04-08", watchlist: [] }, null, 2)}\n`,
+      "utf8"
+    );
+    await writeFile(
+      path.join(portfolioRoot, "account_context.json"),
+      `${JSON.stringify(
+        {
+          available_cash_cny: 1000,
+          reported_total_assets_range_cny: { min: 22000, max: 22000 }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    await writeFile(
+      path.join(portfolioRoot, "config", "asset_master.json"),
+      `${JSON.stringify(
+        {
+          bucket_order: ["A_CORE"],
+          fallback_bucket_key: "A_CORE",
+          buckets: {
+            A_CORE: {
+              label: "A股核心",
+              short_label: "核心",
+              target: 0.2,
+              min: 0.1,
+              max: 0.3,
+              priority_rank: 10
+            }
+          },
+          assets: [
+            {
+              symbol: "007339",
+              name: "易方达沪深300ETF联接C",
+              bucket: "A_CORE",
+              market: "CN",
+              category: "A股宽基"
+            }
+          ]
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    await writeFile(
+      path.join(portfolioRoot, "state", "portfolio_state.json"),
+      `${JSON.stringify(
+        {
+          account_id: "main",
+          snapshot_date: "2026-04-08",
+          positions: [
+            {
+              name: "易方达沪深300ETF联接C",
+              code: "007339",
+              symbol: "007339",
+              fund_code: "007339",
+              amount: 99999,
+              confirmed_units: 11891.28539071,
+              holding_cost_basis_cny: 21000,
+              holding_pnl: 88888,
+              holding_pnl_rate_pct: 423.28,
+              status: "active",
+              execution_type: "OTC",
+              category: "A股宽基"
+            }
+          ],
+          summary: {
+            total_fund_assets: 99999,
+            available_cash_cny: 1000,
+            holding_profit: 88888,
+            cumulative_profit: 88888,
+            total_portfolio_assets_cny: 100999
+          },
+          cash_ledger: {
+            available_cash_cny: 1000
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const payload = await buildLivePayload(15_000, "main", {
+      today: "2026-04-08",
+      now: new Date("2026-04-08T10:00:00+08:00"),
+      fundQuoteFetcher: async () => [
+        {
+          code: "007339",
+          name: "易方达沪深300ETF联接C",
+          netValueDate: "2026-04-08",
+          netValue: 1.766,
+          confirmedNavDate: "2026-04-08",
+          confirmedNav: 1.766,
+          valuation: 1.766,
+          intradayValuation: 1.766,
+          valuationChangePercent: 0,
+          intradayChangePercent: 0,
+          valuationTime: "2026-04-08 10:00",
+          intradayValuationTime: "2026-04-08 10:00",
+          growthRate: 0,
+          observationKind: "intraday_estimate"
+        }
+      ]
+    });
+
+    const targetRow = (payload.rows ?? []).find((row) => row.code === "007339");
+
+    assert.ok(targetRow);
+    assert.equal(targetRow.confirmedUnits, 11891.28539071);
+    assert.equal(targetRow.ledgerAmount, 21000.01);
+    assert.equal(targetRow.ledgerHoldingPnl, 0.01);
+    assert.equal(targetRow.amount, 21000.01);
+    assert.equal(payload.summary.totalFundAssets, 21000.01);
+  } finally {
+    if (previousPortfolioRoot === undefined) {
+      delete process.env.PORTFOLIO_ROOT;
+    } else {
+      process.env.PORTFOLIO_ROOT = previousPortfolioRoot;
+    }
+  }
+});
+
+test("buildLivePayload keeps ledger amount for close_reference hk qdii rows", async () => {
+  const portfolioRoot = await mkdtemp(path.join(os.tmpdir(), "funds-dashboard-close-reference-hk-"));
+  await mkdir(path.join(portfolioRoot, "state"), { recursive: true });
+  await mkdir(path.join(portfolioRoot, "config"), { recursive: true });
+  await mkdir(path.join(portfolioRoot, "data"), { recursive: true });
+
+  const previousPortfolioRoot = process.env.PORTFOLIO_ROOT;
+
+  try {
+    process.env.PORTFOLIO_ROOT = portfolioRoot;
+
+    await writeFile(
+      path.join(portfolioRoot, "fund-watchlist.json"),
+      `${JSON.stringify({ account_id: "main", as_of: "2026-04-08", watchlist: [] }, null, 2)}\n`,
+      "utf8"
+    );
+    await writeFile(
+      path.join(portfolioRoot, "account_context.json"),
+      `${JSON.stringify(
+        {
+          available_cash_cny: 1000,
+          reported_total_assets_range_cny: { min: 70414.58, max: 70414.58 }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    await writeFile(
+      path.join(portfolioRoot, "config", "asset_master.json"),
+      `${JSON.stringify(
+        {
+          bucket_order: ["TACTICAL"],
+          fallback_bucket_key: "TACTICAL",
+          buckets: {
+            TACTICAL: {
+              label: "战术",
+              short_label: "战术",
+              target: 0.1,
+              min: 0,
+              max: 0.2,
+              priority_rank: 10
+            }
+          },
+          assets: [
+            {
+              symbol: "023764",
+              name: "华夏恒生互联网科技业ETF联接(QDII)D",
+              bucket: "TACTICAL",
+              market: "HK",
+              category: "港股互联网/QDII"
+            }
+          ]
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    await writeFile(
+      path.join(portfolioRoot, "state", "portfolio_state.json"),
+      `${JSON.stringify(
+        {
+          account_id: "main",
+          snapshot_date: "2026-04-08",
+          positions: [
+            {
+              name: "华夏恒生互联网科技业ETF联接(QDII)D",
+              code: "023764",
+              symbol: "023764",
+              fund_code: "023764",
+              amount: 69414.58,
+              holding_pnl: -18660.23,
+              holding_pnl_rate_pct: -21.19,
+              holding_cost_basis_cny: 88074.81,
+              confirmed_units: 111526.24574435,
+              last_confirmed_nav: 0.6461,
+              last_confirmed_nav_date: "2026-04-07",
+              status: "active",
+              execution_type: "OTC",
+              market: "HK",
+              category: "港股互联网/QDII"
+            }
+          ],
+          summary: {
+            total_fund_assets: 69414.58,
+            available_cash_cny: 1000,
+            holding_profit: -18660.23,
+            cumulative_profit: -18660.23,
+            total_portfolio_assets_cny: 70414.58
+          },
+          cash_ledger: {
+            available_cash_cny: 1000
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    await writeFile(
+      path.join(portfolioRoot, "data", "nightly_confirmed_nav_status.json"),
+      `${JSON.stringify(
+        {
+          generatedAt: "2026-04-08T00:00:00.000Z",
+          accounts: [
+            {
+              accountId: "main",
+              targetDate: "2026-04-07",
+              status: "partially_confirmed_normal_lag",
+              stats: {
+                fullyConfirmedForDate: false,
+                confirmedPositions: 1,
+                stalePositions: 0,
+                sourceCoverage: 1
+              }
+            }
+          ]
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const payload = await buildLivePayload(15_000, "main", {
+      today: "2026-04-08",
+      now: new Date("2026-04-08T18:00:00+08:00"),
+      fundQuoteFetcher: async () => [
+        {
+          code: "023764",
+          name: "华夏恒生互联网科技业ETF联接(QDII)D",
+          netValueDate: "2026-04-07",
+          netValue: 0.6461,
+          confirmedNavDate: "2026-04-07",
+          confirmedNav: 0.6461,
+          valuation: 0.6788,
+          intradayValuation: 0.6788,
+          valuationChangePercent: 5.07,
+          intradayChangePercent: 5.07,
+          valuationTime: "2026-04-08 16:00",
+          intradayValuationTime: "2026-04-08 16:00",
+          growthRate: 5.07,
+          observationKind: "intraday_estimate"
+        }
+      ]
+    });
+
+    const targetRow = (payload.rows ?? []).find((row) => row.code === "023764");
+
+    assert.ok(targetRow);
+    assert.equal(targetRow.quoteMode, "close_reference");
+    assert.equal(targetRow.ledgerAmount, 72057.11);
+    assert.equal(targetRow.amount, 72057.11);
+    assert.equal(targetRow.ledgerHoldingPnl, -16017.7);
+    assert.equal(targetRow.holdingPnl, -16017.7);
+    assert.equal(targetRow.estimatedPnl, 3653.3);
+    assert.equal(payload.summary.totalFundAssets, 72057.11);
+    assert.equal(payload.summary.holdingProfit, -16017.7);
   } finally {
     if (previousPortfolioRoot === undefined) {
       delete process.env.PORTFOLIO_ROOT;

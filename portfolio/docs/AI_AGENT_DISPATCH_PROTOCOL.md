@@ -46,6 +46,7 @@
 8. 实时行情分析必须补最新新闻与最新行情，不能只依赖库里旧报告。
 9. `AI_AGENT_DISPATCH_PROTOCOL.md` 与 `data/agent_bootstrap_context.json.intentRouting` 必须保持一一对应；后者是机器入口，前者是人工解释层。
 10. 新增或删除意图时，只能先改共享 registry，再同步更新本协议文档；禁止文档和代码各维护一份不同版本。
+11. 涉及状态字段、估值/确认、金额/收益、agent 上下文、信号/交易/报告输出的改动，必须先完成 `docs/CHANGE_IMPACT_GUARDRAIL.md` 里的评估清单并记录在 `data/agent_bootstrap_context.json.changeGuardrails`，未完成评估不得实施。
 
 ---
 

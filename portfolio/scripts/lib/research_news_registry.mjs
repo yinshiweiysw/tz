@@ -17,7 +17,7 @@ const RESEARCH_NEWS_REGISTRY = [
     region: "global",
     marketScope: "macro",
     defaultTrustScore: 0.98,
-    requiresBrowserFetch: true
+    requiresBrowserFetch: false
   },
   {
     sourceId: "bloomberg_markets",

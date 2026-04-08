@@ -25,6 +25,9 @@ function normalizeStory(sourceMeta, item = {}) {
     source: sourceMeta.source,
     sourceId: sourceMeta.sourceId,
     tier: sourceMeta.tier,
+    defaultTrustScore: sourceMeta.defaultTrustScore ?? null,
+    region: sourceMeta.region ?? null,
+    marketScope: sourceMeta.marketScope ?? null,
     url: String(item?.url ?? item?.link ?? "").trim() || null,
     published_at: normalizeTimestamp(item?.publishedAt ?? item?.published_at ?? item?.pubDate ?? item?.date)
   };
@@ -133,6 +136,11 @@ async function loadWsjWorld() {
   return parseRssItems(text);
 }
 
+async function loadReutersWorld() {
+  const text = await fetchText("https://feeds.reuters.com/reuters/businessNews");
+  return parseRssItems(text);
+}
+
 async function loadWsjMarkets() {
   const text = await fetchText("https://feeds.a.dj.com/rss/RSSMarketsMain.xml");
   return parseRssItems(text);
@@ -236,6 +244,59 @@ const WEAK_MARKET_PENALTY_PATTERNS = [
   /营收|业绩|财报|销量|发售|发布|患者|治疗|清单/u
 ];
 
+const HARD_NON_MARKET_PATTERNS = [
+  /immigration detention|wife of us soldier|released from detention/i,
+  /移民拘留|士兵妻子|获释/u,
+  /celebrity|movie star|red carpet|fashion week/i,
+  /明星|红毯|娱乐八卦/u
+];
+
+const MARKET_TAG_RULES = [
+  {
+    tag: "geopolitics",
+    patterns: [/停火|冲突|中东|伊朗|以色列|ceasefire|iran|israel|middle east|war/i]
+  },
+  {
+    tag: "liquidity",
+    patterns: [/流动性|资金面|平仓|挤兑|liquidity|funding|forced selling|margin/i]
+  },
+  {
+    tag: "rates",
+    patterns: [/加息|降息|美联储|央行|收益率|fed|rate cut|rate hike|treasury yield|bond yield/i]
+  },
+  {
+    tag: "fx",
+    patterns: [/美元|人民币|汇率|dollar|yuan|fx|exchange rate/i]
+  },
+  {
+    tag: "commodities",
+    patterns: [/黄金|油价|原油|铜|大宗商品|gold|oil|crude|commodity|commodities/i]
+  },
+  {
+    tag: "china_policy",
+    patterns: [/国常会|财政|地产|刺激|稳增长|china policy|stimulus|property support/i]
+  },
+  {
+    tag: "us_tech",
+    patterns: [/纳指|纳斯达克|美股科技|英伟达|苹果|nasdaq|magnificent 7|semiconductor|chip stocks/i]
+  },
+  {
+    tag: "asia_session",
+    patterns: [/日韩|日经|东证|kospi|亚太|msci亚太|asia equities|nikkei|asian stocks/i]
+  }
+];
+
+const CROSS_ASSET_IMPACT_BY_TAG = {
+  geopolitics: ["oil", "gold", "risk_assets"],
+  liquidity: ["gold", "equities", "usd"],
+  rates: ["treasury", "growth_equities", "gold"],
+  fx: ["usd", "cny", "gold"],
+  commodities: ["gold", "oil", "commodity_equities"],
+  china_policy: ["a_shares", "hk_china", "cny"],
+  us_tech: ["nasdaq", "global_growth"],
+  asia_session: ["a_shares", "hk_equities", "japan_equities", "korea_equities"]
+};
+
 function scoreMarketRelevanceText(text = "") {
   const input = String(text ?? "").trim();
   if (!input) {
@@ -261,6 +322,53 @@ function scoreMarketRelevance(story = {}) {
   return scoreMarketRelevanceText(text);
 }
 
+function extractMarketTags(story = {}) {
+  const text = `${story?.title ?? ""} ${story?.summary ?? ""}`.trim();
+  const tags = [];
+  for (const rule of MARKET_TAG_RULES) {
+    if (rule.patterns.some((pattern) => pattern.test(text))) {
+      tags.push(rule.tag);
+    }
+  }
+  return [...new Set(tags)];
+}
+
+function buildCrossAssetImpact(tags = []) {
+  return [
+    ...new Set(
+      tags.flatMap((tag) => CROSS_ASSET_IMPACT_BY_TAG[tag] ?? [])
+    )
+  ];
+}
+
+function isHardFilteredNonMarketStory(story = {}) {
+  const text = `${story?.title ?? ""} ${story?.summary ?? ""}`.trim();
+  return HARD_NON_MARKET_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function scorePortfolioRelevance(tags = []) {
+  let score = 0;
+  if (tags.includes("china_policy")) {
+    score += 2;
+  }
+  if (tags.includes("asia_session")) {
+    score += 2;
+  }
+  if (tags.includes("us_tech")) {
+    score += 3;
+  }
+  if (tags.includes("commodities")) {
+    score += 3;
+  }
+  if (tags.includes("geopolitics")) {
+    score += 2;
+  }
+  if (tags.includes("rates") || tags.includes("fx")) {
+    score += 1;
+  }
+  return score;
+}
+
 function hasHeadlineMarketSignal(story = {}) {
   const headlineText = String(story?.title ?? "").trim() || String(story?.summary ?? "").trim();
   return scoreMarketRelevanceText(headlineText) >= 8;
@@ -272,7 +380,8 @@ function rankStory(now, story) {
     publishedAt === null ? 999 : Math.max((Number(now.getTime()) - Number(new Date(publishedAt).getTime())) / 3_600_000, 0);
   return (
     tierWeight(Number(story?.tier ?? 3)) +
-    scoreMarketRelevance(story) -
+    scoreMarketRelevance(story) +
+    scorePortfolioRelevance(story?.marketTags ?? []) * 2 -
     Math.min(ageHours, 48)
   );
 }
@@ -327,6 +436,7 @@ export async function aggregateResearchNews({
   const registry = buildResearchNewsRegistry();
   const defaultLoaders = {
     ap_business: loadApBusiness,
+    reuters_world: loadReutersWorld,
     wsj_world: loadWsjWorld,
     wsj_markets: loadWsjMarkets,
     marketwatch_top: loadMarketWatchTop,
@@ -389,31 +499,60 @@ export async function aggregateResearchNews({
     }
   }
 
-  const rankedStories = stories
+  const enrichedStories = stories.map((story) => {
+    const marketTags = extractMarketTags(story);
+    return {
+      ...story,
+      marketTags,
+      portfolioRelevanceScore: scorePortfolioRelevance(marketTags),
+      crossAssetImpact: buildCrossAssetImpact(marketTags)
+    };
+  });
+
+  const marketMovingStoryExists = enrichedStories.some(
+    (story) => story.marketTags.length > 0 && scoreMarketRelevance(story) > 0
+  );
+
+  const rankedStories = enrichedStories
+    .filter((story) => !(marketMovingStoryExists && isHardFilteredNonMarketStory(story)))
     .slice()
     .sort((left, right) => rankStory(now, right) - rankStory(now, left));
-  const trustedSources = new Set(rankedStories.filter((item) => Number(item?.tier ?? 3) <= 2).map((item) => item.sourceId));
-  const uniqueSources = new Set(rankedStories.map((item) => item.sourceId));
+
+  const tagFrequency = new Map();
+  for (const story of rankedStories) {
+    for (const tag of story.marketTags ?? []) {
+      tagFrequency.set(tag, (tagFrequency.get(tag) ?? 0) + 1);
+    }
+  }
+  const storiesWithConfirmation = rankedStories.map((story) => ({
+    ...story,
+    sourceConfirmationCount: Math.max(
+      1,
+      Math.max(...(story.marketTags ?? []).map((tag) => Number(tagFrequency.get(tag) ?? 0)), 1)
+    )
+  }));
+  const trustedSources = new Set(storiesWithConfirmation.filter((item) => Number(item?.tier ?? 3) <= 2).map((item) => item.sourceId));
+  const uniqueSources = new Set(storiesWithConfirmation.map((item) => item.sourceId));
   const analysisMode =
     uniqueSources.size >= 2 && trustedSources.size >= 1
       ? "multi_source_confirmed"
       : "single_source_degraded";
-  const freshHeadlineCandidates = rankedStories.filter((story) => isFreshHeadlineCandidate(now, story));
+  const freshHeadlineCandidates = storiesWithConfirmation.filter((story) => isFreshHeadlineCandidate(now, story));
   const relevantHeadlineCandidates = freshHeadlineCandidates.filter((story) => hasHeadlineMarketSignal(story));
   const topHeadlines = selectRepresentativeTopHeadlines(
     relevantHeadlineCandidates.length > 0
       ? relevantHeadlineCandidates
       : freshHeadlineCandidates.length > 0
         ? freshHeadlineCandidates
-        : rankedStories,
+        : storiesWithConfirmation,
     8
   );
 
   return {
-    stories: rankedStories,
+    stories: storiesWithConfirmation,
     sourceHealth,
     coverage: {
-      totalStories: rankedStories.length,
+      totalStories: storiesWithConfirmation.length,
       uniqueSourceCount: uniqueSources.size,
       trustedSourceCount: trustedSources.size
     },

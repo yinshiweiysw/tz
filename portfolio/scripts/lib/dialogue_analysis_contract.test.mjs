@@ -95,3 +95,105 @@ test("buildDialogueAnalysisContract summarizes speculative overlay and first tra
   assert.ok(contract.dialogue_cues.analyst_focus.some((line) => line.includes("007339")));
   assert.ok(contract.dialogue_cues.blocked_actions.some((line) => line.includes("不要情绪化追单")));
 });
+
+test("buildDialogueAnalysisContract exposes unified agent entry snapshot for downstream analysis", () => {
+  const contract = buildDialogueAnalysisContract({
+    researchBrain: {
+      actionable_decision: {
+        desk_conclusion: {
+          trade_permission: "limited",
+          one_sentence_order: "允许小步试单。"
+        }
+      }
+    },
+    agentRuntimeContext: {
+      generatedAt: "2026-04-08T11:26:27.761Z",
+      accountId: "main",
+      snapshotDate: "2026-04-08",
+      portfolio: {
+        settledCashCny: 52436.16,
+        tradeAvailableCashCny: 52436.16,
+        cashLikeFundAssetsCny: 105251.47,
+        liquiditySleeveAssetsCny: 105251.47
+      },
+      positions: [
+        {
+          code: "023764",
+          name: "华夏恒生互联网科技业ETF联接(QDII)D",
+          observableAmount: 69414.58,
+          quoteMode: "close_reference"
+        }
+      ]
+    },
+    strategyDecisionContract: {
+      generatedAt: "2026-04-08T11:26:27.766Z",
+      decisionReadiness: "degraded_observe_only",
+      decisionReasons: ["研究覆盖不足"],
+      freshness: {
+        confirmedNavState: "late_missing"
+      },
+      cashSemantics: {
+        settledCashCny: 52436.16,
+        tradeAvailableCashCny: 52436.16,
+        cashLikeFundAssetsCny: 105251.47,
+        liquiditySleeveAssetsCny: 105251.47
+      },
+      regime: {
+        tradePermission: "blocked",
+        overallStance: "freeze"
+      },
+      executionGuardrails: {
+        maxTotalBuyTodayCny: 20000
+      },
+      positionFacts: [
+        {
+          code: "023764",
+          name: "华夏恒生互联网科技业ETF联接(QDII)D",
+          amountCny: 69414.58,
+          decisionValueSource: "observable",
+          quoteMode: "close_reference"
+        }
+      ]
+    },
+    agentBootstrapContext: {
+      entrypointIntegrity: {
+        accountIdsAligned: true,
+        cashSemanticsAligned: true,
+        positionFactsAligned: true
+      }
+    }
+  });
+
+  assert.equal(contract.agent_entry_snapshot.entrypoint_integrity.accountIdsAligned, true);
+  assert.equal(contract.agent_entry_snapshot.cash_semantics.tradeAvailableCashCny, 52436.16);
+  assert.equal(contract.agent_entry_snapshot.strategy_snapshot.decisionReadiness, "degraded_observe_only");
+  assert.deepEqual(contract.agent_entry_snapshot.strategy_snapshot.decisionReasons, ["研究覆盖不足"]);
+  assert.equal(contract.agent_entry_snapshot.strategy_snapshot.tradePermission, "blocked");
+  assert.equal(contract.agent_entry_snapshot.strategy_snapshot.maxTotalBuyTodayCny, 20000);
+  assert.equal(contract.agent_entry_snapshot.top_positions[0].code, "023764");
+  assert.equal(contract.agent_entry_snapshot.top_positions[0].decisionValueSource, "observable");
+});
+
+test("buildDialogueAnalysisContract keeps enriched top_headlines metadata for downstream market analysis", () => {
+  const contract = buildDialogueAnalysisContract({
+    researchBrain: {
+      analysis_mode: "multi_source_confirmed",
+      top_headlines: [
+        {
+          source: "财新",
+          title: "全球市场交易“美伊停战”：黄金重燃、美元熄火",
+          published_at: "2026-04-08T13:10:00+08:00",
+          marketTags: ["geopolitics", "commodities", "asia_session"],
+          portfolioRelevanceScore: 7,
+          sourceConfirmationCount: 3,
+          crossAssetImpact: ["gold", "oil", "risk_assets"]
+        }
+      ]
+    }
+  });
+
+  assert.equal(contract.news_context.top_headlines[0].marketTags.includes("geopolitics"), true);
+  assert.equal(contract.news_context.top_headlines[0].portfolioRelevanceScore, 7);
+  assert.equal(contract.news_context.top_headlines[0].sourceConfirmationCount, 3);
+  assert.equal(contract.news_context.top_headlines[0].crossAssetImpact.includes("gold"), true);
+});

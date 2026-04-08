@@ -8,6 +8,7 @@ import {
   applyBuyToHoldingCostBasis,
   applySellToHoldingCostBasis,
   ensureHoldingCostBasis,
+  rebuildHoldingFromCanonicalTruth,
   recalculateHoldingMetricsFromCostBasis,
   resolveHoldingCostBasis,
   transferConversionHoldingCostBasis
@@ -107,6 +108,20 @@ function inferCategoryFromName(name) {
     return "日本股市/QDII";
   }
   return "未分类";
+}
+
+function isOverseasTPlusTwoOtcTrade(trade) {
+  const categoryText = String(trade?.category ?? "").trim();
+  if (categoryText.includes("QDII") || categoryText.startsWith("海外")) {
+    return true;
+  }
+
+  const nameText = String(resolveFundName(trade) ?? "").trim();
+  if (!nameText) {
+    return false;
+  }
+
+  return /QDII|纳斯达克|标普500|海外科技|大宗商品|日经|恒生互联网|恒生科技/u.test(nameText);
 }
 
 const CASH_LIKE_CATEGORY_SET = new Set(["偏债混合", "债券", "货币"]);
@@ -225,18 +240,19 @@ export function inferProfitEffectiveOn(trade, fallbackDate) {
     trade?.submitted_before_cutoff === false ||
     trade?.order_submitted_before_cutoff === false ||
     trade?.before_cutoff === false;
+  const useTPlusTwo = isOverseasTPlusTwoOtcTrade(trade);
 
   if (submittedAfterCutoff) {
-    return secondTradingDay(tradeDate);
+    return useTPlusTwo ? secondTradingDay(nextTradingDay(tradeDate)) : secondTradingDay(tradeDate);
   }
 
   if (submittedBeforeCutoff) {
-    return nextTradingDay(tradeDate);
+    return useTPlusTwo ? secondTradingDay(tradeDate) : nextTradingDay(tradeDate);
   }
 
   // Default OTC assumption: if the user only reported a same-day executed fund order
   // but omitted cutoff details, keep it out of today's PnL and assume T+1 profit start.
-  return nextTradingDay(tradeDate);
+  return useTPlusTwo ? secondTradingDay(tradeDate) : nextTradingDay(tradeDate);
 }
 
 function stripCompatLatestToRawSnapshot(latest, accountId, latestCompatPath) {
@@ -1029,6 +1045,9 @@ function shouldOverlayLedgerEntry(rawSnapshotDate, entry) {
   if (compareDateStrings(rawDate, effectiveTradeDate) <= 0) {
     return true;
   }
+  if (isRawReflectedPendingBuy(rawDate, entry)) {
+    return true;
+  }
 
   return !entryReflectsTradeInRawSnapshot(entry);
 }
@@ -1042,6 +1061,30 @@ function entryReflectsTradeInRawSnapshot(entry) {
   );
 }
 
+function isRawReflectedPendingBuy(rawSnapshotDate, entry) {
+  const rawDate = String(rawSnapshotDate ?? "").trim();
+  if (!rawDate || String(entry?.type ?? "").trim() !== "buy" || !entryReflectsTradeInRawSnapshot(entry)) {
+    return false;
+  }
+
+  const executionType = String(entry?.normalized?.execution_type ?? "OTC").toUpperCase();
+  if (executionType === "EXCHANGE") {
+    return false;
+  }
+
+  const profitEffectiveOn = String(
+    entry?.profit_effective_on ??
+      entry?.normalized?.profit_effective_on ??
+      entry?.original?.profit_effective_on ??
+      ""
+  ).trim();
+  if (!profitEffectiveOn) {
+    return false;
+  }
+
+  return compareDateStrings(rawDate, profitEffectiveOn) < 0;
+}
+
 function shouldUnwindSameDayRawEntry(rawSnapshotDate, entry) {
   const rawDate = String(rawSnapshotDate ?? "").trim();
   const effectiveTradeDate = String(entry?.effective_trade_date ?? "").trim();
@@ -1049,6 +1092,9 @@ function shouldUnwindSameDayRawEntry(rawSnapshotDate, entry) {
 
   if (!rawDate || !effectiveTradeDate) {
     return false;
+  }
+  if (isRawReflectedPendingBuy(rawDate, entry)) {
+    return true;
   }
 
   return (
@@ -1250,6 +1296,17 @@ function deriveRawAccountSnapshot(rawSnapshot) {
   );
 }
 
+function rebuildCanonicalOtcPosition(position) {
+  const executionType = String(position?.execution_type ?? "OTC").toUpperCase();
+  if (executionType === "EXCHANGE") {
+    return position;
+  }
+
+  const rebuilt = rebuildHoldingFromCanonicalTruth(position);
+  Object.assign(position, rebuilt);
+  return position;
+}
+
 export function materializePortfolioStateFromInputs({
   rawSnapshot,
   executionLedger,
@@ -1372,6 +1429,8 @@ export function materializePortfolioStateFromInputs({
 
     materialization.warnings.push(`Unsupported ledger entry type: ${entry?.type ?? "unknown"}`);
   }
+
+  positions.forEach((position) => rebuildCanonicalOtcPosition(position));
 
   const activePositions = positions.filter(
     (item) => item?.status === "active" && Number(item?.amount ?? 0) > 0

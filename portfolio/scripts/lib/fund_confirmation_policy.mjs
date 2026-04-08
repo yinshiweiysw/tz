@@ -10,6 +10,59 @@ function normalizeText(value) {
 
 import { round } from "./format_utils.mjs";
 
+function normalizeNow(value) {
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return value;
+  }
+
+  if (value !== undefined && value !== null) {
+    const parsed = new Date(value);
+    if (Number.isFinite(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  return new Date();
+}
+
+function formatShanghaiDate(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
+function getShanghaiHour(date = new Date()) {
+  return Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Shanghai",
+      hour: "2-digit",
+      hour12: false
+    }).format(date)
+  );
+}
+
+function isSameDayPendingBeforeCutoff({
+  targetDate,
+  expectedConfirmedDate,
+  now,
+  nightlyCutoffHour
+} = {}) {
+  const normalizedTargetDate = normalizeText(targetDate);
+  const normalizedExpectedDate = normalizeText(expectedConfirmedDate);
+  if (!normalizedTargetDate || !normalizedExpectedDate || normalizedTargetDate !== normalizedExpectedDate) {
+    return false;
+  }
+
+  const normalizedNow = normalizeNow(now);
+  return (
+    formatShanghaiDate(normalizedNow) === normalizedTargetDate &&
+    getShanghaiHour(normalizedNow) < Number(nightlyCutoffHour ?? 23)
+  );
+}
+
 function resolveAssetIdentity({ asset = null, position = null } = {}) {
   const market = normalizeText(asset?.market ?? position?.market).toUpperCase();
   const category = normalizeText(asset?.category ?? position?.category);
@@ -48,14 +101,18 @@ function inferConfirmationProfile({ asset = null, position = null } = {}) {
   };
 }
 
-function buildLabel(state, confirmedNavDate, expectedConfirmedDate) {
+function buildLabel(state, confirmedNavDate, expectedConfirmedDate, options = {}) {
   const confirmedDateText = normalizeText(confirmedNavDate);
   const expectedDateText = normalizeText(expectedConfirmedDate);
+  const pendingSameDayUntilCutoff = options.pendingSameDayUntilCutoff === true;
 
   if (state === "confirmed") {
     return confirmedDateText ? `已确认 · ${confirmedDateText}` : "已确认";
   }
   if (state === "normal_lag") {
+    if (pendingSameDayUntilCutoff) {
+      return confirmedDateText ? `待今晚确认 · 最近确认${confirmedDateText}` : "待今晚确认";
+    }
     return confirmedDateText ? `正常滞后 · ${confirmedDateText}确认` : "正常滞后";
   }
   if (state === "holiday_delay") {
@@ -71,7 +128,9 @@ export function classifyFundConfirmation({
   targetDate,
   confirmedNavDate,
   asset = null,
-  position = null
+  position = null,
+  now = new Date(),
+  nightlyCutoffHour = 23
 } = {}) {
   const normalizedTargetDate = normalizeText(targetDate);
   const normalizedConfirmedNavDate = normalizeText(confirmedNavDate) || null;
@@ -79,6 +138,7 @@ export function classifyFundConfirmation({
 
   let expectedConfirmedDate = normalizedTargetDate || null;
   let state = "confirmed";
+  let pendingSameDayUntilCutoff = false;
 
   if (!normalizedTargetDate) {
     state = normalizedConfirmedNavDate ? "confirmed" : "source_missing";
@@ -140,15 +200,31 @@ export function classifyFundConfirmation({
     }
   }
 
+  pendingSameDayUntilCutoff = isSameDayPendingBeforeCutoff({
+    targetDate: normalizedTargetDate,
+    expectedConfirmedDate,
+    now,
+    nightlyCutoffHour
+  });
+  if (
+    pendingSameDayUntilCutoff &&
+    (state === "late_missing" || state === "source_missing")
+  ) {
+    state = "normal_lag";
+  }
+
   return {
     state,
-    label: buildLabel(state, normalizedConfirmedNavDate, expectedConfirmedDate),
+    label: buildLabel(state, normalizedConfirmedNavDate, expectedConfirmedDate, {
+      pendingSameDayUntilCutoff
+    }),
     confirmedNavDate: normalizedConfirmedNavDate,
     expectedConfirmedDate,
     profile: profile.profile,
     market: profile.market,
     targetDate: normalizedTargetDate,
     isWithinExpectedWindow: ["confirmed", "normal_lag", "holiday_delay"].includes(state),
+    pendingSameDayUntilCutoff,
     usesHolidayShift:
       state === "holiday_delay" &&
       normalizedTargetDate &&

@@ -72,6 +72,40 @@ test("classifyFundConfirmation marks domestic funds with old confirmed nav as la
   assert.equal(result.expectedConfirmedDate, "2026-04-02");
 });
 
+test("classifyFundConfirmation keeps same-day domestic funds in normal_lag before Shanghai nightly cutoff", () => {
+  const result = classifyFundConfirmation({
+    targetDate: "2026-04-08",
+    confirmedNavDate: "2026-04-07",
+    asset: {
+      symbol: "007339",
+      market: "CN",
+      category: "A股宽基",
+      name: "易方达沪深300ETF联接C"
+    },
+    now: "2026-04-08T20:30:00+08:00"
+  });
+
+  assert.equal(result.state, "normal_lag");
+  assert.equal(result.expectedConfirmedDate, "2026-04-08");
+});
+
+test("classifyFundConfirmation flips same-day domestic funds to late_missing after Shanghai nightly cutoff", () => {
+  const result = classifyFundConfirmation({
+    targetDate: "2026-04-08",
+    confirmedNavDate: "2026-04-07",
+    asset: {
+      symbol: "007339",
+      market: "CN",
+      category: "A股宽基",
+      name: "易方达沪深300ETF联接C"
+    },
+    now: "2026-04-08T23:30:00+08:00"
+  });
+
+  assert.equal(result.state, "late_missing");
+  assert.equal(result.expectedConfirmedDate, "2026-04-08");
+});
+
 test("classifyFundConfirmation treats domestic holiday carry-over as holiday_delay", () => {
   const result = classifyFundConfirmation({
     targetDate: "2026-04-06",

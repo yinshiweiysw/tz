@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import {
   applyBuyToHoldingCostBasis,
   applySellToHoldingCostBasis,
+  deriveCanonicalHoldingSnapshot,
   ensureHoldingCostBasis,
+  rebuildHoldingFromCanonicalTruth,
   recalculateHoldingMetricsFromCostBasis,
   transferConversionHoldingCostBasis
 } from "./holding_cost_basis.mjs";
@@ -83,4 +85,42 @@ test("transferConversionHoldingCostBasis preserves source cost basis when fund c
   assert.equal(toPosition.holding_cost_basis_cny, 32876.73);
   assert.equal(toPosition.holding_pnl, 3443.9);
   assert.equal(toPosition.holding_pnl_rate_pct, 10.48);
+});
+
+test("rebuildHoldingFromCanonicalTruth derives amount and holding pnl from units nav and cost basis", () => {
+  const rebuilt = rebuildHoldingFromCanonicalTruth(
+    {
+      name: "易方达沪深300ETF联接C",
+      confirmed_units: 10000,
+      holding_cost_basis_cny: 21000,
+      amount: 999999,
+      holding_pnl: 999999
+    },
+    { nav: 2.168019 }
+  );
+
+  assert.equal(rebuilt.units, 10000);
+  assert.equal(rebuilt.cost_basis_cny, 21000);
+  assert.equal(rebuilt.amount, 21680.19);
+  assert.equal(rebuilt.holding_pnl, 680.19);
+  assert.equal(rebuilt.holding_pnl_rate_pct, 3.24);
+});
+
+test("deriveCanonicalHoldingSnapshot ignores stale stored amount when units and nav are available", () => {
+  const snapshot = deriveCanonicalHoldingSnapshot({
+    name: "易方达沪深300ETF联接C",
+    confirmed_units: 11891.28539071,
+    last_confirmed_nav: 1.766,
+    holding_cost_basis_cny: 21000,
+    amount: 99999,
+    holding_pnl: 88888
+  });
+
+  assert.equal(snapshot.units, 11891.28539071);
+  assert.equal(snapshot.nav, 1.766);
+  assert.equal(snapshot.costBasisCny, 21000);
+  assert.equal(snapshot.amountCny, 21000.01);
+  assert.equal(snapshot.holdingPnlCny, 0.01);
+  assert.equal(snapshot.holdingPnlRatePct, 0);
+  assert.equal(snapshot.derivedFromCanonicalTruth, true);
 });

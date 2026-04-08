@@ -125,6 +125,27 @@ def round_or_none(value: Any, digits: int = 4) -> float | None:
     return round(numeric, digits)
 
 
+def resolve_position_market_value(position: dict[str, Any]) -> float | None:
+    execution_type = str(position.get("execution_type") or "OTC").upper()
+    units = safe_float(position.get("units"))
+    if units is None:
+        units = safe_float(position.get("confirmed_units"))
+    nav = safe_float(position.get("last_confirmed_nav"))
+    if execution_type != "EXCHANGE" and units is not None and units >= 0 and nav is not None and nav > 0:
+        return round_money(units * nav)
+
+    amount = safe_float(position.get("amount"))
+    if amount is not None:
+        return round_money(amount)
+
+    shares = int(round(safe_float(position.get("shares")) or 0))
+    cost_price = round_or_none(position.get("cost_price"), 4)
+    if shares > 0 and (cost_price or 0.0) > 0:
+        return round_money(shares * float(cost_price))
+
+    return None
+
+
 class TradePlanner:
     def __init__(
         self,
@@ -961,7 +982,6 @@ class TradePlanner:
             if not symbol:
                 continue
 
-            amount = safe_float(position.get("amount"))
             shares = int(round(safe_float(position.get("shares")) or 0))
             cost_price = round_or_none(position.get("cost_price"), 4)
             sellable_raw = position.get("sellable_shares")
@@ -970,9 +990,7 @@ class TradePlanner:
                 if sellable_raw is not None
                 else None
             )
-            current_position_cny = round_money(amount) if amount is not None else None
-            if current_position_cny is None and shares > 0 and (cost_price or 0.0) > 0:
-                current_position_cny = round_money(shares * float(cost_price))
+            current_position_cny = resolve_position_market_value(position)
             positions_by_symbol[symbol] = {
                 "symbol": symbol,
                 "ticker": str(position.get("ticker") or symbol).strip() or symbol,

@@ -197,6 +197,32 @@ print(json.dumps(payload, ensure_ascii=False))
   assert.ok(payload.shrinkage_intensity > 0);
 });
 
+test("calculate_quant_metrics prefers canonical holding cost basis over amount-minus-pnl inference", async () => {
+  const { stdout } = await execFileAsync(VENV_PYTHON, [
+    "-c",
+    `
+import importlib.util
+import json
+
+spec = importlib.util.spec_from_file_location("calculate_quant_metrics", "${SCRIPT_PATH}")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+position = {
+  "amount": 21000.01,
+  "holding_pnl": 19000.01,
+  "holding_cost_basis_cny": 21000,
+}
+
+result = module.resolve_position_cost_basis(position, 21000.01, 19000.01)
+print(json.dumps({"estimated_cost": result}, ensure_ascii=False))
+    `.trim(),
+  ]);
+
+  const payload = JSON.parse(stdout.trim());
+  assert.equal(payload.estimated_cost, 21000);
+});
+
 test("calculate_quant_metrics falls back to native position fund_code when watchlist has no mapping", async () => {
   const portfolioRoot = await mkdtemp(path.join(os.tmpdir(), "quant-metrics-native-code-"));
   const configDir = path.join(portfolioRoot, "config");

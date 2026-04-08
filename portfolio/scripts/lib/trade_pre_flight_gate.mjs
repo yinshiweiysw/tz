@@ -180,7 +180,13 @@ export function evaluateTradePreFlight({
   const projectedFundAmounts = new Map();
   const projectedThemeAmounts = new Map();
   let projectedCash = safeNumber(
-    portfolioState?.summary?.available_cash_cny ?? portfolioState?.cash_ledger?.available_cash_cny ?? 0,
+    portfolioState?.summary?.trade_available_cash_cny ??
+      portfolioState?.cash_ledger?.trade_available_cash_cny ??
+      portfolioState?.summary?.settled_cash_cny ??
+      portfolioState?.cash_ledger?.settled_cash_cny ??
+      portfolioState?.summary?.available_cash_cny ??
+      portfolioState?.cash_ledger?.available_cash_cny ??
+      0,
     0
   );
 

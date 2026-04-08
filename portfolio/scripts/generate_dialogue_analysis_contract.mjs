@@ -8,6 +8,8 @@ import {
   resolvePortfolioRoot
 } from "./lib/account_root.mjs";
 import { buildDialogueAnalysisContract } from "./lib/dialogue_analysis_contract.mjs";
+import { readManifestState } from "./lib/manifest_state.mjs";
+import { readJsonOrNull } from "./lib/portfolio_state_view.mjs";
 import { ensureReportContext, resolveScopedResearchBrainPath } from "./lib/report_context.mjs";
 import { runResearchBrainBuild } from "./generate_research_brain.mjs";
 
@@ -131,6 +133,37 @@ function shouldRebuildResearchBrain({ refreshMode, freshness = {}, researchBrain
   );
 }
 
+async function loadAgentEntryArtifacts(portfolioRoot, manifest = null) {
+  const effectiveManifest =
+    manifest ?? (await readManifestState(buildPortfolioPath(portfolioRoot, "state-manifest.json")));
+  const canonical = effectiveManifest?.canonical_entrypoints ?? {};
+  const runtimeContextPath =
+    canonical.agent_runtime_context ??
+    buildPortfolioPath(portfolioRoot, "data", "agent_runtime_context.json");
+  const strategyDecisionContractPath =
+    canonical.strategy_decision_contract ??
+    buildPortfolioPath(portfolioRoot, "data", "strategy_decision_contract.json");
+  const agentBootstrapContextPath =
+    canonical.latest_agent_bootstrap_context ??
+    buildPortfolioPath(portfolioRoot, "data", "agent_bootstrap_context.json");
+
+  const [agentRuntimeContext, strategyDecisionContract, agentBootstrapContext] =
+    await Promise.all([
+      readJsonOrNull(runtimeContextPath),
+      readJsonOrNull(strategyDecisionContractPath),
+      readJsonOrNull(agentBootstrapContextPath)
+    ]);
+
+  return {
+    runtimeContextPath,
+    strategyDecisionContractPath,
+    agentBootstrapContextPath,
+    agentRuntimeContext: agentRuntimeContext ?? {},
+    strategyDecisionContract: strategyDecisionContract ?? {},
+    agentBootstrapContext: agentBootstrapContext ?? {}
+  };
+}
+
 export async function runDialogueAnalysisContractBuild(rawOptions = {}, dependencies = {}) {
   const portfolioRoot = resolvePortfolioRoot(rawOptions);
   const accountId = resolveAccountId(rawOptions);
@@ -185,13 +218,18 @@ export async function runDialogueAnalysisContractBuild(rawOptions = {}, dependen
     throw new Error("Dialogue analysis contract requires a valid research_brain payload.");
   }
 
+  const agentEntryArtifacts = await loadAgentEntryArtifacts(portfolioRoot, context?.manifest ?? null);
+
   const contract = buildDialogueAnalysisContract({
     researchBrain,
     cnMarketSnapshot: context?.payloads?.cnMarketSnapshot ?? {},
     opportunityPool: context?.payloads?.opportunityPool ?? {},
     speculativePlan: context?.payloads?.speculativePlan ?? {},
     tradePlan: context?.payloads?.tradePlan ?? {},
-    researchGuardLines: buildResearchGuardLines(researchBrain)
+    researchGuardLines: buildResearchGuardLines(researchBrain),
+    agentRuntimeContext: agentEntryArtifacts.agentRuntimeContext,
+    strategyDecisionContract: agentEntryArtifacts.strategyDecisionContract,
+    agentBootstrapContext: agentEntryArtifacts.agentBootstrapContext
   });
 
   const outputPath = String(rawOptions.output ?? "").trim() ||
@@ -208,6 +246,11 @@ export async function runDialogueAnalysisContractBuild(rawOptions = {}, dependen
       refreshedTargets: [],
       skippedTargets: [],
       errors: []
+    },
+    agent_entry_artifacts: {
+      runtime_context_path: agentEntryArtifacts.runtimeContextPath,
+      strategy_decision_contract_path: agentEntryArtifacts.strategyDecisionContractPath,
+      bootstrap_context_path: agentEntryArtifacts.agentBootstrapContextPath
     },
     contract
   };

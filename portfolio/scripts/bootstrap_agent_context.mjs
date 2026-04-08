@@ -10,7 +10,10 @@ import {
   readManifestState,
   updateManifestCanonicalEntrypoints
 } from "./lib/manifest_state.mjs";
-import { loadCanonicalPortfolioState } from "./lib/portfolio_state_view.mjs";
+import {
+  loadCanonicalPortfolioState,
+  readJsonOrNull
+} from "./lib/portfolio_state_view.mjs";
 import { buildAgentIntentRegistry } from "./lib/agent_intent_registry.mjs";
 import { buildFundsDashboardHealth } from "./serve_funds_live_dashboard.mjs";
 
@@ -50,14 +53,125 @@ function buildAccountSummary(portfolioState = {}) {
   };
 }
 
+function toNullableNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function numbersAligned(left, right, tolerance = 0.01) {
+  const a = toNullableNumber(left);
+  const b = toNullableNumber(right);
+  if (a === null || b === null) {
+    return false;
+  }
+  return Math.abs(a - b) <= tolerance;
+}
+
+function buildEntrypointIntegrity({
+  accountId,
+  runtimeContext = {},
+  strategyDecisionContract = {}
+} = {}) {
+  const runtimeAccountId = runtimeContext?.accountId ?? null;
+  const strategyContractAccountId = strategyDecisionContract?.accountId ?? null;
+  const runtimeCodes = new Set(
+    (Array.isArray(runtimeContext?.positions) ? runtimeContext.positions : [])
+      .map((item) => String(item?.code ?? "").trim())
+      .filter(Boolean)
+  );
+  const contractCodes = new Set(
+    (Array.isArray(strategyDecisionContract?.positionFacts)
+      ? strategyDecisionContract.positionFacts
+      : []
+    )
+      .map((item) => String(item?.code ?? "").trim())
+      .filter(Boolean)
+  );
+  const runtimePortfolio = runtimeContext?.portfolio ?? {};
+  const contractCash = strategyDecisionContract?.cashSemantics ?? {};
+  const runtimePositionCount = Array.isArray(runtimeContext?.positions)
+    ? runtimeContext.positions.length
+    : 0;
+  const contractPositionFactCount = Array.isArray(strategyDecisionContract?.positionFacts)
+    ? strategyDecisionContract.positionFacts.length
+    : 0;
+
+  return {
+    runtimeGeneratedAt: runtimeContext?.generatedAt ?? null,
+    strategyDecisionContractGeneratedAt: strategyDecisionContract?.generatedAt ?? null,
+    runtimeAccountId,
+    strategyDecisionContractAccountId: strategyContractAccountId,
+    accountIdsAligned:
+      Boolean(accountId) &&
+      runtimeAccountId === accountId &&
+      strategyContractAccountId === accountId,
+    runtimeSnapshotDate: runtimeContext?.snapshotDate ?? null,
+    strategyDecisionContractSnapshotDate:
+      strategyDecisionContract?.freshness?.snapshotDate ?? null,
+    snapshotDatesAligned:
+      Boolean(runtimeContext?.snapshotDate) &&
+      runtimeContext?.snapshotDate === strategyDecisionContract?.freshness?.snapshotDate,
+    runtimePositionCount,
+    contractPositionFactCount,
+    positionFactsAligned:
+      runtimePositionCount === contractPositionFactCount &&
+      runtimeCodes.size === contractCodes.size &&
+      [...runtimeCodes].every((code) => contractCodes.has(code)),
+    cashSemanticsAligned:
+      numbersAligned(runtimePortfolio?.settledCashCny, contractCash?.settledCashCny) &&
+      numbersAligned(
+        runtimePortfolio?.tradeAvailableCashCny,
+        contractCash?.tradeAvailableCashCny
+      ) &&
+      numbersAligned(
+        runtimePortfolio?.cashLikeFundAssetsCny,
+        contractCash?.cashLikeFundAssetsCny
+      ) &&
+      numbersAligned(
+        runtimePortfolio?.liquiditySleeveAssetsCny,
+        contractCash?.liquiditySleeveAssetsCny
+      )
+  };
+}
+
+function normalizeReadiness(value, fallback = "unknown") {
+  const normalized = String(value ?? "").trim();
+  return normalized || fallback;
+}
+
 export async function buildAgentBootstrapContext(rawOptions = {}, deps = {}) {
   const portfolioRoot = resolvePortfolioRoot(rawOptions);
   const accountId = resolveAccountId(rawOptions);
   const manifestPath = buildPortfolioPath(portfolioRoot, "state-manifest.json");
   const manifest = await readManifestState(manifestPath);
   const canonicalState = await loadCanonicalPortfolioState({ portfolioRoot, manifest });
+  const runtimeContextPath =
+    manifest?.canonical_entrypoints?.agent_runtime_context ??
+    buildPortfolioPath(portfolioRoot, "data", "agent_runtime_context.json");
+  const strategyDecisionContractPath =
+    manifest?.canonical_entrypoints?.strategy_decision_contract ??
+    buildPortfolioPath(portfolioRoot, "data", "strategy_decision_contract.json");
+  const runtimeContext = (await readJsonOrNull(runtimeContextPath)) ?? {};
+  const strategyDecisionContract =
+    (await readJsonOrNull(strategyDecisionContractPath)) ?? {};
   const buildHealth = deps.buildHealth ?? buildFundsDashboardHealth;
   const health = await buildHealth(accountId);
+  const decisionReadiness = normalizeReadiness(
+    strategyDecisionContract?.decisionReadiness,
+    health?.state === "ready" ? "ready" : health?.state ?? "unknown"
+  );
+  const analysisReadiness = normalizeReadiness(
+    runtimeContext?.systemState?.researchReadiness?.level,
+    decisionReadiness
+  );
+  const newsCoverageReadiness = normalizeReadiness(
+    runtimeContext?.systemState?.researchReadiness?.coverage_status ??
+      runtimeContext?.marketContext?.newsCoverageReadiness,
+    "unknown"
+  );
 
   return {
     generatedAt: new Date().toISOString(),
@@ -67,8 +181,7 @@ export async function buildAgentBootstrapContext(rawOptions = {}, deps = {}) {
       "Portfolio system uses portfolio_state.json as canonical accounting state, agent_runtime_context.json as the unified fact layer, and strategy_decision_contract.json as the unified decision layer.",
     bootstrapReadOrder: [
       "state-manifest.json",
-      "data/agent_runtime_context.json",
-      "data/strategy_decision_contract.json",
+      "data/agent_bootstrap_context.json",
       "state/portfolio_state.json"
     ],
     canonicalEntrypoints: {
@@ -76,14 +189,39 @@ export async function buildAgentBootstrapContext(rawOptions = {}, deps = {}) {
       ...(manifest?.canonical_entrypoints ?? {})
     },
     health,
+    analysisReadiness,
+    decisionReadiness,
+    newsCoverageReadiness,
+    portfolioFactsVersion: 1,
     accountSummary: buildAccountSummary(canonicalState?.payload ?? {}),
+    entrypointIntegrity: buildEntrypointIntegrity({
+      accountId,
+      runtimeContext,
+      strategyDecisionContract
+    }),
     operatingRules: {
       canonicalViewOnly: true,
       reportsAreOutputOnly: true,
       dashboardGetRequestsAreReadOnly: true,
       latestCompatIsCompatibilityOnly: true
     },
-    intentRouting: buildAgentIntentRegistry(portfolioRoot)
+    intentRouting: buildAgentIntentRegistry(portfolioRoot),
+    changeGuardrails: {
+      required: true,
+      checklist: [
+        "change_layer",
+        "canonical_inputs",
+        "affected_modules",
+        "impact_decision",
+        "write_boundary_check",
+        "required_regressions"
+      ],
+      policy: {
+        impactAssessmentBeforeImplementation: true,
+        regressionBeforeCompletion: true,
+        noSilentFeatureRemoval: true
+      }
+    }
   };
 }
 

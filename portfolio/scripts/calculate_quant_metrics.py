@@ -245,6 +245,20 @@ def estimate_cost(amount: float, holding_profit: float) -> float | None:
     return None
 
 
+def resolve_position_cost_basis(
+    position: dict[str, Any], amount: float, holding_profit: float
+) -> float | None:
+    for key in ("holding_cost_basis_cny", "cost_basis_cny", "cost_basis"):
+        value = position.get(key)
+        try:
+            numeric = float(value)
+        except Exception:
+            continue
+        if math.isfinite(numeric) and numeric > 0:
+            return numeric
+    return estimate_cost(amount, holding_profit)
+
+
 def load_price_series(connection: sqlite3.Connection, symbol: str) -> pd.Series:
     query = """
         SELECT date, adj_close
@@ -418,7 +432,7 @@ def main() -> int:
     for position in active_positions:
         amount = float(position.get("amount") or 0)
         holding_profit = infer_holding_profit(position)
-        estimated_cost = estimate_cost(amount, holding_profit)
+        estimated_cost = resolve_position_cost_basis(position, amount, holding_profit)
         symbol = resolve_position_symbol(
             position,
             watchlist_lookup,

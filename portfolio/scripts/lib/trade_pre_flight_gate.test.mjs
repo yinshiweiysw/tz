@@ -462,3 +462,32 @@ test("characterization: pending sell cash does not relax cash floor before settl
   assert.equal(result.allowed, false);
   assert.match(result.blockingReasons.join(" | "), /cash floor/i);
 });
+
+test("uses canonical trade_available_cash before compatibility available_cash alias", () => {
+  const result = evaluateTradePreFlight({
+    portfolioState: {
+      summary: {
+        trade_available_cash_cny: 10000,
+        available_cash_cny: 90000,
+        total_portfolio_assets_cny: 100000
+      },
+      positions: []
+    },
+    proposedTrades: [
+      {
+        type: "buy",
+        fund_code: "007339",
+        name: "易方达沪深300ETF联接C",
+        amount_cny: 5000,
+        bucket_key: "A_CORE"
+      }
+    ],
+    assetMaster: buildAssetMasterFixture(),
+    ipsConstraints: buildIpsConstraintsFixture(),
+    portfolioRiskState: { current_drawdown_pct: 0.04 }
+  });
+
+  assert.equal(result.allowed, false);
+  assert.match(result.blockingReasons.join(" | "), /cash floor/i);
+  assert.equal(result.metadata.projected_available_cash_cny, 5000);
+});

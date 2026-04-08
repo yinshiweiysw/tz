@@ -151,6 +151,156 @@ test("same-day OTC buy reflected in raw snapshot stays pending on trade date", (
   assert.equal(state.trade_lifecycle_summary.amounts_by_stage.platform_confirmed_pending_profit, 5000);
 });
 
+test("raw-reflected OTC buy stays pending until profit effective date even after trade date has passed", () => {
+  const rawSnapshot = {
+    account_id: "main",
+    snapshot_date: "2026-04-08",
+    currency: "CNY",
+    summary: {
+      total_fund_assets: 4000,
+      pending_buy_confirm: 0,
+      pending_sell_to_arrive: 0,
+      effective_exposure_after_pending_sell: 4000,
+      yesterday_profit: 0,
+      holding_profit: 0,
+      cumulative_profit: 0,
+      available_cash_cny: 6000,
+      total_portfolio_assets_cny: 10000
+    },
+    raw_account_snapshot: {
+      total_fund_assets: 4000,
+      pending_buy_confirm: 0,
+      pending_sell_to_arrive: 0,
+      effective_exposure_after_pending_sell: 4000
+    },
+    cash_ledger: {
+      available_cash_cny: 6000,
+      pending_buy_confirm_cny: 0,
+      pending_sell_to_arrive_cny: 0
+    },
+    positions: [
+      {
+        name: "测试QDII基金",
+        amount: 4000,
+        daily_pnl: 0,
+        holding_pnl: 0,
+        holding_pnl_rate_pct: 0,
+        category: "美股科技/QDII",
+        status: "active",
+        execution_type: "OTC",
+        code: "019736",
+        symbol: "019736",
+        fund_code: "019736"
+      }
+    ],
+    recognition_notes: []
+  };
+  const executionLedger = {
+    entries: [
+      {
+        id: "manual-buy-qdii-pending",
+        account_id: "main",
+        type: "buy",
+        status: "recorded",
+        recorded_at: "2026-04-08T08:30:00.000Z",
+        effective_trade_date: "2026-04-03",
+        profit_effective_on: "2026-04-09",
+        source: "manual_transaction_file",
+        source_file: "/tmp/2026-04-03-manual-buys.json",
+        normalized: {
+          fund_name: "测试QDII基金",
+          amount_cny: 4000,
+          category: "美股科技/QDII",
+          execution_type: "OTC",
+          code: "019736",
+          symbol: "019736",
+          fund_code: "019736",
+          submitted_before_cutoff: false,
+          cutoff_time_local: "15:00",
+          profit_effective_on: "2026-04-09",
+          cash_effect_cny: -4000,
+          raw_snapshot_includes_trade: true
+        },
+        original: {
+          trade_date: "2026-04-03",
+          interpreted_fund_name: "测试QDII基金",
+          amount_cny: 4000,
+          submitted_before_cutoff: false,
+          profit_effective_on: "2026-04-09",
+          raw_snapshot_includes_trade: true
+        }
+      }
+    ]
+  };
+
+  const state = materializeWithFixture(rawSnapshot, executionLedger, "2026-04-08");
+  const active = state.positions.find((item) => item.name === "测试QDII基金");
+
+  assert.equal(active.amount, 0);
+  assert.equal(state.summary.total_fund_assets, 0);
+  assert.equal(state.summary.pending_buy_confirm, 4000);
+  assert.equal(state.pending_profit_effective_positions.length, 1);
+  assert.equal(state.pending_profit_effective_positions[0].amount, 4000);
+});
+
+test("materializer rebuilds otc amount from confirmed units and last confirmed nav when canonical fields are available", () => {
+  const rawSnapshot = {
+    account_id: "main",
+    snapshot_date: "2026-04-08",
+    currency: "CNY",
+    summary: {
+      total_fund_assets: 999999,
+      pending_buy_confirm: 0,
+      pending_sell_to_arrive: 0,
+      effective_exposure_after_pending_sell: 999999,
+      yesterday_profit: 0,
+      holding_profit: 999999,
+      cumulative_profit: 999999,
+      available_cash_cny: 5000,
+      total_portfolio_assets_cny: 1004999
+    },
+    raw_account_snapshot: {
+      total_fund_assets: 999999,
+      pending_buy_confirm: 0,
+      pending_sell_to_arrive: 0,
+      effective_exposure_after_pending_sell: 999999
+    },
+    cash_ledger: {
+      available_cash_cny: 5000,
+      pending_buy_confirm_cny: 0,
+      pending_sell_to_arrive_cny: 0
+    },
+    positions: [
+      {
+        name: "易方达沪深300ETF联接C",
+        amount: 999999,
+        daily_pnl: 0,
+        holding_pnl: 999999,
+        holding_pnl_rate_pct: 999999,
+        holding_cost_basis_cny: 21000,
+        confirmed_units: 10000,
+        last_confirmed_nav: 2.168019,
+        last_confirmed_nav_date: "2026-04-07",
+        category: "A股宽基",
+        status: "active",
+        execution_type: "OTC",
+        code: "007339",
+        symbol: "007339",
+        fund_code: "007339"
+      }
+    ],
+    recognition_notes: []
+  };
+
+  const state = materializeWithFixture(rawSnapshot, { entries: [] }, "2026-04-08");
+  const position = state.positions.find((item) => item.code === "007339");
+
+  assert.equal(position.amount, 21680.19);
+  assert.equal(position.holding_pnl, 680.19);
+  assert.equal(position.holding_pnl_rate_pct, 3.24);
+  assert.equal(state.summary.total_fund_assets, 21680.19);
+});
+
 test("ensureMaterializationFiles no longer creates a placeholder portfolio_state.json", async () => {
   const portfolioRoot = await mkdtemp(path.join(tmpdir(), "portfolio-materializer-"));
   await mkdir(path.join(portfolioRoot, "state"), { recursive: true });

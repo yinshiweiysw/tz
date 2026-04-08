@@ -80,9 +80,107 @@ function normalizeNewsContext(researchBrain = {}) {
         source: String(item?.source ?? item?.sourceId ?? "").trim() || null,
         title: String(item?.title ?? item?.headline ?? "").trim() || null,
         published_at: String(item?.published_at ?? item?.publishedAt ?? "").trim() || null,
-        url: String(item?.url ?? "").trim() || null
+        url: String(item?.url ?? "").trim() || null,
+        marketTags: asArray(item?.marketTags ?? item?.market_tags).filter(Boolean),
+        portfolioRelevanceScore: asNumber(item?.portfolioRelevanceScore, 0),
+        sourceConfirmationCount: asNumber(item?.sourceConfirmationCount, 1),
+        crossAssetImpact: asArray(item?.crossAssetImpact ?? item?.cross_asset_impact).filter(Boolean)
       }))
       .filter((item) => item.title)
+  };
+}
+
+function normalizeAgentEntryCashSemantics(agentRuntimeContext = {}, strategyDecisionContract = {}) {
+  const strategyCash = strategyDecisionContract?.cashSemantics ?? {};
+  const runtimePortfolio = agentRuntimeContext?.portfolio ?? {};
+
+  return {
+    settledCashCny:
+      asNumber(strategyCash?.settledCashCny, null) ??
+      asNumber(runtimePortfolio?.settledCashCny, null),
+    tradeAvailableCashCny:
+      asNumber(strategyCash?.tradeAvailableCashCny, null) ??
+      asNumber(runtimePortfolio?.tradeAvailableCashCny, null),
+    cashLikeFundAssetsCny:
+      asNumber(strategyCash?.cashLikeFundAssetsCny, null) ??
+      asNumber(runtimePortfolio?.cashLikeFundAssetsCny, null),
+    liquiditySleeveAssetsCny:
+      asNumber(strategyCash?.liquiditySleeveAssetsCny, null) ??
+      asNumber(runtimePortfolio?.liquiditySleeveAssetsCny, null)
+  };
+}
+
+function normalizeTopPositions(agentRuntimeContext = {}, strategyDecisionContract = {}) {
+  const contractFacts = asArray(strategyDecisionContract?.positionFacts)
+    .map((item) => ({
+      code: String(item?.code ?? "").trim() || null,
+      name: String(item?.name ?? "").trim() || null,
+      amountCny: asNumber(item?.amountCny, null),
+      decisionValueSource: String(item?.decisionValueSource ?? "").trim() || null,
+      quoteMode: String(item?.quoteMode ?? "").trim() || null,
+      confirmationState: String(item?.confirmationState ?? "").trim() || null
+    }))
+    .filter((item) => item.code && item.amountCny !== null);
+
+  const runtimePositions = asArray(agentRuntimeContext?.positions)
+    .map((item) => ({
+      code: String(item?.code ?? "").trim() || null,
+      name: String(item?.name ?? "").trim() || null,
+      amountCny: asNumber(item?.observableAmount, null) ?? asNumber(item?.amount, null),
+      decisionValueSource:
+        asNumber(item?.observableAmount, null) !== null ? "observable" : "canonical",
+      quoteMode: String(item?.quoteMode ?? "").trim() || null,
+      confirmationState: String(item?.confirmationState ?? "").trim() || null
+    }))
+    .filter((item) => item.code && item.amountCny !== null);
+
+  const source = contractFacts.length > 0 ? contractFacts : runtimePositions;
+  return source.sort((left, right) => (right.amountCny ?? 0) - (left.amountCny ?? 0)).slice(0, 5);
+}
+
+function buildAgentEntrySnapshot({
+  agentRuntimeContext = {},
+  strategyDecisionContract = {},
+  agentBootstrapContext = {},
+  researchBrain = {}
+} = {}) {
+  return {
+    runtime_generated_at: agentRuntimeContext?.generatedAt ?? null,
+    strategy_decision_contract_generated_at: strategyDecisionContract?.generatedAt ?? null,
+    bootstrap_generated_at: agentBootstrapContext?.generatedAt ?? null,
+    account_id:
+      String(
+        strategyDecisionContract?.accountId ?? agentRuntimeContext?.accountId ?? ""
+      ).trim() || null,
+    snapshot_date:
+      String(
+        agentRuntimeContext?.snapshotDate ??
+          strategyDecisionContract?.freshness?.snapshotDate ??
+          researchBrain?.meta?.trade_date ??
+          ""
+      ).trim() || null,
+    entrypoint_integrity: agentBootstrapContext?.entrypointIntegrity ?? null,
+    cash_semantics: normalizeAgentEntryCashSemantics(
+      agentRuntimeContext,
+      strategyDecisionContract
+    ),
+    strategy_snapshot: {
+      decisionReadiness:
+        strategyDecisionContract?.decisionReadiness ??
+        researchBrain?.decision_readiness?.level ??
+        null,
+      decisionReasons: asArray(strategyDecisionContract?.decisionReasons).filter(Boolean),
+      tradePermission:
+        strategyDecisionContract?.regime?.tradePermission ??
+        researchBrain?.actionable_decision?.desk_conclusion?.trade_permission ??
+        null,
+      overallStance: strategyDecisionContract?.regime?.overallStance ?? null,
+      maxTotalBuyTodayCny:
+        asNumber(strategyDecisionContract?.executionGuardrails?.maxTotalBuyTodayCny, null),
+      confirmedNavState:
+        String(strategyDecisionContract?.freshness?.confirmedNavState ?? "").trim() || null
+    },
+    top_positions: normalizeTopPositions(agentRuntimeContext, strategyDecisionContract)
   };
 }
 
@@ -92,7 +190,10 @@ export function buildDialogueAnalysisContract({
   opportunityPool = {},
   speculativePlan = {},
   tradePlan = {},
-  researchGuardLines = []
+  researchGuardLines = [],
+  agentRuntimeContext = {},
+  strategyDecisionContract = {},
+  agentBootstrapContext = {}
 } = {}) {
   const sharedResearchSections = buildUnifiedResearchSections({
     researchBrain,
@@ -117,6 +218,12 @@ export function buildDialogueAnalysisContract({
   const speculativeOverlay = normalizeSpeculativeOverlay(speculativePlan);
   const tradePlanSummary = normalizeTradePlanSummary(tradePlan);
   const newsContext = normalizeNewsContext(researchBrain);
+  const agentEntrySnapshot = buildAgentEntrySnapshot({
+    agentRuntimeContext,
+    strategyDecisionContract,
+    agentBootstrapContext,
+    researchBrain
+  });
   const analystFocus = [];
 
   if (tradePlanSummary.first_trade?.symbol) {
@@ -141,6 +248,7 @@ export function buildDialogueAnalysisContract({
     },
     market_core: marketCore,
     news_context: newsContext,
+    agent_entry_snapshot: agentEntrySnapshot,
     gold_factor_model: researchBrain?.gold_factor_model ?? null,
     portfolio_actions: portfolioActions,
     watchlist_actions: watchlistActions,

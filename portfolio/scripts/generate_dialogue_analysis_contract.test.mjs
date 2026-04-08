@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -408,4 +408,172 @@ test("runDialogueAnalysisContractBuild rebuilds research brain into session-scop
   );
 
   assert.equal(receivedOutput, path.join(portfolioRoot, "data", "research_brain.2026-04-03.noon.json"));
+});
+
+test("runDialogueAnalysisContractBuild reads unified agent entry artifacts into the contract", async () => {
+  const portfolioRoot = await mkdtemp(path.join(os.tmpdir(), "dialogue-contract-agent-entry-"));
+  const dataDir = path.join(portfolioRoot, "data");
+  await mkdir(dataDir, { recursive: true });
+
+  await writeFile(
+    path.join(dataDir, "agent_runtime_context.json"),
+    `${JSON.stringify(
+      {
+        generatedAt: "2026-04-08T11:26:27.761Z",
+        accountId: "main",
+        snapshotDate: "2026-04-08",
+        portfolio: {
+          settledCashCny: 52436.16,
+          tradeAvailableCashCny: 52436.16,
+          cashLikeFundAssetsCny: 105251.47,
+          liquiditySleeveAssetsCny: 105251.47
+        },
+        positions: [
+          {
+            code: "023764",
+            name: "华夏恒生互联网科技业ETF联接(QDII)D",
+            observableAmount: 69414.58,
+            quoteMode: "close_reference"
+          }
+        ]
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  await writeFile(
+    path.join(dataDir, "strategy_decision_contract.json"),
+    `${JSON.stringify(
+      {
+        generatedAt: "2026-04-08T11:26:27.766Z",
+        accountId: "main",
+        freshness: {
+          confirmedNavState: "late_missing"
+        },
+        cashSemantics: {
+          settledCashCny: 52436.16,
+          tradeAvailableCashCny: 52436.16,
+          cashLikeFundAssetsCny: 105251.47,
+          liquiditySleeveAssetsCny: 105251.47
+        },
+        regime: {
+          tradePermission: "blocked",
+          overallStance: "freeze"
+        },
+        executionGuardrails: {
+          maxTotalBuyTodayCny: 20000
+        },
+        positionFacts: [
+          {
+            code: "023764",
+            name: "华夏恒生互联网科技业ETF联接(QDII)D",
+            amountCny: 69414.58,
+            decisionValueSource: "observable",
+            quoteMode: "close_reference"
+          }
+        ]
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  await writeFile(
+    path.join(dataDir, "agent_bootstrap_context.json"),
+    `${JSON.stringify(
+      {
+        entrypointIntegrity: {
+          accountIdsAligned: true,
+          cashSemanticsAligned: true,
+          positionFactsAligned: true
+        }
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  const result = await runDialogueAnalysisContractBuild(
+    {
+      portfolioRoot,
+      now: new Date("2026-04-08T15:00:00+08:00"),
+      output: path.join(dataDir, "dialogue_analysis_contract.json")
+    },
+    {
+      ensureReportContext: async () => ({
+        payloads: {
+          cnMarketSnapshot: {},
+          opportunityPool: {},
+          speculativePlan: {},
+          tradePlan: {},
+          researchBrain: {
+            generated_at: "2026-04-08T14:55:00+08:00",
+            meta: {
+              market_session: "post_close",
+              trade_date: "2026-04-08"
+            },
+            freshness_guard: {
+              overall_status: "aligned",
+              stale_dependencies: [],
+              missing_dependencies: []
+            },
+            coverage_guard: {
+              overall_status: "sufficient",
+              weak_domains: []
+            },
+            decision_readiness: {
+              level: "ready",
+              analysis_allowed: true,
+              trading_allowed: false,
+              reasons: []
+            },
+            event_driver: {
+              status: "watch_only",
+              primary_driver: "地缘风险边际降温",
+              priced_in_assessment: "repricing"
+            },
+            flow_macro_radar: {
+              liquidity_regime: "neutral",
+              summary: "等待收盘后确认。"
+            },
+            actionable_decision: {
+              desk_conclusion: {
+                trade_permission: "blocked",
+                one_sentence_order: "不追高，等二次确认。"
+              },
+              portfolio_actions: [],
+              new_watchlist_actions: []
+            }
+          }
+        },
+        freshness: {
+          staleKeys: [],
+          missingKeys: [],
+          refreshRecommendedKeys: []
+        },
+        refresh: {
+          mode: "auto",
+          triggered: false,
+          refreshedTargets: [],
+          skippedTargets: [],
+          errors: []
+        }
+      }),
+      runResearchBrainBuild: async () => {
+        throw new Error("should not rebuild research brain");
+      }
+    }
+  );
+
+  const persisted = JSON.parse(await readFile(path.join(dataDir, "dialogue_analysis_contract.json"), "utf8"));
+  assert.equal(result.contract.agent_entry_snapshot.entrypoint_integrity.cashSemanticsAligned, true);
+  assert.equal(result.contract.agent_entry_snapshot.cash_semantics.tradeAvailableCashCny, 52436.16);
+  assert.equal(result.contract.agent_entry_snapshot.strategy_snapshot.maxTotalBuyTodayCny, 20000);
+  assert.equal(result.contract.agent_entry_snapshot.top_positions[0].code, "023764");
+  assert.equal(
+    persisted.contract.agent_entry_snapshot.entrypoint_integrity.positionFactsAligned,
+    true
+  );
 });

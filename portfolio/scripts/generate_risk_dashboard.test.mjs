@@ -50,3 +50,29 @@ test("buildView exposes denominator labels and cash semantics", () => {
   assert.equal(view.denominator_labels.cash_weights, "pct_of_total_assets");
   assert.equal(view.cash_pct_of_total_assets, 35.96);
 });
+
+test("buildView prefers canonical units and confirmed nav over stale stored amount", () => {
+  const view = buildView(
+    "canonical",
+    [
+      {
+        name: "易方达沪深300ETF联接C",
+        amount: 999999,
+        confirmed_units: 10000,
+        last_confirmed_nav: 2.168019,
+        category: "A股宽基",
+        bucket: "A_CORE"
+      }
+    ],
+    {
+      total_assets_cny: 50000,
+      settled_cash_cny: 20000,
+      trade_available_cash_cny: 20000,
+      cash_like_fund_assets_cny: 0,
+      liquidity_sleeve_assets_cny: 0
+    }
+  );
+
+  assert.equal(view.invested_capital_cny, 21680.19);
+  assert.equal(view.top_positions[0].amount, 21680.19);
+});

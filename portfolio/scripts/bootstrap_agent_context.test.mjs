@@ -66,12 +66,63 @@ test("buildAgentBootstrapContext exposes canonical routes, health, and separated
   );
   await writeFile(
     path.join(portfolioRoot, "data", "agent_runtime_context.json"),
-    `${JSON.stringify({ generatedAt: "2026-04-08T06:30:00.000Z" }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        generatedAt: "2026-04-08T06:30:00.000Z",
+        accountId: "main",
+        snapshotDate: "2026-04-07",
+        meta: {
+          dataFreshnessSummary: "ready"
+        },
+        marketContext: {
+          newsCoverageReadiness: "ok"
+        },
+        portfolio: {
+          settledCashCny: 160000,
+          tradeAvailableCashCny: 120000,
+          cashLikeFundAssetsCny: 85000,
+          liquiditySleeveAssetsCny: 85000
+        },
+        positions: [
+          {
+            code: "016482",
+            amount: 70000,
+            observableAmount: 70000
+          }
+        ]
+      },
+      null,
+      2
+    )}\n`,
     "utf8"
   );
   await writeFile(
     path.join(portfolioRoot, "data", "strategy_decision_contract.json"),
-    `${JSON.stringify({ generatedAt: "2026-04-08T06:31:00.000Z" }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        generatedAt: "2026-04-08T06:31:00.000Z",
+        accountId: "main",
+        freshness: {
+          snapshotDate: "2026-04-07",
+          runtimeDataFreshness: "ready",
+          confirmedNavState: "partially_confirmed_normal_lag"
+        },
+        cashSemantics: {
+          settledCashCny: 160000,
+          tradeAvailableCashCny: 120000,
+          cashLikeFundAssetsCny: 85000,
+          liquiditySleeveAssetsCny: 85000
+        },
+        positionFacts: [
+          {
+            code: "016482",
+            amountCny: 70000
+          }
+        ]
+      },
+      null,
+      2
+    )}\n`,
     "utf8"
   );
 
@@ -121,8 +172,7 @@ test("buildAgentBootstrapContext exposes canonical routes, health, and separated
   ]);
   assert.deepEqual(context.bootstrapReadOrder, [
     "state-manifest.json",
-    "data/agent_runtime_context.json",
-    "data/strategy_decision_contract.json",
+    "data/agent_bootstrap_context.json",
     "state/portfolio_state.json"
   ]);
   assert.equal(
@@ -134,6 +184,20 @@ test("buildAgentBootstrapContext exposes canonical routes, health, and separated
       "data/strategy_decision_contract.json"
     ),
     true
+  );
+  assert.equal(context.entrypointIntegrity.accountIdsAligned, true);
+  assert.equal(context.entrypointIntegrity.cashSemanticsAligned, true);
+  assert.equal(context.entrypointIntegrity.positionFactsAligned, true);
+  assert.equal(context.entrypointIntegrity.runtimePositionCount, 1);
+  assert.equal(context.entrypointIntegrity.contractPositionFactCount, 1);
+  assert.equal(context.analysisReadiness, "ready");
+  assert.equal(context.decisionReadiness, "ready");
+  assert.equal(context.newsCoverageReadiness, "ok");
+  assert.equal(context.portfolioFactsVersion, 1);
+  assert.equal(context.entrypointIntegrity.runtimeGeneratedAt, "2026-04-08T06:30:00.000Z");
+  assert.equal(
+    context.entrypointIntegrity.strategyDecisionContractGeneratedAt,
+    "2026-04-08T06:31:00.000Z"
   );
 });
 
@@ -213,4 +277,80 @@ test("runBootstrapAgentContextBuild writes agent_bootstrap_context.json and upda
     manifest.canonical_entrypoints.agent_bootstrap_context_script,
     path.join(portfolioRoot, "scripts", "bootstrap_agent_context.mjs")
   );
+});
+
+test("buildAgentBootstrapContext exposes change guardrails for agents", async () => {
+  const portfolioRoot = await mkdtemp(path.join(os.tmpdir(), "agent-bootstrap-clause-"));
+  await Promise.all([
+    mkdir(path.join(portfolioRoot, "state"), { recursive: true }),
+    mkdir(path.join(portfolioRoot, "config"), { recursive: true }),
+    mkdir(path.join(portfolioRoot, "data"), { recursive: true })
+  ]);
+
+  await writeFile(
+    path.join(portfolioRoot, "state-manifest.json"),
+    `${JSON.stringify({ canonical_entrypoints: {} }, null, 2)}\n`,
+    "utf8"
+  );
+  await writeFile(
+    path.join(portfolioRoot, "state", "portfolio_state.json"),
+    `${JSON.stringify(
+      {
+        account_id: "main",
+        snapshot_date: "2026-04-07",
+        summary: {},
+        positions: []
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  await writeFile(
+    path.join(portfolioRoot, "config", "asset_master.json"),
+    `${JSON.stringify({ bucket_order: [], buckets: {}, assets: [] }, null, 2)}\n`,
+    "utf8"
+  );
+  await writeFile(
+    path.join(portfolioRoot, "data", "agent_runtime_context.json"),
+    `${JSON.stringify({ generatedAt: "2026-04-08T06:30:00.000Z" }, null, 2)}\n`,
+    "utf8"
+  );
+  await writeFile(
+    path.join(portfolioRoot, "data", "strategy_decision_contract.json"),
+    `${JSON.stringify({ generatedAt: "2026-04-08T06:31:00.000Z" }, null, 2)}\n`,
+    "utf8"
+  );
+
+  const result = await runBootstrapAgentContextBuild(
+    {
+      portfolioRoot,
+      user: "main"
+    },
+    {
+      buildHealth: async () => ({
+        state: "ready",
+        accountId: "main",
+        portfolioRoot,
+        snapshotDate: "2026-04-07",
+        accountingState: "snapshot_fresh_for_accounting",
+        confirmedNavState: "confirmed_nav_ready",
+        reasons: []
+      })
+    }
+  );
+
+  const { payload } = result;
+  assert.equal(payload.changeGuardrails?.required, true);
+  assert.deepEqual(payload.changeGuardrails?.checklist ?? [], [
+    "change_layer",
+    "canonical_inputs",
+    "affected_modules",
+    "impact_decision",
+    "write_boundary_check",
+    "required_regressions"
+  ]);
+  assert.equal(payload.changeGuardrails?.policy?.impactAssessmentBeforeImplementation, true);
+  assert.equal(payload.changeGuardrails?.policy?.regressionBeforeCompletion, true);
+  assert.equal(payload.changeGuardrails?.policy?.noSilentFeatureRemoval, true);
 });

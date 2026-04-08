@@ -281,3 +281,42 @@ test("aggregateResearchNews does not force tier3 telegraph into representative h
     ["marketwatch_top", "caixin_macro", "caixin_macro"]
   );
 });
+
+test("aggregateResearchNews annotates market tags and suppresses generic AP social headlines when macro coverage exists", async () => {
+  const result = await aggregateResearchNews({
+    sourceIds: ["marketwatch_top", "caixin_macro", "ap_business"],
+    now: new Date("2026-04-08T13:40:00+08:00"),
+    sourceLoaders: {
+      marketwatch_top: async () => [
+        {
+          title: "Stock futures surge, oil prices slide as Trump announces two-week cease-fire with Iran",
+          summary: "Gold, oil and Asia equities all reprice after the cease-fire headline.",
+          publishedAt: "2026-04-08T13:15:00+08:00"
+        }
+      ],
+      caixin_macro: async () => [
+        {
+          title: "全球市场交易“美伊停战”：黄金重燃、美元熄火",
+          summary: "停火、黄金、美元、油价成为当日主驱动，日韩股市同步走强。",
+          publishedAt: "2026-04-08T13:10:00+08:00"
+        }
+      ],
+      ap_business: async () => [
+        {
+          title: "Wife of US soldier released from federal immigration detention",
+          summary: "A non-market social story.",
+          publishedAt: "2026-04-08T13:20:00+08:00"
+        }
+      ]
+    }
+  });
+
+  assert.equal(
+    result.topHeadlines.some((item) => item.title.includes("immigration detention")),
+    false
+  );
+  assert.equal(result.topHeadlines[0]?.marketTags.includes("geopolitics"), true);
+  assert.equal(result.topHeadlines[0]?.portfolioRelevanceScore > 0, true);
+  assert.equal(result.topHeadlines[0]?.sourceConfirmationCount >= 2, true);
+  assert.equal(result.topHeadlines[0]?.crossAssetImpact.includes("gold"), true);
+});

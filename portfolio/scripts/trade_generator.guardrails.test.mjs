@@ -251,6 +251,33 @@ test("trade_generator prefers canonical portfolio_state cash semantics over stal
   );
 });
 
+test("trade_generator derives current otc position value from units and confirmed nav", async () => {
+  const { stdout } = await execFileAsync("/Users/yinshiwei/codex/tz/.venv-akshare/bin/python3", [
+    "-c",
+    `
+import importlib.util
+import json
+
+spec = importlib.util.spec_from_file_location("trade_generator", "${SCRIPT_PATH}")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+position = {
+  "execution_type": "OTC",
+  "amount": 999999,
+  "confirmed_units": 10000,
+  "last_confirmed_nav": 2.168019,
+}
+
+result = module.resolve_position_market_value(position)
+print(json.dumps({"current_position_cny": result}, ensure_ascii=False))
+    `.trim(),
+  ]);
+
+  const payload = JSON.parse(stdout.trim());
+  assert.equal(payload.current_position_cny, 21680.19);
+});
+
 test("trade_generator falls back to historical T+1 holdings when sellable_shares is missing", async () => {
   const { stdout, stderr } = await execFileAsync("/Users/yinshiwei/codex/tz/.venv-akshare/bin/python3", [
     "-c",

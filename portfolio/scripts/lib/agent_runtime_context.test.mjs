@@ -53,7 +53,8 @@ test("buildAgentRuntimeContextPayload projects positions buckets market context 
     },
     researchBrain: {
       top_headlines: [{ source: "财新", title: "全球市场交易“美伊停战”：黄金重燃、美元熄火" }],
-      gold_factor_model: { goldRegime: "liquidity_repricing" }
+      gold_factor_model: { goldRegime: "liquidity_repricing" },
+      coverage_guard: { overall_status: "ok" }
     },
     health: {
       state: "ready",
@@ -75,7 +76,201 @@ test("buildAgentRuntimeContextPayload projects positions buckets market context 
   assert.equal(payload.positions[0].bucketKey, "A_CORE");
   assert.equal(payload.bucketView[0].gapAmountCny, 53827);
   assert.equal(payload.marketContext.topHeadlines[0].source, "财新");
+  assert.equal(payload.marketContext.newsCoverageReadiness, "ok");
   assert.equal(payload.systemState.confirmedNavState, "partially_confirmed_normal_lag");
+});
+
+test("buildAgentRuntimeContextPayload exposes canonical and observable fund fields separately", () => {
+  const payload = buildAgentRuntimeContextPayload({
+    accountId: "main",
+    portfolioState: {
+      snapshot_date: "2026-04-08",
+      positions: [
+        {
+          name: "易方达沪深300ETF联接C",
+          code: "007339",
+          confirmed_units: 10000,
+          holding_cost_basis_cny: 21000,
+          bucket: "A_CORE",
+          category: "A股宽基"
+        }
+      ]
+    },
+    dashboardState: {
+      rows: [
+        {
+          name: "易方达沪深300ETF联接C",
+          code: "007339",
+          amount: 21680.19,
+          holdingPnl: 680.19,
+          quoteMode: "intraday_valuation",
+          quoteDate: "2026-04-08"
+        }
+      ]
+    }
+  });
+
+  assert.equal(payload.positions[0].units, 10000);
+  assert.equal(payload.positions[0].costBasis, 21000);
+  assert.equal(payload.positions[0].observableAmount, 21680.19);
+  assert.equal(payload.positions[0].observableHoldingPnl, 680.19);
+  assert.equal(payload.positions[0].quoteMode, "intraday_valuation");
+});
+
+test("buildAgentRuntimeContextPayload keeps units null when canonical units are unavailable", () => {
+  const payload = buildAgentRuntimeContextPayload({
+    accountId: "main",
+    portfolioState: {
+      positions: [
+        {
+          name: "未知份额基金",
+          code: "000001",
+          holding_cost_basis_cny: 3000
+        }
+      ]
+    },
+    dashboardState: {
+      rows: [
+        {
+          code: "000001",
+          amount: 3030.99,
+          holdingPnl: 30.99,
+          quoteMode: "intraday_valuation"
+        }
+      ]
+    }
+  });
+
+  assert.equal(payload.positions[0].units, null);
+  assert.equal(payload.positions[0].observableAmount, 3030.99);
+});
+
+test("buildAgentRuntimeContextPayload derives canonical amount from units and confirmed nav when stored amount is stale", () => {
+  const payload = buildAgentRuntimeContextPayload({
+    accountId: "main",
+    portfolioState: {
+      positions: [
+        {
+          name: "易方达沪深300ETF联接C",
+          code: "007339",
+          confirmed_units: 11891.28539071,
+          last_confirmed_nav: 1.766,
+          amount: 99999,
+          holding_cost_basis_cny: 21000,
+          holding_pnl: 88888,
+          bucket: "A_CORE",
+          category: "A股宽基"
+        }
+      ]
+    },
+    dashboardState: {
+      rows: [
+        {
+          code: "007339",
+          amount: 21579.12,
+          holdingPnl: 579.12,
+          quoteMode: "intraday_valuation",
+          quoteDate: "2026-04-08"
+        }
+      ]
+    }
+  });
+
+  assert.equal(payload.positions[0].canonicalAmount, 21000.01);
+  assert.equal(payload.positions[0].canonicalHoldingPnl, 0.01);
+  assert.equal(payload.positions[0].holdingPnl, 0.01);
+  assert.equal(payload.positions[0].observableAmount, 21579.12);
+});
+
+test("buildAgentRuntimeContextPayload normalizes dashboard bucket groups into runtime bucket view", () => {
+  const payload = buildAgentRuntimeContextPayload({
+    accountId: "main",
+    portfolioState: {
+      summary: {
+        total_portfolio_assets_cny: 445000,
+        total_fund_assets: 285000,
+        settled_cash_cny: 160000,
+        trade_available_cash_cny: 120000
+      },
+      positions: []
+    },
+    dashboardState: {
+      bucketGroups: [
+        {
+          bucketKey: "A_CORE",
+          label: "A股核心",
+          currentAmount: 41152.21,
+          currentPct: 9.53,
+          targetPct: 22,
+          gapAmountCny: 53827
+        }
+      ]
+    }
+  });
+
+  assert.equal(payload.bucketView[0].bucketKey, "A_CORE");
+  assert.equal(payload.bucketView[0].amount, 41152.21);
+  assert.equal(payload.bucketView[0].weightPct, 9.53);
+  assert.equal(payload.bucketView[0].gapAmountCny, 53827);
+});
+
+test("buildAgentRuntimeContextPayload falls back to bucketGroups when presentation bucketSummary is empty", () => {
+  const payload = buildAgentRuntimeContextPayload({
+    accountId: "main",
+    portfolioState: {
+      summary: {
+        total_portfolio_assets_cny: 431720.08
+      },
+      positions: []
+    },
+    dashboardState: {
+      presentation: {
+        bucketSummary: []
+      },
+      bucketGroups: [
+        {
+          bucketKey: "HEDGE",
+          bucketLabel: "黄金",
+          currentAmount: 54365.49,
+          currentPct: 13.98,
+          targetPct: 12
+        }
+      ]
+    }
+  });
+
+  assert.equal(payload.bucketView[0].bucketKey, "HEDGE");
+  assert.equal(payload.bucketView[0].amount, 54365.49);
+  assert.equal(payload.bucketView[0].weightPct, 13.98);
+  assert.equal(payload.bucketView[0].targetPct, 12);
+  assert.equal(payload.bucketView[0].gapAmountCny, -8548.06);
+});
+
+test("buildAgentRuntimeContextPayload prefers row confirmation state over stale stored position confirmation state", () => {
+  const payload = buildAgentRuntimeContextPayload({
+    accountId: "main",
+    portfolioState: {
+      positions: [
+        {
+          name: "易方达沪深300ETF联接C",
+          code: "007339",
+          confirmation_state: "confirmed",
+          bucket: "A_CORE"
+        }
+      ]
+    },
+    dashboardState: {
+      rows: [
+        {
+          name: "易方达沪深300ETF联接C",
+          code: "007339",
+          confirmationState: "normal_lag"
+        }
+      ]
+    }
+  });
+
+  assert.equal(payload.positions[0].confirmationState, "normal_lag");
 });
 
 test("runAgentRuntimeContextBuild writes runtime context and paints manifest entries", async () => {
