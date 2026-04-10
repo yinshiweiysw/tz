@@ -28,6 +28,7 @@ import { buildResearchMarketSnapshot } from "./lib/research_market_snapshot.mjs"
 import { classifyResearchSession } from "./lib/research_session.mjs";
 import { buildResearchSnapshot } from "./lib/research_snapshot_builder.mjs";
 import { buildResearchActionableDecision } from "./lib/research_actionable_decision.mjs";
+import { buildResearchEventWatch } from "./lib/research_event_watch.mjs";
 
 function parseArgs(argv) {
   const result = {};
@@ -351,6 +352,11 @@ export async function runResearchBrainBuild(rawOptions = {}) {
     portfolioRoot === defaultPortfolioRoot ? manifest : await readJsonOrNull(sharedManifestPath);
   const paths = buildAnalyticsPaths(portfolioRoot, manifest, sharedManifest);
   const payloads = await loadPayloads(paths);
+  const highImpactEventCalendarPath =
+    manifest?.canonical_entrypoints?.latest_high_impact_event_calendar ??
+    manifest?.canonical_entrypoints?.high_impact_event_calendar ??
+    buildPortfolioPath(portfolioRoot, "data", "high_impact_event_calendar.json");
+  const highImpactEventCalendar = await readJsonOrNull(highImpactEventCalendarPath);
 
   const sessionInfo = classifyResearchSession(now);
   const sessionContext = {
@@ -440,6 +446,10 @@ export async function runResearchBrainBuild(rawOptions = {}) {
     sessionInfo,
     marketDataQuality
   });
+  const eventWatch = buildResearchEventWatch({
+    calendar: highImpactEventCalendar,
+    now
+  });
   const dataQualityFlags = Array.isArray(marketDataQuality?.flags) ? marketDataQuality.flags : [];
   const blockedReason =
     decisionReadiness?.trading_allowed === false
@@ -489,6 +499,7 @@ export async function runResearchBrainBuild(rawOptions = {}) {
     top_headlines: newsAggregation.topHeadlines,
     analysis_mode: newsAggregation.analysisMode,
     analysis_degraded_reason: newsAggregation.degradedReason,
+    event_watch: eventWatch,
     flow_macro_radar: flowMacroRadar,
     market_data_quality: marketDataQuality,
     driver_expectation_matrix: driverExpectationMatrix,

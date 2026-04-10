@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildResearchActionDecisionLines,
   buildResearchDriverLines,
+  buildResearchEventWatchLines,
   buildResearchFlowRadarLines,
   buildResearchFlowValidationLines,
   buildResearchGoldFactorLines,
@@ -55,6 +56,46 @@ test("buildResearchHeadlineLines renders analysis mode and top headlines", () =>
   assert.ok(lines.some((line) => line.includes("multi_source_confirmed")));
   assert.ok(lines.some((line) => line.includes("Reuters")));
   assert.ok(lines.some((line) => line.includes("WSJ")));
+});
+
+test("buildResearchEventWatchLines renders tomorrow risks, weekly catalysts and deadline watch", () => {
+  const lines = buildResearchEventWatchLines({
+    readiness: "ready",
+    summary: {
+      total_high_impact_events: 3,
+      tomorrow_risk_count: 1,
+      this_week_catalyst_count: 2,
+      deadline_watch_count: 1
+    },
+    tomorrow_risks: [
+      {
+        title: "China CPI/PPI",
+        scheduledAt: "2026-04-11T09:30:00+08:00"
+      }
+    ],
+    this_week_catalysts: [
+      {
+        title: "China CPI/PPI",
+        scheduledAt: "2026-04-11T09:30:00+08:00"
+      },
+      {
+        title: "US CPI",
+        scheduledAt: "2026-04-11T20:30:00+08:00"
+      }
+    ],
+    deadline_watch: [
+      {
+        title: "US-Iran Truce Window",
+        scheduledAt: "2026-04-22T00:00:00+08:00",
+        deadlineAt: "2026-04-24T23:59:59+08:00"
+      }
+    ]
+  });
+
+  assert.ok(lines.some((line) => line.includes("ready")));
+  assert.ok(lines.some((line) => line.includes("明日风险")));
+  assert.ok(lines.some((line) => line.includes("周内催化")));
+  assert.ok(lines.some((line) => line.includes("到期窗口")));
 });
 
 test("buildResearchGoldFactorLines renders dominant driver and action bias", () => {
@@ -206,6 +247,37 @@ test("buildUnifiedResearchSections adds headline and gold sections when research
 
   assert.ok(sections.some((item) => item.heading === "## Headline Tape"));
   assert.ok(sections.some((item) => item.heading === "## Gold Factor Model"));
+});
+
+test("buildUnifiedResearchSections adds event watch section when event_watch is present", () => {
+  const sections = buildUnifiedResearchSections({
+    researchBrain: {
+      event_watch: {
+        readiness: "ready",
+        summary: {
+          total_high_impact_events: 1,
+          tomorrow_risk_count: 1,
+          this_week_catalyst_count: 1,
+          deadline_watch_count: 0
+        },
+        tomorrow_risks: [
+          {
+            title: "US CPI",
+            scheduledAt: "2026-04-11T20:30:00+08:00"
+          }
+        ],
+        this_week_catalysts: [
+          {
+            title: "US CPI",
+            scheduledAt: "2026-04-11T20:30:00+08:00"
+          }
+        ],
+        deadline_watch: []
+      }
+    }
+  });
+
+  assert.ok(sections.some((item) => item.heading === "## Event Watch"));
 });
 
 test("flattenResearchSections expands headings and lines for downstream reports", () => {

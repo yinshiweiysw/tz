@@ -25,6 +25,7 @@ import { runResearchBrainBuild } from "./generate_research_brain.mjs";
 import { runRiskDashboardBuild } from "./generate_risk_dashboard.mjs";
 import { runLiveFundsSnapshotBuild } from "./serve_funds_live_dashboard.mjs";
 import { runDashboardStateBuild } from "./build_dashboard_state.mjs";
+import { runHighImpactEventCalendarBuild } from "./build_high_impact_event_calendar.mjs";
 import { runAgentEntrypointRefresh } from "./refresh_agent_entrypoints.mjs";
 
 function parseArgs(argv) {
@@ -63,6 +64,7 @@ function normalizeScopes(value) {
       "live_funds_snapshot",
       "dashboard_state",
       "nightly_confirmed_nav_status",
+      "high_impact_event_calendar",
       "research_brain",
       "agent_entrypoints",
       "report_session_memory",
@@ -80,6 +82,9 @@ function normalizeScopes(value) {
     ["dashboard_state", "dashboard_state"],
     ["nightly", "nightly_confirmed_nav_status"],
     ["nightly_confirmed_nav_status", "nightly_confirmed_nav_status"],
+    ["high_impact", "high_impact_event_calendar"],
+    ["event_calendar", "high_impact_event_calendar"],
+    ["high_impact_event_calendar", "high_impact_event_calendar"],
     ["research", "research_brain"],
     ["research_brain", "research_brain"],
     ["agent", "agent_entrypoints"],
@@ -241,6 +246,8 @@ export async function runRefreshAccountSidecars(rawOptions = {}, deps = {}) {
   const runRiskDashboard = deps.runRiskDashboardBuild ?? runRiskDashboardBuild;
   const runLiveSnapshot = deps.runLiveFundsSnapshotBuild ?? runLiveFundsSnapshotBuild;
   const runDashboardState = deps.runDashboardStateBuild ?? runDashboardStateBuild;
+  const runHighImpactEventCalendar =
+    deps.runHighImpactEventCalendarBuild ?? runHighImpactEventCalendarBuild;
   const runResearchBrain = deps.runResearchBrainBuild ?? runResearchBrainBuild;
   const runAgentEntrypoints = deps.runAgentEntrypointRefresh ?? runAgentEntrypointRefresh;
   const runReportQualityScorecard = deps.runReportQualityScorecardBuild ?? runReportQualityScorecardBuild;
@@ -311,6 +318,28 @@ export async function runRefreshAccountSidecars(rawOptions = {}, deps = {}) {
     if (outputs.nightlyConfirmedNavStatusPath) {
       manifestEntries.latest_nightly_confirmed_nav_status = outputs.nightlyConfirmedNavStatusPath;
     }
+  }
+
+  if (hasScope(scopes, "high_impact_event_calendar")) {
+    const highImpactResult = await runHighImpactEventCalendar({
+      portfolioRoot,
+      user: accountId,
+      date: tradeDate
+    });
+    outputs.highImpactEventCalendarPath =
+      highImpactResult?.outputPath ??
+      buildPortfolioPath(portfolioRoot, "data", "high_impact_event_calendar.json");
+    manifestEntries.high_impact_event_calendar = outputs.highImpactEventCalendarPath;
+    manifestEntries.high_impact_event_calendar_builder = buildPortfolioPath(
+      portfolioRoot,
+      "scripts",
+      "build_high_impact_event_calendar.mjs"
+    );
+    manifestEntries.high_impact_event_calendar_override = buildPortfolioPath(
+      portfolioRoot,
+      "data",
+      "high_impact_event_calendar.override.json"
+    );
   }
 
   if (

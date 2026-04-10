@@ -771,7 +771,7 @@ const dailyResearchLines = flattenResearchSections(
     researchGuardLines: []
   }),
   {
-    includeHeadings: ["## Active Market Driver", "## China / HK Flow Validation"]
+    includeHeadings: ["## Active Market Driver", "## Event Watch", "## China / HK Flow Validation"]
   }
 );
 const macroRadarLines = buildMacroRadarLines(macroRadar);

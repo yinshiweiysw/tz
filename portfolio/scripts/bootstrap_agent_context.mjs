@@ -142,6 +142,14 @@ function normalizeReadiness(value, fallback = "unknown") {
   return normalized || fallback;
 }
 
+function normalizeEventCount(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return 0;
+  }
+  return Math.floor(numeric);
+}
+
 export async function buildAgentBootstrapContext(rawOptions = {}, deps = {}) {
   const portfolioRoot = resolvePortfolioRoot(rawOptions);
   const accountId = resolveAccountId(rawOptions);
@@ -172,6 +180,18 @@ export async function buildAgentBootstrapContext(rawOptions = {}, deps = {}) {
       runtimeContext?.marketContext?.newsCoverageReadiness,
     "unknown"
   );
+  const eventWatchReadiness = normalizeReadiness(
+    runtimeContext?.marketContext?.eventWatch?.readiness,
+    "unknown"
+  );
+  const upcomingHighImpactEventCount = normalizeEventCount(
+    runtimeContext?.marketContext?.eventWatch?.upcomingHighImpactEventCount
+  );
+  const nextHighImpactEvent =
+    runtimeContext?.marketContext?.eventWatch?.nextHighImpactEvent &&
+    typeof runtimeContext.marketContext.eventWatch.nextHighImpactEvent === "object"
+      ? runtimeContext.marketContext.eventWatch.nextHighImpactEvent
+      : null;
 
   return {
     generatedAt: new Date().toISOString(),
@@ -192,6 +212,9 @@ export async function buildAgentBootstrapContext(rawOptions = {}, deps = {}) {
     analysisReadiness,
     decisionReadiness,
     newsCoverageReadiness,
+    eventWatchReadiness,
+    upcomingHighImpactEventCount,
+    nextHighImpactEvent,
     portfolioFactsVersion: 1,
     accountSummary: buildAccountSummary(canonicalState?.payload ?? {}),
     entrypointIntegrity: buildEntrypointIntegrity({

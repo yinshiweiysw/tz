@@ -22,6 +22,11 @@ test("runRefreshAccountSidecars rebuilds canonical sidecars in a fixed order and
   const reportQualityScorecardPath = path.join(portfolioRoot, "data", "report_quality_scorecard.json");
   const analysisHitRatePath = path.join(portfolioRoot, "data", "analysis_hit_rate.json");
   const nightlyStatusPath = path.join(portfolioRoot, "data", "nightly_confirmed_nav_status.json");
+  const highImpactEventCalendarPath = path.join(
+    portfolioRoot,
+    "data",
+    "high_impact_event_calendar.json"
+  );
   const agentRuntimeContextPath = path.join(portfolioRoot, "data", "agent_runtime_context.json");
   const strategyDecisionContractPath = path.join(
     portfolioRoot,
@@ -142,6 +147,24 @@ test("runRefreshAccountSidecars rebuilds canonical sidecars in a fixed order and
           statusPath: nightlyStatusPath
         };
       },
+      runHighImpactEventCalendarBuild: async () => {
+        callOrder.push("high_impact");
+        await writeJson(highImpactEventCalendarPath, {
+          generatedAt: "2026-04-04T15:32:10.000Z",
+          accountId: "main",
+          events: [
+            {
+              eventId: "us-cpi-2026-04",
+              title: "US CPI",
+              importance: "high",
+              scheduledAt: "2026-04-10T20:30:00+08:00"
+            }
+          ]
+        });
+        return {
+          outputPath: highImpactEventCalendarPath
+        };
+      },
       runResearchBrainBuild: async () => {
         callOrder.push("research");
         await writeJson(researchBrainPath, researchBrain);
@@ -188,7 +211,15 @@ test("runRefreshAccountSidecars rebuilds canonical sidecars in a fixed order and
     }
   );
 
-  assert.deepEqual(callOrder, ["risk", "live", "nightly", "research", "agent", "scorecard"]);
+  assert.deepEqual(callOrder, [
+    "risk",
+    "live",
+    "nightly",
+    "high_impact",
+    "research",
+    "agent",
+    "scorecard"
+  ]);
 
   const persistedManifest = JSON.parse(await readFile(manifestPath, "utf8"));
   assert.equal(
@@ -199,6 +230,14 @@ test("runRefreshAccountSidecars rebuilds canonical sidecars in a fixed order and
   assert.equal(
     persistedManifest.canonical_entrypoints.latest_live_funds_snapshot,
     liveFundsSnapshotPath
+  );
+  assert.equal(
+    persistedManifest.canonical_entrypoints.high_impact_event_calendar,
+    highImpactEventCalendarPath
+  );
+  assert.equal(
+    persistedManifest.canonical_entrypoints.high_impact_event_calendar_builder,
+    path.join(portfolioRoot, "scripts", "build_high_impact_event_calendar.mjs")
   );
   assert.equal(
     persistedManifest.canonical_entrypoints.latest_report_session_memory,
@@ -232,6 +271,7 @@ test("runRefreshAccountSidecars rebuilds canonical sidecars in a fixed order and
   assert.equal(result.outputs.riskDashboardPath, riskDashboardPath);
   assert.equal(result.outputs.liveFundsSnapshotPath, liveFundsSnapshotPath);
   assert.equal(result.outputs.nightlyConfirmedNavStatusPath, nightlyStatusPath);
+  assert.equal(result.outputs.highImpactEventCalendarPath, highImpactEventCalendarPath);
   assert.equal(result.outputs.researchBrainPath, researchBrainPath);
   assert.equal(result.outputs.agentRuntimeContextPath, agentRuntimeContextPath);
   assert.equal(result.outputs.strategyDecisionContractPath, strategyDecisionContractPath);

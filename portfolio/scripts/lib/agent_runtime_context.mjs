@@ -71,6 +71,28 @@ function resolvePositionUnits(position = {}) {
   return toNullableNumber(position?.units ?? position?.confirmed_units);
 }
 
+function normalizeEventWatch(eventWatch = {}) {
+  const readiness = String(
+    eventWatch?.readiness ??
+      eventWatch?.status ??
+      eventWatch?.eventWatchReadiness ??
+      "unknown"
+  ).trim() || "unknown";
+  const upcomingHighImpactEventCount = toNumber(
+    eventWatch?.upcomingHighImpactEventCount ?? eventWatch?.upcomingCount
+  );
+  const nextHighImpactEvent =
+    eventWatch?.nextHighImpactEvent && typeof eventWatch.nextHighImpactEvent === "object"
+      ? eventWatch.nextHighImpactEvent
+      : null;
+
+  return {
+    readiness,
+    upcomingHighImpactEventCount,
+    nextHighImpactEvent
+  };
+}
+
 export function buildAgentRuntimeContextPayload({
   accountId,
   portfolioState = {},
@@ -174,7 +196,8 @@ export function buildAgentRuntimeContextPayload({
       crossAssetSnapshot: researchBrain?.market_snapshot ?? {},
       dominantDrivers: researchBrain?.event_driver?.active_drivers ?? [],
       goldRegime: researchBrain?.gold_factor_model?.goldRegime ?? null,
-      riskTone: researchBrain?.actionable_decision?.desk_conclusion?.overall_stance ?? null
+      riskTone: researchBrain?.actionable_decision?.desk_conclusion?.overall_stance ?? null,
+      eventWatch: normalizeEventWatch(researchBrain?.event_watch)
     },
     systemState: {
       dashboardHealth: health,

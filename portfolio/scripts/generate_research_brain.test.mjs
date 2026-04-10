@@ -760,3 +760,81 @@ test("runResearchBrainBuild writes institutional sidecars and exposes section co
   assert.equal(typeof marketFlowMatrix.liquidity_regime, "string");
   assert.equal(typeof driverExpectationMatrix.expectation_gap, "string");
 });
+
+test("runResearchBrainBuild includes event_watch from canonical high impact event calendar", async () => {
+  const portfolioRoot = await mkdtemp(path.join(os.tmpdir(), "research-brain-event-watch-"));
+  const manifestPath = path.join(portfolioRoot, "state-manifest.json");
+  const outputPath = path.join(portfolioRoot, "data", "research_brain.json");
+  const eventCalendarPath = path.join(portfolioRoot, "data", "high_impact_event_calendar.json");
+
+  await writeJson(manifestPath, {
+    version: 1,
+    account_id: "event-watch",
+    portfolio_root: portfolioRoot,
+    canonical_entrypoints: {
+      latest_snapshot: path.join(portfolioRoot, "state", "portfolio_state.json"),
+      risk_dashboard: path.join(portfolioRoot, "risk_dashboard.json"),
+      latest_macro_state: path.join(portfolioRoot, "data", "macro_state.json"),
+      latest_macro_radar: path.join(portfolioRoot, "data", "macro_radar.json"),
+      latest_regime_router_signals: path.join(portfolioRoot, "signals", "regime_router_signals.json"),
+      latest_opportunity_pool_json: path.join(portfolioRoot, "data", "opportunity_pool.json"),
+      latest_performance_attribution: path.join(portfolioRoot, "data", "performance_attribution.json"),
+      latest_research_brain: outputPath,
+      latest_high_impact_event_calendar: eventCalendarPath
+    }
+  });
+  await writeJson(path.join(portfolioRoot, "state", "portfolio_state.json"), {
+    snapshot_date: "2026-04-10"
+  });
+  await writeJson(path.join(portfolioRoot, "risk_dashboard.json"), {
+    as_of: "2026-04-10"
+  });
+  await writeJson(path.join(portfolioRoot, "data", "macro_state.json"), {
+    generated_at: "2026-04-10T17:00:00+08:00"
+  });
+  await writeJson(path.join(portfolioRoot, "data", "macro_radar.json"), {
+    generated_at: "2026-04-10T17:10:00+08:00"
+  });
+  await writeJson(path.join(portfolioRoot, "signals", "regime_router_signals.json"), {
+    generated_at: "2026-04-10T17:20:00+08:00"
+  });
+  await writeJson(path.join(portfolioRoot, "data", "opportunity_pool.json"), {
+    generated_at: "2026-04-10T17:30:00+08:00",
+    as_of: "2026-04-10"
+  });
+  await writeJson(path.join(portfolioRoot, "data", "performance_attribution.json"), {
+    generated_at: "2026-04-10T17:35:00+08:00",
+    as_of: "2026-04-10"
+  });
+  await writeJson(eventCalendarPath, {
+    generated_at: "2026-04-10T18:00:00+08:00",
+    events: [
+      {
+        eventId: "cn-cpi",
+        title: "China CPI/PPI",
+        eventType: "macro_release",
+        importance: "high",
+        scheduledAt: "2026-04-11T09:30:00+08:00"
+      },
+      {
+        eventId: "us-iran-window",
+        title: "US-Iran Truce Expiry Window",
+        eventType: "geopolitical_window",
+        importance: "high",
+        scheduledAt: "2026-04-22T00:00:00+08:00",
+        window: { endAt: "2026-04-24T23:59:59+08:00" }
+      }
+    ]
+  });
+
+  const result = await runResearchBrainBuild({
+    portfolioRoot,
+    now: new Date("2026-04-10T12:00:00+08:00"),
+    quoteFetcher: async () => []
+  });
+
+  assert.equal(result.output.event_watch.readiness, "ready");
+  assert.equal(result.output.event_watch.summary.total_high_impact_events, 2);
+  assert.equal(result.output.event_watch.tomorrow_risks.length, 1);
+  assert.equal(result.output.event_watch.deadline_watch.length, 1);
+});

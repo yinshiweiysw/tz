@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildDialogueAnalysisContract } from "./dialogue_analysis_contract.mjs";
+import { buildReportHeadlineTape } from "./report_headline_tape.mjs";
 
 test("buildDialogueAnalysisContract reuses shared research sections and exposes flow validation", () => {
   const contract = buildDialogueAnalysisContract({
@@ -196,4 +197,129 @@ test("buildDialogueAnalysisContract keeps enriched top_headlines metadata for do
   assert.equal(contract.news_context.top_headlines[0].portfolioRelevanceScore, 7);
   assert.equal(contract.news_context.top_headlines[0].sourceConfirmationCount, 3);
   assert.equal(contract.news_context.top_headlines[0].crossAssetImpact.includes("gold"), true);
+});
+
+test("buildDialogueAnalysisContract exposes event watch context for downstream analysis", () => {
+  const contract = buildDialogueAnalysisContract({
+    researchBrain: {
+      event_watch: {
+        readiness: "ready",
+        tomorrow_risks: [
+          {
+            eventId: "us-cpi-2026-04-11",
+            title: "US CPI",
+            scheduledAt: "2026-04-11T20:30:00+08:00"
+          }
+        ],
+        this_week_catalysts: [],
+        deadline_watch: []
+      }
+    }
+  });
+
+  assert.equal(contract.market_context.event_watch.readiness, "ready");
+  assert.equal(contract.market_context.event_watch.tomorrow_risks[0].eventId, "us-cpi-2026-04-11");
+});
+
+test("buildDialogueAnalysisContract exposes event_watch context and keeps it independent from telegraph headlines", () => {
+  const contract = buildDialogueAnalysisContract({
+    researchBrain: {
+      event_watch: {
+        readiness: "ready",
+        summary: {
+          total_high_impact_events: 3
+        },
+        next_event: {
+          eventId: "us-cpi-2026-04",
+          title: "US CPI",
+          scheduledAt: "2026-04-11T20:30:00+08:00"
+        },
+        tomorrow_risks: [
+          {
+            eventId: "us-cpi-2026-04",
+            title: "US CPI"
+          }
+        ],
+        this_week_catalysts: [
+          {
+            eventId: "cn-cpi-2026-04",
+            title: "China CPI/PPI"
+          }
+        ],
+        deadline_watch: [
+          {
+            eventId: "iran-truce-expiry",
+            title: "US-Iran Truce Window Expiry"
+          }
+        ]
+      },
+      top_headlines: [
+        {
+          source: "财联社",
+          title: "盘中快讯：某板块拉升",
+          published_at: "2026-04-10T14:01:00+08:00"
+        }
+      ]
+    }
+  });
+
+  assert.equal(contract.news_context.event_watch.readiness, "ready");
+  assert.equal(contract.news_context.event_watch.summary.total_high_impact_events, 3);
+  assert.equal(contract.news_context.event_watch.next_event.eventId, "us-cpi-2026-04");
+  assert.equal(contract.news_context.event_watch.tomorrow_risks[0].eventId, "us-cpi-2026-04");
+  assert.equal(contract.news_context.top_headlines[0].title, "盘中快讯：某板块拉升");
+});
+
+test("buildReportHeadlineTape prefers event_watch as primary headline chain and keeps telegraph as auxiliary", () => {
+  const tape = buildReportHeadlineTape({
+    researchBrain: {
+      event_watch: {
+        readiness: "ready",
+        tomorrow_risks: [
+          {
+            eventId: "us-cpi-2026-04",
+            title: "US CPI",
+            scheduledAt: "2026-04-11T20:30:00+08:00"
+          }
+        ],
+        this_week_catalysts: [],
+        deadline_watch: []
+      }
+    },
+    headlineCandidates: [
+      {
+        title: "盘中快讯：某板块拉升"
+      }
+    ],
+    telegraphCandidates: [
+      {
+        title: "港股异动"
+      }
+    ]
+  });
+
+  assert.equal(tape.primarySource, "event_watch");
+  assert.equal(tape.primaryLines[0].includes("US CPI"), true);
+  assert.equal(tape.auxiliaryLines[0].includes("港股异动"), true);
+});
+
+test("buildReportHeadlineTape degrades explicitly when event_watch is missing and does not let telegraph replace the primary chain", () => {
+  const tape = buildReportHeadlineTape({
+    researchBrain: {},
+    headlineCandidates: [
+      {
+        title: "快讯：主题股拉升"
+      }
+    ],
+    telegraphCandidates: [
+      {
+        title: "电报：某市场异动"
+      }
+    ]
+  });
+
+  assert.equal(tape.primarySource, "degraded_event_watch_missing");
+  assert.equal(tape.primaryLines[0].includes("Event Watch"), true);
+  assert.equal(tape.primaryLines[0].includes("降级"), true);
+  assert.equal(tape.auxiliaryLines[0].includes("电报"), true);
 });

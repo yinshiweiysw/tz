@@ -75,7 +75,16 @@ test("buildAgentBootstrapContext exposes canonical routes, health, and separated
           dataFreshnessSummary: "ready"
         },
         marketContext: {
-          newsCoverageReadiness: "ok"
+          newsCoverageReadiness: "ok",
+          eventWatch: {
+            readiness: "ready",
+            upcomingHighImpactEventCount: 2,
+            nextHighImpactEvent: {
+              eventId: "cn-cpi-2026-04",
+              title: "China CPI/PPI",
+              scheduledAt: "2026-04-10T09:30:00+08:00"
+            }
+          }
         },
         portfolio: {
           settledCashCny: 160000,
@@ -185,6 +194,12 @@ test("buildAgentBootstrapContext exposes canonical routes, health, and separated
     ),
     true
   );
+  assert.equal(
+    context.intentRouting["分析当前行情"].requiredReads.includes(
+      "data/high_impact_event_calendar.json"
+    ),
+    true
+  );
   assert.equal(context.entrypointIntegrity.accountIdsAligned, true);
   assert.equal(context.entrypointIntegrity.cashSemanticsAligned, true);
   assert.equal(context.entrypointIntegrity.positionFactsAligned, true);
@@ -193,6 +208,9 @@ test("buildAgentBootstrapContext exposes canonical routes, health, and separated
   assert.equal(context.analysisReadiness, "ready");
   assert.equal(context.decisionReadiness, "ready");
   assert.equal(context.newsCoverageReadiness, "ok");
+  assert.equal(context.eventWatchReadiness, "ready");
+  assert.equal(context.upcomingHighImpactEventCount, 2);
+  assert.equal(context.nextHighImpactEvent?.eventId, "cn-cpi-2026-04");
   assert.equal(context.portfolioFactsVersion, 1);
   assert.equal(context.entrypointIntegrity.runtimeGeneratedAt, "2026-04-08T06:30:00.000Z");
   assert.equal(

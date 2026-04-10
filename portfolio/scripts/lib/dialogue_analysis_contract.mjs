@@ -74,6 +74,19 @@ function normalizeNewsContext(researchBrain = {}) {
   return {
     analysis_mode: String(researchBrain?.analysis_mode ?? "").trim() || null,
     degraded_reason: String(researchBrain?.analysis_degraded_reason ?? "").trim() || null,
+    event_watch: researchBrain?.event_watch ?? {
+      readiness: "degraded",
+      summary: {
+        total_high_impact_events: 0,
+        tomorrow_risk_count: 0,
+        this_week_catalyst_count: 0,
+        deadline_watch_count: 0
+      },
+      next_event: null,
+      tomorrow_risks: [],
+      this_week_catalysts: [],
+      deadline_watch: []
+    },
     top_headlines: asArray(researchBrain?.top_headlines)
       .slice(0, 5)
       .map((item) => ({
@@ -247,6 +260,10 @@ export function buildDialogueAnalysisContract({
       readiness_level: researchBrain?.decision_readiness?.level ?? null
     },
     market_core: marketCore,
+    market_context: {
+      ...marketCore,
+      event_watch: newsContext.event_watch
+    },
     news_context: newsContext,
     agent_entry_snapshot: agentEntrySnapshot,
     gold_factor_model: researchBrain?.gold_factor_model ?? null,

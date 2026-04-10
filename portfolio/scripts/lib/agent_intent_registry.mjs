@@ -11,7 +11,12 @@ export function buildAgentIntentRegistry(portfolioRoot) {
   return {
     分析当前行情: {
       primaryScript: script("generate_dialogue_analysis_contract.mjs"),
-      requiredReads: ["state-manifest.json", ...SHARED_REQUIRED_READS, "state/portfolio_state.json"],
+      requiredReads: [
+        "state-manifest.json",
+        ...SHARED_REQUIRED_READS,
+        "state/portfolio_state.json",
+        "data/high_impact_event_calendar.json"
+      ],
       forbiddenBehaviors: ["不要直接扫描整个仓库", "不要默认读取 working_view", "不要跳过实时新闻校验"],
       requiresExternalNewsRefresh: true,
       minimumNewsSources: 2

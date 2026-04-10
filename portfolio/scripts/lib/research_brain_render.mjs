@@ -67,6 +67,35 @@ export function buildResearchHeadlineLines(newsContext = {}) {
   ];
 }
 
+export function buildResearchEventWatchLines(eventWatch = {}) {
+  const tomorrowRisks = normalizeArray(eventWatch?.tomorrow_risks).slice(0, 3);
+  const thisWeekCatalysts = normalizeArray(eventWatch?.this_week_catalysts).slice(0, 4);
+  const deadlineWatch = normalizeArray(eventWatch?.deadline_watch).slice(0, 3);
+  const summary = eventWatch?.summary ?? {};
+  const readiness = String(eventWatch?.readiness ?? "").trim();
+
+  if (!readiness && tomorrowRisks.length === 0 && thisWeekCatalysts.length === 0 && deadlineWatch.length === 0) {
+    return [];
+  }
+
+  return [
+    `- 状态：${readiness || "unknown"}`,
+    `- 事件总数：${Number(summary?.total_high_impact_events ?? 0) || 0}`,
+    `- 明日风险：${Number(summary?.tomorrow_risk_count ?? tomorrowRisks.length ?? 0) || 0}`,
+    `- 周内催化：${Number(summary?.this_week_catalyst_count ?? thisWeekCatalysts.length ?? 0) || 0}`,
+    `- 到期窗口：${Number(summary?.deadline_watch_count ?? deadlineWatch.length ?? 0) || 0}`,
+    ...(tomorrowRisks.length > 0
+      ? tomorrowRisks.map((item) => `- 明日风险项：${item?.title ?? "未命名事件"}｜${item?.scheduledAt ?? "--"}`)
+      : []),
+    ...(thisWeekCatalysts.length > 0
+      ? thisWeekCatalysts.map((item) => `- 周内催化项：${item?.title ?? "未命名事件"}｜${item?.scheduledAt ?? "--"}`)
+      : []),
+    ...(deadlineWatch.length > 0
+      ? deadlineWatch.map((item) => `- 到期窗口项：${item?.title ?? "未命名事件"}｜${item?.deadlineAt ?? item?.scheduledAt ?? "--"}`)
+      : [])
+  ];
+}
+
 export function buildResearchGoldFactorLines(goldFactorModel = {}) {
   const secondaryDrivers = normalizeArray(goldFactorModel?.secondaryGoldDrivers).slice(0, 4);
   const riskNotes = normalizeArray(goldFactorModel?.goldRiskNotes).slice(0, 3);
@@ -187,6 +216,10 @@ export function buildUnifiedResearchSections({
     {
       heading: "## Headline Tape",
       lines: buildResearchHeadlineLines(researchBrain)
+    },
+    {
+      heading: "## Event Watch",
+      lines: buildResearchEventWatchLines(researchBrain?.event_watch)
     },
     {
       heading: "## Gold Factor Model",

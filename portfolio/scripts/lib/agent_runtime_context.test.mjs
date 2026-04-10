@@ -54,7 +54,16 @@ test("buildAgentRuntimeContextPayload projects positions buckets market context 
     researchBrain: {
       top_headlines: [{ source: "财新", title: "全球市场交易“美伊停战”：黄金重燃、美元熄火" }],
       gold_factor_model: { goldRegime: "liquidity_repricing" },
-      coverage_guard: { overall_status: "ok" }
+      coverage_guard: { overall_status: "ok" },
+      event_watch: {
+        readiness: "ready",
+        upcomingHighImpactEventCount: 3,
+        nextHighImpactEvent: {
+          eventId: "us-cpi-2026-04",
+          title: "US CPI",
+          scheduledAt: "2026-04-10T20:30:00+08:00"
+        }
+      }
     },
     health: {
       state: "ready",
@@ -77,6 +86,9 @@ test("buildAgentRuntimeContextPayload projects positions buckets market context 
   assert.equal(payload.bucketView[0].gapAmountCny, 53827);
   assert.equal(payload.marketContext.topHeadlines[0].source, "财新");
   assert.equal(payload.marketContext.newsCoverageReadiness, "ok");
+  assert.equal(payload.marketContext.eventWatch.readiness, "ready");
+  assert.equal(payload.marketContext.eventWatch.upcomingHighImpactEventCount, 3);
+  assert.equal(payload.marketContext.eventWatch.nextHighImpactEvent.eventId, "us-cpi-2026-04");
   assert.equal(payload.systemState.confirmedNavState, "partially_confirmed_normal_lag");
 });
 
