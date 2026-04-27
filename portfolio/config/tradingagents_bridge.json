@@ -1,0 +1,53 @@
+{
+  "phase1Buckets": ["A_CORE", "GLB_MOM", "TACTICAL"],
+  "blockedBuckets": ["HEDGE", "INCOME", "CASH"],
+  "staleAfterHours": 36,
+  "providerDefaults": {
+    "llmProvider": "deepseek",
+    "deepThinkModel": "deepseek-v4-flash",
+    "quickThinkModel": "deepseek-v4-flash",
+    "selectedAnalysts": ["market"],
+    "backendUrl": "https://api.deepseek.com",
+    "outputLanguage": "Chinese",
+    "requestTimeoutSeconds": 90,
+    "requestMaxRetries": 0,
+    "maxTokens": 1200,
+    "temperature": 0.2,
+    "thinkingType": "disabled",
+    "marketDataToolMaxRows": 120,
+    "indicatorToolMaxLookbackDays": 30,
+    "invokeMaxAttempts": 1,
+    "invokeBackoffSeconds": 12,
+    "invokeMaxBackoffSeconds": 60,
+    "invokeIntervalSeconds": 2,
+    "symbolMaxAttempts": 1,
+    "symbolBackoffSeconds": 30,
+    "symbolMaxBackoffSeconds": 120,
+    "symbolIntervalSeconds": 8,
+    "symbolCacheTtlHours": 18,
+    "allowStaleSymbolCacheOnError": 1,
+    "processTimeoutMs": 240000,
+    "processMaxBufferBytes": 8388608,
+    "prewarmMaxSymbolsPerRun": 1,
+    "prewarmPrioritySymbols": ["QQQ", "SOXX", "KWEB", "ARKK", "ASHR"]
+  },
+  "ratingMap": {
+    "BUY": "增配",
+    "OVERWEIGHT": "偏增配",
+    "HOLD": "维持",
+    "UNDERWEIGHT": "减配",
+    "SELL": "显著减配 / 退出候选"
+  },
+  "ratingConfidenceDefaults": {
+    "BUY": 0.66,
+    "OVERWEIGHT": 0.62,
+    "HOLD": 0.55,
+    "UNDERWEIGHT": 0.62,
+    "SELL": 0.66
+  },
+  "bucketProxyUniverse": {
+    "A_CORE": ["ASHR"],
+    "GLB_MOM": ["QQQ", "SOXX", "KWEB"],
+    "TACTICAL": ["ARKK"]
+  }
+}

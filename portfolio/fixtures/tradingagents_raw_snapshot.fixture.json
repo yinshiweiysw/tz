@@ -1,0 +1,65 @@
+{
+  "generatedAt": "2026-04-24T09:30:00+08:00",
+  "asOf": "2026-04-24",
+  "mode": "fixture",
+  "source": "TradingAgents",
+  "provider": "fixture",
+  "calls": [
+    {
+      "symbol": "ASHR",
+      "rating": "HOLD",
+      "confidence": 0.58,
+      "thesis": "A 股核心风险偏好仍偏中性，先等待更明确的主线扩散。",
+      "risks": ["量能不足", "主题轮动过快"],
+      "riskJudge": "当前 A 股核心仓位以中性观察为宜，不适合激进追价。",
+      "investmentJudge": "没有形成足够强的趋势扩散证据，先保持中性。",
+      "decisionText": "维持核心仓位，不主动追高。",
+      "marketReport": "A 股主线仍偏结构轮动，缺少统一放量共振。",
+      "newsReport": "政策和流动性层面没有新的强刺激，主题切换较快。",
+      "fundamentalsReport": "宽基基本面没有显著恶化，但也缺少强上修催化。",
+      "sentimentReport": "情绪面偏中性，追价胜率一般。"
+    },
+    {
+      "symbol": "QQQ",
+      "rating": "OVERWEIGHT",
+      "confidence": 0.72,
+      "thesis": "美股成长主线仍强，科技龙头继续保持相对优势。",
+      "risks": ["利率再定价", "高位波动放大"],
+      "riskJudge": "允许有限进攻，但要控制追高节奏。",
+      "investmentJudge": "成长主线仍占优，可适度偏增配。",
+      "decisionText": "可有限增配全球动量，优先龙头科技。",
+      "marketReport": "美股科技主线强于大盘，风格仍偏成长。",
+      "newsReport": "AI 和大型科技公司相关催化仍在延续。",
+      "fundamentalsReport": "龙头盈利预期和现金流质量依然占优。",
+      "sentimentReport": "成长风格拥挤度上升，但尚未出现全面失速。"
+    },
+    {
+      "symbol": "SOXX",
+      "rating": "BUY",
+      "confidence": 0.68,
+      "thesis": "半导体链条景气度仍高，进攻型配置可继续向科技成长倾斜。",
+      "risks": ["估值抬升", "盈利兑现不及预期"],
+      "riskJudge": "可以做有限进攻，但不适合满仓追高。",
+      "investmentJudge": "半导体景气交易仍然成立，偏向积极配置。",
+      "decisionText": "若做进攻增配，优先考虑科技成长和半导体方向。",
+      "marketReport": "半导体相对强势，成长弹性更突出。",
+      "newsReport": "AI 算力和先进制程相关催化持续释放。",
+      "fundamentalsReport": "产业链景气改善仍在，盈利预期偏积极。",
+      "sentimentReport": "市场对科技成长的风险偏好仍在上升。"
+    },
+    {
+      "symbol": "ARKK",
+      "rating": "UNDERWEIGHT",
+      "confidence": 0.61,
+      "thesis": "高波动主题的赔率暂不够好，战术仓位不宜主动追高。",
+      "risks": ["回撤扩大", "风格切换过快"],
+      "riskJudge": "高波动主题风险收益比一般，宜收缩战术仓位。",
+      "investmentJudge": "战术主题缺少足够高的胜率，不宜继续扩张。",
+      "decisionText": "战术仓位以减配或观察为主，不主动追高。",
+      "marketReport": "高 beta 主题内部波动放大，持续性一般。",
+      "newsReport": "热门主题催化碎片化，缺少稳定主线。",
+      "fundamentalsReport": "相关标的基本面分化较大，兑现不稳定。",
+      "sentimentReport": "情绪容易快速切换，回撤风险偏高。"
+    }
+  ]
+}

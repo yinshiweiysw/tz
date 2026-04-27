@@ -3,10 +3,17 @@ import assert from "node:assert/strict";
 
 import {
   fetchDashboardHealth,
+  fetchTradingDecisionStatus,
   isDashboardReady,
+  mergeSensitiveEnv,
+  parseMarkedJsonBlock,
+  readSensitiveEnvFromKeychain,
   resolveStartupAction,
+  shouldRecycleForTradingBrainProvider,
+  summarizeSensitiveEnvPresence,
   waitUntilPortFree
 } from "./open_funds_live_dashboard.mjs";
+import { syncMarketTopicReports } from "./lib/market_report_sync.mjs";
 
 test("fetchDashboardHealth reads /api/live-funds/health and returns blocked state details", async () => {
   const originalFetch = globalThis.fetch;
@@ -58,12 +65,48 @@ test("isDashboardReady accepts degraded-but-readable health state and rejects bl
   }
 });
 
+test("fetchTradingDecisionStatus reads trading decision payload", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    assert.match(String(url), /\/api\/trading-decision\?account=main$/);
+    return {
+      ok: true,
+      async json() {
+        return {
+          mode: "fallback_fixture",
+          diagnostics: {
+            providerError: "Missing required API key: ZHIPU_API_KEY"
+          }
+        };
+      }
+    };
+  };
+
+  try {
+    const result = await fetchTradingDecisionStatus("http://127.0.0.1:8766", "main");
+    assert.equal(result.reachable, true);
+    assert.equal(result.payload?.mode, "fallback_fixture");
+    assert.equal(result.payload?.diagnostics?.providerError, "Missing required API key: ZHIPU_API_KEY");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("resolveStartupAction recycles an occupied port when restart is requested and existing server is unhealthy", () => {
   assert.equal(
     resolveStartupAction({
       restart: true,
       listeningPidCount: 1,
       existingReady: false
+    }),
+    "recycle"
+  );
+  assert.equal(
+    resolveStartupAction({
+      restart: true,
+      listeningPidCount: 1,
+      existingReady: true,
+      providerRepairNeeded: true
     }),
     "recycle"
   );
@@ -94,4 +137,90 @@ test("waitUntilPortFree polls until the listener is gone", async () => {
   });
 
   assert.equal(freed, true);
+});
+
+test("parseMarkedJsonBlock extracts JSON payload from noisy shell output", () => {
+  const payload = parseMarkedJsonBlock(`noise\n__CODEX_ENV_JSON_START__\n{\"ZHIPU_API_KEY\":\"secret\"}\n__CODEX_ENV_JSON_END__\n`);
+  assert.deepEqual(payload, {
+    ZHIPU_API_KEY: "secret"
+  });
+});
+
+test("mergeSensitiveEnv only fills missing secret vars and summarizes presence", () => {
+  const merged = mergeSensitiveEnv(
+    {
+      PATH: "/usr/bin"
+    },
+    {
+      ZHIPU_API_KEY: "from-login-shell"
+    }
+  );
+  assert.equal(merged.ZHIPU_API_KEY, "from-login-shell");
+  assert.deepEqual(summarizeSensitiveEnvPresence(merged, ["ZHIPU_API_KEY"]), {
+    ZHIPU_API_KEY: true
+  });
+});
+
+test("readSensitiveEnvFromKeychain reads configured fallback keys without exposing values", () => {
+  const calls = [];
+  const result = readSensitiveEnvFromKeychain({
+    account: "tester",
+    keys: ["ZHIPU_API_KEY", "ZHIPU_API_KEY_2"],
+    spawnSyncFn(command, args) {
+      calls.push([command, args]);
+      if (args.includes("codex-env:ZHIPU_API_KEY_2")) {
+        return {
+          status: 0,
+          stdout: "fallback-secret\n",
+          stderr: ""
+        };
+      }
+      return {
+        status: 44,
+        stdout: "",
+        stderr: "not found"
+      };
+    }
+  });
+
+  assert.equal(calls.length, 2);
+  assert.deepEqual(result.env, {
+    ZHIPU_API_KEY_2: "fallback-secret"
+  });
+});
+
+test("shouldRecycleForTradingBrainProvider repairs a reused server when launcher now has the key", () => {
+  assert.equal(
+    shouldRecycleForTradingBrainProvider({
+      launcherEnv: {
+        ZHIPU_API_KEY_2: "present"
+      },
+      tradingDecisionStatus: {
+        payload: {
+          diagnostics: {
+            providerError: "Missing required API key: ZHIPU_API_KEY",
+            fallbackReason: "missing_provider_key_using_fixture"
+          }
+        }
+      }
+    }),
+    true
+  );
+  assert.equal(
+    shouldRecycleForTradingBrainProvider({
+      launcherEnv: {},
+      tradingDecisionStatus: {
+        payload: {
+          diagnostics: {
+            providerError: "Missing required API key: ZHIPU_API_KEY"
+          }
+        }
+      }
+    }),
+    false
+  );
+});
+
+test("launcher market topic sync helper is available for startup report hydration", () => {
+  assert.equal(typeof syncMarketTopicReports, "function");
 });

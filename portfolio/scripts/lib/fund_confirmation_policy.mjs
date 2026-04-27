@@ -34,6 +34,15 @@ function formatShanghaiDate(date = new Date()) {
   }).format(date);
 }
 
+function shiftShanghaiDate(dateText, daysDelta) {
+  const base = new Date(`${dateText}T12:00:00+08:00`);
+  if (!Number.isFinite(base.getTime())) {
+    return null;
+  }
+  base.setUTCDate(base.getUTCDate() + Number(daysDelta || 0));
+  return formatShanghaiDate(base);
+}
+
 function getShanghaiHour(date = new Date()) {
   return Number(
     new Intl.DateTimeFormat("en-GB", {
@@ -60,6 +69,61 @@ function isSameDayPendingBeforeCutoff({
   return (
     formatShanghaiDate(normalizedNow) === normalizedTargetDate &&
     getShanghaiHour(normalizedNow) < Number(nightlyCutoffHour ?? 23)
+  );
+}
+
+function findNextTradingDateAfter({ market, date }) {
+  let cursor = normalizeText(date);
+  if (!cursor) {
+    return null;
+  }
+
+  for (let attempts = 0; attempts < 10; attempts += 1) {
+    cursor = shiftShanghaiDate(cursor, 1);
+    if (!cursor) {
+      return null;
+    }
+    if (isTradingDateForMarket({ market, date: cursor })) {
+      return cursor;
+    }
+  }
+
+  return null;
+}
+
+function isQdiiPublicationPendingBeforeCutoff({
+  expectedConfirmedDate,
+  confirmedNavDate,
+  now,
+  nightlyCutoffHour
+} = {}) {
+  const expectedDateText = normalizeText(expectedConfirmedDate);
+  const confirmedDateText = normalizeText(confirmedNavDate);
+  if (!expectedDateText || !confirmedDateText || confirmedDateText >= expectedDateText) {
+    return false;
+  }
+
+  const priorExpectedDate = findPreviousTradingDateBefore({
+    market: "CN_A",
+    date: expectedDateText
+  });
+  if (confirmedDateText !== priorExpectedDate) {
+    return false;
+  }
+
+  const publicationDate = findNextTradingDateAfter({
+    market: "CN_A",
+    date: expectedDateText
+  });
+  if (!publicationDate) {
+    return false;
+  }
+
+  const normalizedNow = normalizeNow(now);
+  const today = formatShanghaiDate(normalizedNow);
+  return (
+    today < publicationDate ||
+    (today === publicationDate && getShanghaiHour(normalizedNow) < Number(nightlyCutoffHour ?? 23))
   );
 }
 
@@ -139,6 +203,7 @@ export function classifyFundConfirmation({
   let expectedConfirmedDate = normalizedTargetDate || null;
   let state = "confirmed";
   let pendingSameDayUntilCutoff = false;
+  let pendingPublicationLagUntilCutoff = false;
 
   if (!normalizedTargetDate) {
     state = normalizedConfirmedNavDate ? "confirmed" : "source_missing";
@@ -206,8 +271,16 @@ export function classifyFundConfirmation({
     now,
     nightlyCutoffHour
   });
+  pendingPublicationLagUntilCutoff =
+    profile.profile === "global_qdii" &&
+    isQdiiPublicationPendingBeforeCutoff({
+      expectedConfirmedDate,
+      confirmedNavDate: normalizedConfirmedNavDate,
+      now,
+      nightlyCutoffHour
+    });
   if (
-    pendingSameDayUntilCutoff &&
+    (pendingSameDayUntilCutoff || pendingPublicationLagUntilCutoff) &&
     (state === "late_missing" || state === "source_missing")
   ) {
     state = "normal_lag";
@@ -216,7 +289,7 @@ export function classifyFundConfirmation({
   return {
     state,
     label: buildLabel(state, normalizedConfirmedNavDate, expectedConfirmedDate, {
-      pendingSameDayUntilCutoff
+      pendingSameDayUntilCutoff: pendingSameDayUntilCutoff || pendingPublicationLagUntilCutoff
     }),
     confirmedNavDate: normalizedConfirmedNavDate,
     expectedConfirmedDate,
@@ -225,6 +298,7 @@ export function classifyFundConfirmation({
     targetDate: normalizedTargetDate,
     isWithinExpectedWindow: ["confirmed", "normal_lag", "holiday_delay"].includes(state),
     pendingSameDayUntilCutoff,
+    pendingPublicationLagUntilCutoff,
     usesHolidayShift:
       state === "holiday_delay" &&
       normalizedTargetDate &&

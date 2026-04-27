@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   listDiscoveredPortfolioAccounts,
@@ -9,8 +10,19 @@ import {
   isValidDiscoverableAccountId,
   resolveAccountId,
   resolvePortfolioRoot,
-  portfolioUsersRoot
+  portfolioUsersRoot,
+  workspaceRoot
 } from "./account_root.mjs";
+
+test("workspace defaults derive from the current worktree while the main portfolio root stays discoverable", () => {
+  const currentFilePath = fileURLToPath(import.meta.url);
+  const expectedWorkspaceRoot = path.resolve(path.dirname(currentFilePath), "..", "..", "..");
+
+  assert.equal(workspaceRoot, expectedWorkspaceRoot);
+  assert.equal(path.basename(defaultPortfolioRoot), "portfolio");
+  assert.equal(path.basename(portfolioUsersRoot), "portfolio_users");
+  assert.equal(resolvePortfolioRoot({ user: true }), defaultPortfolioRoot);
+});
 
 test("resolveAccountId falls back to main when boolean user flag leaks in", () => {
   assert.equal(resolveAccountId({ user: true }), "main");

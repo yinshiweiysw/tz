@@ -877,6 +877,118 @@
         "max_pct_of_total_assets": 0.18,
         "max_pct_of_invested_assets": 0.25
       }
+    },
+    {
+      "symbol": "020872",
+      "name": "华夏创业板指数发起式E",
+      "execution_type": "OTC",
+      "bucket": "A_CORE",
+      "market": "CN",
+      "category": "创业板宽基",
+      "strategy_regime": {
+        "type": "erp_mean_reversion",
+        "pricing_anchor": {
+          "use_erp": true,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 12,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.04,
+          "kill_switch_enabled": false
+        }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.18,
+        "max_pct_of_invested_assets": 0.28
+      }
+    },
+    {
+      "symbol": "008087",
+      "name": "华夏中证5G通信主题ETF联接C",
+      "execution_type": "OTC",
+      "bucket": "TACTICAL",
+      "market": "CN",
+      "category": "A股通信主题",
+      "strategy_regime": {
+        "type": "target_volatility",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 6,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.085,
+          "kill_switch_enabled": true
+        }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.08,
+        "max_pct_of_invested_assets": 0.12
+      }
+    },
+    {
+      "symbol": "014855",
+      "name": "嘉实中证半导体产业指数增强C",
+      "execution_type": "OTC",
+      "bucket": "TACTICAL",
+      "market": "CN",
+      "category": "A股半导体",
+      "strategy_regime": {
+        "type": "target_volatility",
+        "pricing_anchor": {
+          "use_erp": false,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 6,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.085,
+          "kill_switch_enabled": true
+        }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.08,
+        "max_pct_of_invested_assets": 0.12
+      }
+    },
+    {
+      "symbol": "014219",
+      "name": "汇添富中证科创创业50指数增强C",
+      "execution_type": "OTC",
+      "bucket": "A_CORE",
+      "market": "CN",
+      "category": "成长宽基",
+      "strategy_regime": {
+        "type": "erp_mean_reversion",
+        "pricing_anchor": {
+          "use_erp": true,
+          "use_dividend_spread": false,
+          "crowding_penalty": false
+        },
+        "trend_filter": {
+          "momentum_lookback_months": 12,
+          "moving_average": 120
+        },
+        "risk_control": {
+          "max_atr_threshold": 0.045,
+          "kill_switch_enabled": false
+        }
+      },
+      "position_limits": {
+        "max_pct_of_total_assets": 0.18,
+        "max_pct_of_invested_assets": 0.28
+      }
     }
   ],
   "portfolio_backtest": {

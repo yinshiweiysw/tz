@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildPortfolioPath, resolveAccountId, resolvePortfolioRoot } from "./lib/account_root.mjs";
+import { syncMarketTopicReports } from "./lib/market_report_sync.mjs";
 import { runDashboardStateBuild } from "./build_dashboard_state.mjs";
 
 const defaultHost = "127.0.0.1";
@@ -11,6 +12,18 @@ const defaultPort = 8766;
 const defaultRefreshMs = 30_000;
 const defaultWaitAttempts = 20;
 const defaultWaitMs = 500;
+const sensitiveRuntimeEnvKeys = [
+  "ZHIPU_API_KEY",
+  "ZHIPU_API_KEY_2",
+  "ZHIPU_API_KEY_3",
+  "ZHIPU_API_KEY_POOL",
+  "DEEPSEEK_API_KEY",
+  "DEEPSEEK_API_KEY_2",
+  "DEEPSEEK_API_KEY_POOL"
+];
+const keychainServicePrefix = "codex-env";
+const loginShellEnvStartMarker = "__CODEX_ENV_JSON_START__";
+const loginShellEnvEndMarker = "__CODEX_ENV_JSON_END__";
 
 function parseArgs(argv) {
   const result = {
@@ -19,6 +32,7 @@ function parseArgs(argv) {
     refreshMs: defaultRefreshMs,
     user: "",
     portfolioRoot: "",
+    route: "/",
     open: true,
     restart: true
   };
@@ -42,6 +56,7 @@ function parseArgs(argv) {
 
   result.port = Number(result.port) || defaultPort;
   result.refreshMs = Number(result.refreshMs) || defaultRefreshMs;
+  result.route = String(result.route || "/").startsWith("/") ? String(result.route || "/") : `/${String(result.route || "").trim()}`;
   if (typeof result.open === "string") {
     const normalized = result.open.trim().toLowerCase();
     result.open = !["0", "false", "no", "off"].includes(normalized);
@@ -106,6 +121,39 @@ export async function isDashboardReady(url, accountId) {
   return result.ready;
 }
 
+export async function fetchTradingDecisionStatus(url, accountId) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 1500);
+  try {
+    const decisionUrl = new URL("/api/trading-decision", `${url}/`);
+    decisionUrl.searchParams.set("account", accountId);
+    const response = await fetch(decisionUrl, {
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      return {
+        reachable: false,
+        payload: null,
+        reason: `HTTP ${response.status}`
+      };
+    }
+    const payload = await response.json();
+    return {
+      reachable: true,
+      payload,
+      reason: null
+    };
+  } catch {
+    return {
+      reachable: false,
+      payload: null,
+      reason: "trading_decision_unreachable"
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function waitUntilReady(url, accountId, attempts = defaultWaitAttempts, delayMs = defaultWaitMs) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const health = await fetchDashboardHealth(url, accountId);
@@ -131,15 +179,144 @@ function openBrowser(url) {
 export function resolveStartupAction({
   restart = true,
   listeningPidCount = 0,
-  existingReady = false
+  existingReady = false,
+  providerRepairNeeded = false
 } = {}) {
-  if (restart && listeningPidCount > 0) {
+  if (restart && listeningPidCount > 0 && providerRepairNeeded) {
+    return "recycle";
+  }
+  if (restart && listeningPidCount > 0 && !existingReady) {
     return "recycle";
   }
   if (existingReady) {
     return "reuse";
   }
   return "launch";
+}
+
+function trimText(value) {
+  const text = String(value ?? "").trim();
+  return text || null;
+}
+
+export function parseMarkedJsonBlock(stdout, startMarker = loginShellEnvStartMarker, endMarker = loginShellEnvEndMarker) {
+  const text = String(stdout ?? "");
+  const startIndex = text.indexOf(startMarker);
+  const endIndex = text.indexOf(endMarker);
+  if (startIndex < 0 || endIndex < 0 || endIndex <= startIndex) {
+    return null;
+  }
+  const payload = text.slice(startIndex + startMarker.length, endIndex).trim();
+  if (!payload) {
+    return null;
+  }
+  try {
+    return JSON.parse(payload);
+  } catch {
+    return null;
+  }
+}
+
+export function mergeSensitiveEnv(baseEnv = {}, discoveredEnv = {}, keys = sensitiveRuntimeEnvKeys) {
+  const next = {
+    ...baseEnv
+  };
+  for (const key of keys) {
+    if (trimText(next?.[key])) {
+      continue;
+    }
+    const discoveredValue = trimText(discoveredEnv?.[key]);
+    if (discoveredValue) {
+      next[key] = discoveredValue;
+    }
+  }
+  return next;
+}
+
+export function summarizeSensitiveEnvPresence(env = {}, keys = sensitiveRuntimeEnvKeys) {
+  return Object.fromEntries(
+    keys.map((key) => [key, Boolean(trimText(env?.[key]))])
+  );
+}
+
+export function shouldRecycleForTradingBrainProvider({
+  launcherEnv = {},
+  tradingDecisionStatus = {}
+} = {}) {
+  const hasTradingBrainKey = sensitiveRuntimeEnvKeys.some((key) => Boolean(trimText(launcherEnv?.[key])));
+  if (!hasTradingBrainKey) {
+    return false;
+  }
+  const providerError = trimText(tradingDecisionStatus?.payload?.diagnostics?.providerError);
+  const fallbackReason = trimText(tradingDecisionStatus?.payload?.diagnostics?.fallbackReason);
+  return (
+    /^Missing required API key: /i.test(providerError ?? "") ||
+    fallbackReason === "missing_provider_key_using_fixture"
+  );
+}
+
+export function readSensitiveEnvFromKeychain({
+  account = process.env.USER || "codex",
+  keys = sensitiveRuntimeEnvKeys,
+  spawnSyncFn = spawnSync
+} = {}) {
+  const env = {};
+  const errors = [];
+  for (const key of keys) {
+    const result = spawnSyncFn(
+      "security",
+      ["find-generic-password", "-a", String(account), "-s", `${keychainServicePrefix}:${key}`, "-w"],
+      {
+        encoding: "utf8"
+      }
+    );
+    if (result.error || result.status !== 0) {
+      if (result.error) {
+        errors.push(`${key}: ${result.error.message}`);
+      }
+      continue;
+    }
+    const value = trimText(result.stdout);
+    if (value) {
+      env[key] = value;
+    }
+  }
+  return {
+    ok: Object.keys(env).length > 0 || errors.length === 0,
+    env,
+    reason: errors.length > 0 ? errors.join("; ") : null
+  };
+}
+
+export function readSensitiveEnvFromLoginShell({
+  env = process.env,
+  shellPath = env?.SHELL || "zsh",
+  keys = sensitiveRuntimeEnvKeys,
+  spawnSyncFn = spawnSync
+} = {}) {
+  const pythonLines = [
+    "import json, os",
+    `keys = ${JSON.stringify(keys)}`,
+    `print(${JSON.stringify(loginShellEnvStartMarker)})`,
+    "print(json.dumps({key: os.environ.get(key) for key in keys}))",
+    `print(${JSON.stringify(loginShellEnvEndMarker)})`
+  ].join("; ");
+  const result = spawnSyncFn(shellPath, ["-lic", `python3 -c '${pythonLines}'`], {
+    encoding: "utf8",
+    env
+  });
+  if (result.error || result.status !== 0) {
+    return {
+      ok: false,
+      env: {},
+      reason: trimText(result.error?.message) ?? trimText(result.stderr) ?? "login_shell_probe_failed"
+    };
+  }
+  return {
+    ok: true,
+    env: parseMarkedJsonBlock(result.stdout) ?? {},
+    reason: null
+  };
 }
 
 function findListeningPids(port) {
@@ -237,21 +414,51 @@ async function main() {
     portfolioRoot: args.portfolioRoot
   });
   const materializeResult = materializePendingBuys(args);
+  const marketTopicsSyncResult = await syncMarketTopicReports({
+    portfolioRoot
+  });
   const dashboardStateResult = await runDashboardStateBuild({
     user: accountId,
     portfolioRoot,
     refreshMs: args.refreshMs
   });
+  const loginShellEnvProbe = readSensitiveEnvFromLoginShell({
+    env: process.env
+  });
+  const keychainEnvProbe = readSensitiveEnvFromKeychain();
+  const shellMergedEnv = mergeSensitiveEnv(process.env, loginShellEnvProbe.env);
+  const launcherEnv = {
+    ...mergeSensitiveEnv(shellMergedEnv, keychainEnvProbe.env),
+    LANGCHAIN_OPENAI_TCP_KEEPALIVE: process.env.LANGCHAIN_OPENAI_TCP_KEEPALIVE || "0"
+  };
+  const launcherEnvPresence = {
+    currentProcess: summarizeSensitiveEnvPresence(process.env),
+    loginShell: summarizeSensitiveEnvPresence(loginShellEnvProbe.env),
+    keychain: summarizeSensitiveEnvPresence(keychainEnvProbe.env),
+    effective: summarizeSensitiveEnvPresence(launcherEnv)
+  };
   const baseUrl = `http://${args.host}:${args.port}`;
-  const dashboardUrl = `${baseUrl}/?account=${encodeURIComponent(accountId)}`;
+  const dashboardUrl = `${baseUrl}${args.route}?account=${encodeURIComponent(accountId)}`;
 
   const existingHealth = await fetchDashboardHealth(baseUrl, accountId);
   const existingReady = existingHealth.ready;
+  const existingTradingDecision = existingReady
+    ? await fetchTradingDecisionStatus(baseUrl, accountId)
+    : {
+        reachable: false,
+        payload: null,
+        reason: "dashboard_not_ready"
+      };
+  const providerRepairNeeded = shouldRecycleForTradingBrainProvider({
+    launcherEnv,
+    tradingDecisionStatus: existingTradingDecision
+  });
   const listeningPids = findListeningPids(args.port);
   const startupAction = resolveStartupAction({
     restart: args.restart,
     listeningPidCount: listeningPids.length,
-    existingReady
+    existingReady,
+    providerRepairNeeded
   });
   let stoppedPids = [];
   if (startupAction === "recycle") {
@@ -290,6 +497,7 @@ async function main() {
     spawn("node", childArgs, {
       cwd: path.dirname(serverScript),
       detached: true,
+      env: launcherEnv,
       stdio: ["ignore", stdoutFd, stderrFd]
     }).unref();
 
@@ -312,7 +520,26 @@ async function main() {
         restart: args.restart,
         stoppedPids,
         materializeResult,
+        marketTopicsSyncResult,
         dashboardStateResult,
+        tradingBrainEnv: launcherEnvPresence,
+        loginShellEnvProbe: {
+          ok: loginShellEnvProbe.ok,
+          reason: loginShellEnvProbe.reason
+        },
+        keychainEnvProbe: {
+          ok: keychainEnvProbe.ok,
+          reason: keychainEnvProbe.reason
+        },
+        existingTradingDecision: {
+          reachable: existingTradingDecision.reachable,
+          reason: existingTradingDecision.reason,
+          mode: existingTradingDecision.payload?.mode ?? null,
+          status: existingTradingDecision.payload?.status ?? null,
+          providerError: existingTradingDecision.payload?.diagnostics?.providerError ?? null,
+          fallbackReason: existingTradingDecision.payload?.diagnostics?.fallbackReason ?? null
+        },
+        providerRepairNeeded,
         accountId,
         portfolioRoot,
         url: dashboardUrl,

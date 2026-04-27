@@ -162,13 +162,17 @@ export async function buildAgentBootstrapContext(rawOptions = {}, deps = {}) {
   const strategyDecisionContractPath =
     manifest?.canonical_entrypoints?.strategy_decision_contract ??
     buildPortfolioPath(portfolioRoot, "data", "strategy_decision_contract.json");
+  const tradingDecisionPath =
+    manifest?.canonical_entrypoints?.latest_trading_decision_snapshot ??
+    buildPortfolioPath(portfolioRoot, "data", "trading_decision_snapshot.json");
   const runtimeContext = (await readJsonOrNull(runtimeContextPath)) ?? {};
   const strategyDecisionContract =
     (await readJsonOrNull(strategyDecisionContractPath)) ?? {};
+  const tradingDecisionSnapshot = (await readJsonOrNull(tradingDecisionPath)) ?? {};
   const buildHealth = deps.buildHealth ?? buildFundsDashboardHealth;
   const health = await buildHealth(accountId);
   const decisionReadiness = normalizeReadiness(
-    strategyDecisionContract?.decisionReadiness,
+    tradingDecisionSnapshot?.status ?? tradingDecisionSnapshot?.shouldTradeVerdict ?? strategyDecisionContract?.decisionReadiness,
     health?.state === "ready" ? "ready" : health?.state ?? "unknown"
   );
   const analysisReadiness = normalizeReadiness(
@@ -198,11 +202,14 @@ export async function buildAgentBootstrapContext(rawOptions = {}, deps = {}) {
     accountId,
     portfolioRoot,
     systemSummary:
-      "Portfolio system uses portfolio_state.json as canonical accounting state, agent_runtime_context.json as the unified fact layer, and strategy_decision_contract.json as the unified decision layer.",
+      "Portfolio system uses portfolio_state.json as canonical accounting state, live funds/dashboard snapshots as the display layer, and TradingAgents decision snapshots as the trading brain with local fund guardrails.",
+    productSurface: ["基金面板", "交易主脑", "市场/专题"],
     bootstrapReadOrder: [
       "state-manifest.json",
       "data/agent_bootstrap_context.json",
-      "state/portfolio_state.json"
+      "state/portfolio_state.json",
+      "data/trading_decision_snapshot.json",
+      "data/trading_advice_snapshot.json"
     ],
     canonicalEntrypoints: {
       manifestPath,
@@ -217,6 +224,14 @@ export async function buildAgentBootstrapContext(rawOptions = {}, deps = {}) {
     nextHighImpactEvent,
     portfolioFactsVersion: 1,
     accountSummary: buildAccountSummary(canonicalState?.payload ?? {}),
+    tradingDecision: {
+      generatedAt: tradingDecisionSnapshot?.generatedAt ?? null,
+      asOf: tradingDecisionSnapshot?.asOf ?? null,
+      mode: tradingDecisionSnapshot?.mode ?? null,
+      provider: tradingDecisionSnapshot?.provider ?? null,
+      status: tradingDecisionSnapshot?.status ?? null,
+      riskLight: tradingDecisionSnapshot?.riskLight ?? null
+    },
     entrypointIntegrity: buildEntrypointIntegrity({
       accountId,
       runtimeContext,

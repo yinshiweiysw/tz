@@ -60,6 +60,14 @@ import {
   resolveNightlyConfirmedNavReadiness
 } from "./lib/nightly_confirmed_nav_status.mjs";
 import { round } from "./lib/format_utils.mjs";
+import { loadTradingAdviceSnapshot, loadTradingAgentsBridgeConfig } from "./lib/tradingagents_bridge.mjs";
+import { loadTradingDecisionSnapshot } from "./lib/tradingagents_decision.mjs";
+import { createTradingAgentsBackgroundScheduler } from "./lib/tradingagents_runtime_refresh.mjs";
+import { buildMarketTopicsPayload } from "./lib/market_topics.mjs";
+import {
+  collectLiveSymbols,
+  inspectTradingAgentsSymbolCacheCoverage
+} from "./run_tradingagents_bridge.mjs";
 
 const defaultHost = "127.0.0.1";
 const defaultPort = 8766;
@@ -69,6 +77,7 @@ let activePortfolioRoot = resolvePortfolioRoot();
 let activeAccountId = resolveAccountId();
 const cachedPayloads = new Map();
 const inflightPayloadPromises = new Map();
+const tradingAgentsBackgroundScheduler = createTradingAgentsBackgroundScheduler();
 
 const manualFundCodeHints = {
   [normalizeName("景顺长城纳斯达克科技市值加权ETF联接(QDII)E")]: {
@@ -84,6 +93,21 @@ const manualFundCodeHints = {
     aliases: [
       "华安三菱日联日经225ETF发起式联接(QDII)A"
     ]
+  },
+  [normalizeName("华夏中证5G通信主题ETF联接C")]: {
+    code: "008087",
+    name: "华夏中证5G通信主题ETF联接C",
+    aliases: []
+  },
+  [normalizeName("嘉实中证半导体产业指数增强C")]: {
+    code: "014855",
+    name: "嘉实中证半导体产业指数增强C",
+    aliases: []
+  },
+  [normalizeName("汇添富中证科创创业50指数增强C")]: {
+    code: "014219",
+    name: "汇添富中证科创创业50指数增强C",
+    aliases: []
   }
 };
 
@@ -1288,6 +1312,28 @@ function resolveHealthState({ blocked = false, degraded = false } = {}) {
   return "ready";
 }
 
+function resolveLivePayloadReadinessState(health = {}, confirmedNavStatus = {}) {
+  const confirmedState = String(confirmedNavStatus?.state ?? health?.confirmedNavState ?? "").trim();
+  if (String(health?.state ?? "").trim() === "blocked") {
+    return "blocked";
+  }
+  if (["late_missing", "source_missing", "blocked"].includes(confirmedState)) {
+    return "degraded";
+  }
+  const reasons = (Array.isArray(health?.reasons) ? health.reasons : [])
+    .filter(Boolean)
+    .filter((reason) => {
+      const text = String(reason ?? "");
+      return !(
+        text.startsWith("optional ") ||
+        text.startsWith("stale_confirmed_quotes_pending") ||
+        text.startsWith("nightly_confirmed_nav_status_missing") ||
+        text.includes("确认净值")
+      );
+    });
+  return reasons.length > 0 ? "degraded" : "ready";
+}
+
 function resolveAccountingState(snapshotDate, today) {
   return snapshotDate && snapshotDate === today
     ? "snapshot_fresh_for_accounting"
@@ -2176,6 +2222,7 @@ export async function buildLivePayload(refreshMs, requestedAccountId, deps = {})
     snapshotDate: latest?.snapshot_date ?? null,
     readiness: {
       ...health,
+      state: resolveLivePayloadReadinessState(health, effectiveConfirmedNavStatus),
       confirmedNavState: effectiveConfirmedNavStatus?.state ?? health.confirmedNavState,
       confirmedNavStatus: effectiveConfirmedNavStatus
     },
@@ -2396,6 +2443,1485 @@ export async function getLivePayload(refreshMs, requestedAccountId, force = fals
   return inflightPayloadPromise;
 }
 
+function buildSimpleNav(activePath, accountId) {
+  const routes = [
+    { path: "/", label: "基金面板", hint: "默认首页" },
+    { path: "/advice", label: "交易主脑", hint: "TradingAgents 主链" },
+    { path: "/market", label: "市场/专题", hint: "主线与报告" }
+  ];
+
+  return routes
+    .map((route) => {
+      const href = `${route.path}?account=${encodeURIComponent(accountId)}`;
+      const active = route.path === activePath ? " active" : "";
+      return (
+        `<a class="app-nav-link${active}" href="${href}">` +
+        `<span class="app-nav-label">${route.label}</span>` +
+        `<span class="app-nav-hint">${route.hint}</span>` +
+        `</a>`
+      );
+    })
+    .join("");
+}
+
+function simplePageShell({
+  title,
+  subtitle,
+  heroNote = "只读视图 · 展示优先",
+  activePath,
+  initialAccountId,
+  availableAccounts,
+  bodyHtml,
+  script
+}) {
+  const optionHtml = availableAccounts
+    .map(
+      (item) =>
+        `<option value="${item.id}"${item.id === initialAccountId ? " selected" : ""}>${item.label}</option>`
+    )
+    .join("");
+
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${title}</title>
+    <style>
+      :root {
+        --bg: #f4efe6;
+        --paper: #fcf9f2;
+        --panel: rgba(255, 255, 255, 0.96);
+        --line: rgba(15, 23, 42, 0.1);
+        --line-strong: rgba(15, 23, 42, 0.16);
+        --ink: #17212b;
+        --muted: #66758a;
+        --soft: #8b98a9;
+        --accent: #0f766e;
+        --accent-soft: rgba(15, 118, 110, 0.1);
+        --shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
+        --warn: #b45309;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: "SF Pro Display", "PingFang SC", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(15, 118, 110, 0.14), transparent 30%),
+          linear-gradient(180deg, #faf6ee 0%, var(--bg) 100%);
+      }
+
+      .page {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 24px 16px 40px;
+      }
+
+      .hero,
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: var(--shadow);
+      }
+
+      .hero {
+        padding: 20px 20px 18px;
+        margin-bottom: 16px;
+      }
+
+      .hero-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: flex-start;
+      }
+
+      .eyebrow {
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 28px;
+      }
+
+      .subline {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.55;
+        max-width: 760px;
+      }
+
+      .hero-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 250, 252, 0.78));
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+        white-space: nowrap;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 16px;
+      }
+
+      .toolbar-left,
+      .toolbar-right {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .app-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .app-nav-link {
+        text-decoration: none;
+        color: var(--ink);
+        padding: 8px 12px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.72);
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        align-items: flex-start;
+        min-width: 108px;
+      }
+
+      .app-nav-link.active {
+        background: var(--accent-soft);
+        border-color: rgba(15, 118, 110, 0.2);
+        color: var(--accent);
+      }
+
+      .app-nav-label {
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.2;
+      }
+
+      .app-nav-hint {
+        font-size: 11px;
+        color: var(--soft);
+        line-height: 1.2;
+      }
+
+      select,
+      button {
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        padding: 10px 12px;
+        font: inherit;
+        background: #fff;
+        color: var(--ink);
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      .status {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .card {
+        padding: 18px;
+      }
+
+      .card-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: flex-start;
+        margin-bottom: 12px;
+      }
+
+      .summary-card {
+        grid-column: span 12;
+      }
+
+      .split-card {
+        grid-column: span 6;
+      }
+
+      .card h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+      }
+
+      .card-head h2 {
+        margin-bottom: 0;
+      }
+
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        padding: 6px 10px;
+        font-size: 12px;
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.78);
+      }
+
+      .summary-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.9fr);
+        gap: 16px;
+        align-items: start;
+      }
+
+      .summary-main {
+        min-width: 0;
+      }
+
+      .summary-metrics {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .metric-card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px 13px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(247, 250, 252, 0.85));
+      }
+
+      .metric-label {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      .metric-value {
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+
+      .list,
+      .compact-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .row {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px 14px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(249, 250, 251, 0.72));
+      }
+
+      .row-title {
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .row-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+      }
+
+      .row-metrics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .row-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.8);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .row-sub {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      details.row summary {
+        cursor: pointer;
+        list-style: none;
+      }
+
+      details.row summary::-webkit-details-marker {
+        display: none;
+      }
+
+      details.row[open] {
+        border-color: var(--line-strong);
+      }
+
+      .row-summary {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+      }
+
+      .terminal-list {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 250, 251, 0.72));
+      }
+
+      .decision-brief-list {
+        display: grid;
+        gap: 6px;
+        margin: 12px 0 2px;
+      }
+
+      .decision-brief-item {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr);
+        gap: 8px;
+        align-items: baseline;
+        padding: 7px 9px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.62);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .decision-brief-label {
+        color: var(--soft);
+        font-weight: 700;
+      }
+
+      .decision-brief-text {
+        color: var(--ink);
+        min-width: 0;
+      }
+
+      .prewarm-panel {
+        margin-top: 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 10px 12px;
+        background: rgba(255, 255, 255, 0.68);
+      }
+
+      .prewarm-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+
+      .prewarm-title {
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .mini-button {
+        padding: 6px 9px;
+        border-radius: 999px;
+        font-size: 12px;
+        line-height: 1;
+      }
+
+      .symbol-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+      }
+
+      .symbol-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .symbol-chip.fresh {
+        color: #047857;
+        border-color: rgba(4, 120, 87, 0.22);
+        background: rgba(236, 253, 245, 0.72);
+      }
+
+      .symbol-chip.stale {
+        color: #b45309;
+        border-color: rgba(180, 83, 9, 0.24);
+        background: rgba(255, 251, 235, 0.76);
+      }
+
+      .symbol-chip.missing {
+        color: #991b1b;
+        border-color: rgba(153, 27, 27, 0.22);
+        background: rgba(254, 242, 242, 0.72);
+      }
+
+      .terminal-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .action-terminal-row {
+        grid-template-columns: minmax(190px, 1.12fr) minmax(74px, 0.38fr) minmax(98px, 0.44fr) minmax(116px, 0.52fr) minmax(86px, 0.36fr) minmax(190px, 0.95fr);
+        gap: 10px;
+        align-items: start;
+      }
+
+      .observe-terminal-row {
+        grid-template-columns: minmax(170px, 0.8fr) minmax(86px, 0.36fr) minmax(96px, 0.36fr) minmax(0, 1.4fr);
+        gap: 10px;
+        align-items: start;
+      }
+
+      .terminal-row:last-child {
+        border-bottom: 0;
+      }
+
+      .terminal-main {
+        min-width: 0;
+      }
+
+      .terminal-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .terminal-code {
+        color: var(--soft);
+        font-size: 12px;
+        flex: 0 0 auto;
+      }
+
+      .terminal-name {
+        font-size: 13px;
+        font-weight: 600;
+        min-width: 0;
+      }
+
+      .terminal-note {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .terminal-label {
+        color: var(--soft);
+        font-size: 10px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        margin-bottom: 3px;
+      }
+
+      .terminal-value {
+        font-size: 12px;
+        color: var(--ink);
+        line-height: 1.35;
+      }
+
+      .terminal-amount {
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .terminal-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 64px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(153, 27, 27, 0.2);
+        background: rgba(254, 242, 242, 0.72);
+        color: #991b1b;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .terminal-action.buy {
+        border-color: rgba(4, 120, 87, 0.2);
+        background: rgba(236, 253, 245, 0.72);
+        color: #047857;
+      }
+
+      .terminal-reason {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .terminal-evidence {
+        grid-column: 1 / -1;
+        margin-top: 2px;
+        border-top: 1px dashed var(--line);
+        padding-top: 8px;
+      }
+
+      .terminal-evidence summary {
+        cursor: pointer;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 700;
+        list-style: none;
+      }
+
+      .terminal-evidence summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .terminal-side {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+
+      .terminal-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.84);
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.2;
+      }
+
+      .markdown-body {
+        margin-top: 8px;
+        color: var(--ink);
+        font-size: 13px;
+        line-height: 1.65;
+      }
+
+      .markdown-body h3,
+      .markdown-body h4 {
+        margin: 12px 0 6px;
+        font-size: 13px;
+      }
+
+      .markdown-body p {
+        margin: 7px 0;
+      }
+
+      .markdown-body ul,
+      .markdown-body ol {
+        margin: 7px 0;
+        padding-left: 20px;
+      }
+
+      .markdown-body li {
+        margin: 3px 0;
+      }
+
+      .markdown-body strong {
+        font-weight: 700;
+      }
+
+      .markdown-body code {
+        padding: 1px 5px;
+        border-radius: 6px;
+        background: rgba(15, 23, 42, 0.06);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+
+      .path-note {
+        margin-top: 8px;
+        color: var(--soft);
+        font-size: 12px;
+        line-height: 1.45;
+        word-break: break-all;
+      }
+
+      .section-note {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .empty {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .empty.risk-watch-empty {
+        border: 1px dashed rgba(180, 83, 9, 0.28);
+        border-radius: 12px;
+        padding: 12px;
+        color: #92400e;
+        background: rgba(255, 251, 235, 0.72);
+        text-align: left;
+      }
+
+      .mono {
+        font-variant-numeric: tabular-nums;
+      }
+
+      @media (max-width: 900px) {
+        .hero-top,
+        .card-head,
+        .summary-layout {
+          grid-template-columns: 1fr;
+          display: grid;
+        }
+
+        .hero-note {
+          white-space: normal;
+        }
+
+        .terminal-row {
+          grid-template-columns: 1fr;
+          align-items: flex-start;
+        }
+
+        .action-terminal-row {
+          grid-template-columns: 1fr;
+        }
+
+        .observe-terminal-row {
+          grid-template-columns: 1fr;
+        }
+
+        .terminal-side {
+          justify-content: flex-start;
+        }
+
+        .split-card {
+          grid-column: span 12;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div class="hero-top">
+          <div>
+            <div class="eyebrow">Simplified Fund OS</div>
+            <h1>${title}</h1>
+            <div class="subline">${subtitle}</div>
+          </div>
+          <div class="hero-note">${heroNote}</div>
+        </div>
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <div class="app-nav">${buildSimpleNav(activePath, initialAccountId)}</div>
+            <label>
+              <span class="status">账户</span>
+              <select id="accountSelect">${optionHtml}</select>
+            </label>
+          </div>
+          <div class="toolbar-right">
+            <div class="status" id="status">读取中...</div>
+            <button type="button" id="refreshBtn">刷新</button>
+          </div>
+        </div>
+      </section>
+      ${bodyHtml}
+    </main>
+    <script>
+      const config = {
+        currentAccount: ${JSON.stringify(initialAccountId)}
+      };
+      ${script}
+    </script>
+  </body>
+</html>`;
+}
+
+function advicePage({ initialAccountId, availableAccounts }) {
+  return simplePageShell({
+    title: "交易主脑",
+    subtitle: "TradingAgents 现在承担 today verdict、风险灯和执行清单；本地系统只保留基金映射、预算约束和执行可行性护栏。",
+    heroNote: "TradingAgents 主链 · 多 provider live-first · 不直连账本",
+    activePath: "/advice",
+    initialAccountId,
+    availableAccounts,
+    bodyHtml: `
+      <section class="grid">
+        <article class="card summary-card">
+          <div class="card-head">
+            <div>
+              <div class="eyebrow">Trading Brain</div>
+              <h2>今天是否交易</h2>
+            </div>
+            <div class="meta-row" id="decisionMeta"></div>
+          </div>
+          <div class="summary-layout">
+            <div class="summary-main">
+              <div class="row-title mono" id="decisionHeadline">读取中...</div>
+              <div class="row-sub" id="decisionSummary">等待交易主脑结果。</div>
+              <div class="decision-brief-list" id="decisionBriefList"></div>
+              <div class="section-note" id="decisionRuntimeState">后台刷新状态未知。</div>
+              <div class="prewarm-panel">
+                <div class="prewarm-head">
+                  <div>
+                    <div class="prewarm-title">TradingAgents 预热链</div>
+                    <div class="section-note" id="prewarmStatusNote">读取五个代理缓存状态...</div>
+                  </div>
+                  <button class="mini-button" type="button" id="prewarmBtn">触发预热</button>
+                </div>
+                <div class="symbol-strip" id="prewarmSymbols"></div>
+              </div>
+            </div>
+            <div class="summary-metrics">
+              <div class="metric-card">
+                <div class="metric-label">风险灯</div>
+                <div class="metric-value mono" id="riskLight">--</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">真实动作</div>
+                <div class="metric-value mono" id="realActionCount">--</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">观察线</div>
+                <div class="metric-value mono" id="observeCount">--</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">被拦建议</div>
+                <div class="metric-value mono" id="blockedCount">--</div>
+              </div>
+            </div>
+          </div>
+        </article>
+        <article class="card split-card">
+          <h2>真实动作</h2>
+          <div class="section-note" id="realActionsNote">这里只有当前 live 主链下真正可落地的基金动作候选。</div>
+          <div class="terminal-list" id="realActions"></div>
+        </article>
+        <article class="card split-card">
+          <h2>观察线</h2>
+          <div class="section-note">这些方向会影响主结论和风险灯，但当前不直接落地成真实动作。</div>
+          <div class="terminal-list" id="observeLine"></div>
+        </article>
+        <article class="card summary-card">
+          <h2>被拦建议</h2>
+          <div class="section-note">本地护栏或 provider/freshness 降级拦下的建议都会集中展示在这里。</div>
+          <div class="compact-list" id="blockedSuggestions"></div>
+        </article>
+        <article class="card summary-card">
+          <h2>Bucket 风险观察</h2>
+          <div class="section-note">默认看每个桶的一行结论；TradingAgents 长论证继续折叠，避免把页面变回后台日志。</div>
+          <div class="compact-list" id="bucketEvidence"></div>
+        </article>
+      </section>
+    `,
+    script: `
+      const elements = {
+        accountSelect: document.getElementById("accountSelect"),
+        status: document.getElementById("status"),
+        refreshBtn: document.getElementById("refreshBtn"),
+        decisionMeta: document.getElementById("decisionMeta"),
+        decisionHeadline: document.getElementById("decisionHeadline"),
+        decisionSummary: document.getElementById("decisionSummary"),
+        decisionBriefList: document.getElementById("decisionBriefList"),
+        decisionRuntimeState: document.getElementById("decisionRuntimeState"),
+        prewarmBtn: document.getElementById("prewarmBtn"),
+        prewarmStatusNote: document.getElementById("prewarmStatusNote"),
+        prewarmSymbols: document.getElementById("prewarmSymbols"),
+        riskLight: document.getElementById("riskLight"),
+        realActionCount: document.getElementById("realActionCount"),
+        observeCount: document.getElementById("observeCount"),
+        blockedCount: document.getElementById("blockedCount"),
+        realActionsNote: document.getElementById("realActionsNote"),
+        realActions: document.getElementById("realActions"),
+        observeLine: document.getElementById("observeLine"),
+        blockedSuggestions: document.getElementById("blockedSuggestions"),
+        bucketEvidence: document.getElementById("bucketEvidence")
+      };
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function formatCurrency(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+          return "--";
+        }
+        return new Intl.NumberFormat("zh-CN", {
+          style: "currency",
+          currency: "CNY",
+          maximumFractionDigits: 0
+        }).format(numeric);
+      }
+
+      function formatPct(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+          return "--";
+        }
+        return numeric.toFixed(numeric >= 10 ? 0 : 1) + "%";
+      }
+
+      function formatAmountRange(range) {
+        if (!range || !Number.isFinite(Number(range.min)) || !Number.isFinite(Number(range.max))) {
+          return "仅复核";
+        }
+        return formatCurrency(range.min) + " - " + formatCurrency(range.max);
+      }
+
+      function formatPctRange(range) {
+        if (!range || !Number.isFinite(Number(range.min)) || !Number.isFinite(Number(range.max))) {
+          return "";
+        }
+        return formatPct(range.min) + " - " + formatPct(range.max);
+      }
+
+      function displayMarketDataTierLabel(tier, label) {
+        const raw = String(tier ?? label ?? "").trim();
+        if (raw === ["reference", "close"].join("_")) {
+          return "前收参考 · 非实时";
+        }
+        const text = String(label ?? raw).trim();
+        return text === "前收参考" ? "前收参考 · 非实时" : text || "--";
+      }
+
+      function renderInlineMarkdown(value) {
+        const codeFence = String.fromCharCode(96);
+        const codePattern = new RegExp(codeFence + "([^" + codeFence + "]+)" + codeFence, "g");
+        return escapeHtml(value)
+          .replace(codePattern, "<code>$1</code>")
+          .replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>")
+          .replace(/__([^_]+)__/g, "<strong>$1</strong>");
+      }
+
+      function markdownToHtml(value) {
+        const source = String(value ?? "").replace(/\\r\\n/g, "\\n").trim();
+        if (!source) {
+          return '<p class="muted">暂无证据详情。</p>';
+        }
+        const blocks = source.split(/\\n\\s*\\n/).map((block) => block.trim()).filter(Boolean);
+        return blocks.map((block) => {
+          const lines = block.split("\\n").map((line) => line.trim()).filter(Boolean);
+          if (lines.length === 0) {
+            return "";
+          }
+          const heading = lines[0].match(/^(#{1,4})\\s+(.+)$/);
+          if (heading && lines.length === 1) {
+            const level = Math.min(4, Math.max(3, heading[1].length + 2));
+            return "<h" + level + ">" + renderInlineMarkdown(heading[2]) + "</h" + level + ">";
+          }
+          if (lines.every((line) => /^[-*]\\s+/.test(line))) {
+            return "<ul>" + lines.map((line) => "<li>" + renderInlineMarkdown(line.replace(/^[-*]\\s+/, "")) + "</li>").join("") + "</ul>";
+          }
+          if (lines.every((line) => /^\\d+[.)]\\s+/.test(line))) {
+            return "<ol>" + lines.map((line) => "<li>" + renderInlineMarkdown(line.replace(/^\\d+[.)]\\s+/, "")) + "</li>").join("") + "</ol>";
+          }
+          return "<p>" + lines.map(renderInlineMarkdown).join("<br>") + "</p>";
+        }).join("");
+      }
+
+      function stripMarkdown(value) {
+        return String(value ?? "")
+          .replace(/#{1,6}\\s*/g, "")
+          .replace(/\\*\\*([^*]+)\\*\\*/g, "$1")
+          .replace(/__([^_]+)__/g, "$1")
+          .replace(/(^|\\n)\\s*[-*]\\s+/g, "$1")
+          .replace(/\\r?\\n/g, " ")
+          .replace(/\\[([^\\]]+)\\]\\([^)]*\\)/g, "$1")
+          .replace(new RegExp(String.fromCharCode(96), "g"), "")
+          .replace(/\\s+/g, " ")
+          .trim();
+      }
+
+      function oneLineReason(value) {
+        let text = stripMarkdown(value)
+          .replace(/^Rating\\s*[:：]\\s*[A-Z_]+\\s*/i, "")
+          .replace(/^(执行摘要|投资论点|最终决策|关键论点总结)\\s*[:：]?\\s*/i, "")
+          .trim();
+        const candidates = text.split(/(?<=[。！？!?；;])\\s*/).map((item) => item.trim()).filter(Boolean);
+        const picked = candidates.find((item) => item.length >= 18) ?? candidates[0] ?? text;
+        return picked.length > 88 ? picked.slice(0, 85) + "..." : picked || "暂无理由摘要";
+      }
+
+      function navigateToAccount(accountId) {
+        const url = new URL(window.location.href);
+        url.searchParams.set("account", accountId);
+        window.location.href = url.toString();
+      }
+
+      function renderList(target, items, builder, emptyText) {
+        if (!Array.isArray(items) || items.length === 0) {
+          target.innerHTML = '<div class="empty">' + escapeHtml(emptyText) + '</div>';
+          return;
+        }
+        target.innerHTML = items.map(builder).join("");
+      }
+
+      function renderPrewarmStatus(payload) {
+        const coverage = payload?.symbolCacheCoverage ?? null;
+        const symbols = Array.isArray(coverage?.symbols) ? coverage.symbols : [];
+        if (!coverage || symbols.length === 0) {
+          elements.prewarmStatusNote.textContent = "暂无 symbol cache 状态。";
+          elements.prewarmSymbols.innerHTML = '<span class="symbol-chip missing">-- missing</span>';
+          return;
+        }
+        const counts = coverage.counts ?? {};
+        elements.prewarmStatusNote.textContent =
+          String(coverage.provider ?? "provider") +
+          " · as-of " +
+          String(coverage.tradeDate ?? "--") +
+          " · fresh " +
+          String(counts.fresh ?? 0) +
+          "/" +
+          String(counts.total ?? symbols.length);
+        elements.prewarmSymbols.innerHTML = symbols
+          .map((item) => {
+            const status = String(item?.status ?? "missing");
+            const age = item?.ageHours === null || item?.ageHours === undefined ? "--" : String(item.ageHours) + "h";
+            const rating = item?.rating ? " · " + String(item.rating) : "";
+            return (
+              '<span class="symbol-chip ' + escapeHtml(status) + '">' +
+                '<strong>' + escapeHtml(item?.symbol ?? "--") + '</strong>' +
+                escapeHtml(" " + status + " · " + age + rating) +
+              '</span>'
+            );
+          })
+          .join("");
+      }
+
+      function renderDecisionBriefList(payload, realActions, observeLine) {
+        const riskLight = String(payload?.riskLight ?? "--").toUpperCase();
+        const hasRealActions = realActions.length > 0;
+        const marketLabel = displayMarketDataTierLabel(
+          payload?.decisionContext?.marketDataTier,
+          payload?.decisionContext?.marketDataTierLabel
+        );
+        const marketAsOf = payload?.decisionContext?.marketDataAsOf
+          ? " · as-of " + String(payload.decisionContext.marketDataAsOf)
+          : "";
+        const topObserve = observeLine[0]?.note ? oneLineReason(observeLine[0].note) : null;
+        const items = [
+          {
+            label: "风险灯",
+            text: riskLight + " · " + (payload?.decisionSummary ? oneLineReason(payload.decisionSummary) : "等待 TradingAgents 主链。")
+          },
+          {
+            label: "动作",
+            text: hasRealActions
+              ? "形成 " + String(realActions.length) + " 条只读动作候选；建议区间不是订单。"
+              : "当前没有真实动作候选，先看观察线和被拦原因。"
+          },
+          {
+            label: "限制",
+            text: (marketLabel || "行情未知") + marketAsOf + (topObserve ? " · " + topObserve : "")
+          }
+        ];
+        elements.decisionBriefList.innerHTML = items
+          .map((item) =>
+            '<div class="decision-brief-item">' +
+              '<span class="decision-brief-label">' + escapeHtml(item.label) + '</span>' +
+              '<span class="decision-brief-text">' + escapeHtml(item.text) + '</span>' +
+            '</div>'
+          )
+          .join('');
+      }
+
+      function renderDecision(payload) {
+        const realActions = Array.isArray(payload?.executionChecklist?.realActions)
+          ? payload.executionChecklist.realActions
+          : [];
+        const observeLine = Array.isArray(payload?.executionChecklist?.observeLine)
+          ? payload.executionChecklist.observeLine
+          : [];
+        const blockedSuggestions = Array.isArray(payload?.executionChecklist?.blockedSuggestions)
+          ? payload.executionChecklist.blockedSuggestions
+          : [];
+        const bucketActions = Array.isArray(payload?.bucketActions)
+          ? payload.bucketActions
+          : Array.isArray(payload?.bucketVerdicts)
+            ? payload.bucketVerdicts
+            : [];
+        const runtimeRefresh = payload?.runtimeRefresh ?? null;
+
+        elements.status.textContent =
+          String(payload?.source ?? "TradingAgents") +
+          ' · ' +
+          String(payload?.provider ?? '--') +
+          ' · ' +
+          String(payload?.mode ?? '--');
+        elements.decisionMeta.innerHTML = [
+          '<span class="tag">状态 ' + escapeHtml(payload?.status ?? '--') + '</span>',
+          '<span class="tag">风险灯 ' + escapeHtml(payload?.riskLight ?? '--') + '</span>',
+          '<span class="tag">as-of ' + escapeHtml(payload?.asOf ?? '--') + '</span>',
+          '<span class="tag">行情 ' +
+            escapeHtml(displayMarketDataTierLabel(payload?.decisionContext?.marketDataTier, payload?.decisionContext?.marketDataTierLabel)) +
+            (payload?.decisionContext?.marketDataAsOf ? ' · ' + escapeHtml(payload.decisionContext.marketDataAsOf) : '') +
+          '</span>',
+          '<span class="tag">freshness ' + escapeHtml(payload?.diagnostics?.freshnessLabel ?? '--') + '</span>'
+        ].join('');
+        elements.decisionHeadline.textContent = String(payload?.decisionHeadline ?? '等待主链结果');
+        elements.decisionSummary.textContent = String(payload?.decisionSummary ?? '暂无决策摘要。');
+        renderDecisionBriefList(payload, realActions, observeLine);
+        elements.decisionRuntimeState.textContent =
+          runtimeRefresh?.running
+            ? '后台正在预热/刷新 TradingAgents 快照，请稍候自动回补 live 结果。'
+            : runtimeRefresh?.lastError
+              ? '最近一次后台刷新失败：' + String(runtimeRefresh.lastError)
+              : runtimeRefresh?.lastCompletedAt
+                ? '最近后台刷新完成于 ' + String(runtimeRefresh.lastCompletedAt)
+                : runtimeRefresh?.lastSkipReason
+                  ? '当前未触发后台刷新：' + String(runtimeRefresh.lastSkipReason)
+                  : '当前未触发后台刷新。';
+        elements.riskLight.textContent = String(payload?.riskLight ?? '--').toUpperCase();
+        elements.realActionCount.textContent = String(realActions.length);
+        elements.observeCount.textContent = String(observeLine.length);
+        elements.blockedCount.textContent = String(blockedSuggestions.length);
+        renderPrewarmStatus(payload);
+        const hasRiskWatch = observeLine.some((item) => String(item?.executionState ?? "") === "risk_watch") ||
+          bucketActions.some((item) => String(item?.executionState ?? "") === "risk_watch");
+        elements.realActionsNote.textContent =
+          realActions.length === 0 && hasRiskWatch
+            ? "当前是风险观察，不是执行清单：TradingAgents 有方向信号，但本地基金护栏未放行真实动作。"
+            : "这里只有当前 live 主链下真正可落地的基金动作候选。";
+
+        renderList(
+          elements.realActions,
+          realActions,
+          (item) => {
+            const rangeText = formatAmountRange(item.suggestedAmountRangeCny);
+            const pctRangeText = formatPctRange(item.suggestedPctRange);
+            const warnings = Array.isArray(item?.sizingWarnings) ? item.sizingWarnings : [];
+            return '<div class="terminal-row action-terminal-row">' +
+              '<div class="terminal-main terminal-fund">' +
+                '<div class="terminal-title">' +
+                  '<span class="terminal-code mono">' + escapeHtml(item.fundCode) + '</span>' +
+                  '<span class="terminal-name">' + escapeHtml(item.fundName) + '</span>' +
+                '</div>' +
+                '<div class="terminal-note">' + escapeHtml(item.verdict || '--') + '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="terminal-label">桶</div>' +
+                '<div class="terminal-value mono">' + escapeHtml(item.bucketLabel || item.bucket || '--') + '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="terminal-label">当前持仓</div>' +
+                '<div class="terminal-amount mono">' + escapeHtml(formatCurrency(item.currentHoldingAmountCny ?? item.heldAmountCny)) + '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="terminal-label">建议区间</div>' +
+                '<div class="terminal-amount mono">' + escapeHtml(rangeText) + '</div>' +
+                '<div class="terminal-note">' + escapeHtml(pctRangeText || warnings.join(" / ") || item.sizingBasis || "review_only") + '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="terminal-label">动作</div>' +
+                '<span class="terminal-action ' + escapeHtml(item.stance === 'buy' ? 'buy' : 'sell') + '">' + escapeHtml(item.actionLabel || item.stance || '--') + '</span>' +
+              '</div>' +
+              '<div>' +
+                '<div class="terminal-label">一句话理由</div>' +
+                '<div class="terminal-reason">' + escapeHtml(oneLineReason(item.reasonSummary || item.verdict || '暂无理由摘要')) + '</div>' +
+              '</div>' +
+              '<details class="terminal-evidence">' +
+                '<summary>证据详情 / TradingAgents 原文</summary>' +
+                '<div class="markdown-body">' + markdownToHtml(item.reasonSummary || '暂无证据详情。') + '</div>' +
+              '</details>' +
+            '</div>';
+          },
+          realActions.length === 0 && hasRiskWatch
+            ? 'TradingAgents 有风险信号，但基金护栏未放行真实动作；请看下方 Bucket 风险观察。'
+            : '今天没有真实动作。'
+        );
+        if (realActions.length === 0 && hasRiskWatch) {
+          elements.realActions.querySelector(".empty")?.classList.add("risk-watch-empty");
+        }
+
+        renderList(
+          elements.observeLine,
+          observeLine,
+          (item) => {
+            const candidates = Array.isArray(item?.candidateFunds) ? item.candidateFunds : [];
+            const confidence = item?.confidence === null || item?.confidence === undefined ? '--' : String(item.confidence);
+            const reasonLabels = Array.isArray(item?.reasonLabels) ? item.reasonLabels : [];
+            return '<div class="terminal-row observe-terminal-row">' +
+              '<div class="terminal-main">' +
+                '<div class="terminal-label">BUCKET</div>' +
+                '<div class="terminal-title">' +
+                  '<span class="terminal-name">' + escapeHtml(item.bucketLabel || item.bucket || '--') + '</span>' +
+                '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="terminal-label">VERDICT</div>' +
+                '<div class="terminal-value mono">' + escapeHtml(item.verdict || '--') + '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="terminal-label">STATE</div>' +
+                '<div class="terminal-value mono">' + escapeHtml((item.executionState || 'observe') + ' · ' + confidence) + '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="terminal-label">NOTE</div>' +
+                '<div class="terminal-reason">' + escapeHtml(oneLineReason(item.note || '继续观察。')) + '</div>' +
+                (reasonLabels.length > 1 ? '<div class="terminal-note">' + escapeHtml(reasonLabels.slice(1, 3).join(' / ')) + '</div>' : '') +
+                (candidates.length > 0 ? '<div class="terminal-note">候选基金 ' + escapeHtml(String(candidates.length)) + ' 只</div>' : '') +
+              '</div>' +
+              '<details class="terminal-evidence">' +
+                '<summary>证据详情</summary>' +
+                '<div class="markdown-body">' + markdownToHtml(item.note || '继续观察。') + '</div>' +
+              '</details>' +
+            '</div>';
+          },
+          '当前没有观察线。'
+        );
+
+        renderList(
+          elements.blockedSuggestions,
+          blockedSuggestions,
+          (item) =>
+            '<div class="row">' +
+              '<div class="row-top">' +
+                '<div class="row-title">' + escapeHtml(item.fundName || item.fundCode || item.bucket || item.symbol || '被拦建议') + '</div>' +
+                (item?.verdict ? '<span class="row-chip">' + escapeHtml(item.verdict) + '</span>' : '') +
+              '</div>' +
+              '<div class="row-sub">' + escapeHtml(oneLineReason(item.reason || 'blocked')) + '</div>' +
+            '</div>',
+          '当前没有被拦建议。'
+        );
+
+        renderList(
+          elements.bucketEvidence,
+          bucketActions,
+          (item) => {
+            const candidates = Array.isArray(item?.candidateFunds) ? item.candidateFunds : [];
+            const reasons = Array.isArray(item?.reasons) ? item.reasons : [];
+            const proxySymbols = Array.isArray(item?.proxySymbols) ? item.proxySymbols : [];
+            const candidateHtml = candidates.length > 0
+              ? '<div class="row-metrics">' +
+                  candidates.slice(0, 6).map((candidate) =>
+                    '<span class="row-chip">' +
+                      escapeHtml(candidate.fundCode || '--') +
+                      ' · ' +
+                      escapeHtml(formatCurrency(candidate.heldAmountCny)) +
+                    '</span>'
+                  ).join('') +
+                '</div>'
+              : '';
+            return '<details class="row">' +
+              '<summary class="row-summary">' +
+                '<div>' +
+                  '<div class="row-title">' + escapeHtml(item.bucketLabel || item.bucket) + '</div>' +
+                  '<div class="row-sub">' +
+                    escapeHtml(oneLineReason((item.verdict || '--') + ' · ' + (reasons[0] || item.reasonSummary || '继续观察'))) +
+                  '</div>' +
+                '</div>' +
+                '<span class="row-chip">' + escapeHtml(item.actionLevel || item.executionState || 'observe') + '</span>' +
+              '</summary>' +
+              '<div class="row-metrics">' +
+                '<span class="row-chip">方向 ' + escapeHtml(item.verdict || '--') + '</span>' +
+                '<span class="row-chip">代理 ' + escapeHtml(proxySymbols.join(', ') || '--') + '</span>' +
+                '<span class="row-chip">信号数 ' + escapeHtml(String(item.signalCount ?? '--')) + '</span>' +
+                '<span class="row-chip">原因 ' + escapeHtml(reasons.join(', ') || '--') + '</span>' +
+              '</div>' +
+              candidateHtml +
+              '<div class="markdown-body">' + markdownToHtml(item.reasonSummary || '暂无理由摘要') + '</div>' +
+              '<div class="markdown-body">' + markdownToHtml((item.risks || []).join('\\n') || item.riskJudge || '暂无风险补充。') + '</div>' +
+            '</details>';
+          },
+          '当前没有 bucket 证据。'
+        );
+      }
+
+      async function refreshDecision(options = {}) {
+        elements.status.textContent = '读取交易主脑中...';
+        const url = new URL('/api/trading-decision', window.location.origin);
+        url.searchParams.set('account', config.currentAccount);
+        if (options.forcePrewarm) {
+          url.searchParams.set('refresh', '1');
+          elements.prewarmBtn.disabled = true;
+          elements.prewarmBtn.textContent = '已触发';
+        }
+        url.searchParams.set('t', String(Date.now()));
+        try {
+          const response = await fetch(url);
+          const payload = await response.json();
+          renderDecision(payload);
+        } finally {
+          elements.prewarmBtn.disabled = false;
+          elements.prewarmBtn.textContent = '触发预热';
+        }
+      }
+
+      elements.accountSelect.addEventListener('change', (event) => {
+        config.currentAccount = event.target.value;
+        navigateToAccount(config.currentAccount);
+      });
+      elements.refreshBtn.addEventListener('click', refreshDecision);
+      elements.prewarmBtn.addEventListener('click', () => refreshDecision({ forcePrewarm: true }));
+      refreshDecision().catch((error) => {
+        elements.status.textContent = '读取失败';
+        elements.decisionHeadline.textContent = '交易主脑读取失败';
+        elements.decisionSummary.textContent = String(error?.message ?? error);
+      });
+      window.setInterval(() => {
+        refreshDecision().catch(() => {});
+      }, 60000);
+    `
+  });
+}
+
+function marketTopicsPage({ initialAccountId, availableAccounts }) {
+  return simplePageShell({
+    title: "市场/专题",
+    subtitle: "轻量读取已有市场报告、脉冲和事件日历，不再重建重型 workbench 读模型。",
+    heroNote: "报告聚合页 · as-of 可见 · 不承载交易主链",
+    activePath: "/market",
+    initialAccountId,
+    availableAccounts,
+    bodyHtml: `
+      <section class="grid">
+        <article class="card summary-card">
+          <div class="card-head">
+            <div>
+              <div class="eyebrow">Market Topics</div>
+              <h2>市场一句话</h2>
+            </div>
+            <div class="meta-row" id="marketMeta"></div>
+          </div>
+          <div class="summary-layout">
+            <div class="summary-main">
+              <div class="row-title" id="marketHeadline">读取中...</div>
+              <div class="row-sub" id="marketResearchSummary">等待市场专题聚合。</div>
+            </div>
+            <div class="summary-metrics">
+              <div class="metric-card">
+                <div class="metric-label">主题摘要</div>
+                <div class="metric-value mono" id="themeCount">--</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">关键事件</div>
+                <div class="metric-value mono" id="eventCount">--</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">报告入口</div>
+                <div class="metric-value mono" id="reportCount">--</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Primary as-of</div>
+                <div class="metric-value mono" id="marketAsOf">--</div>
+              </div>
+            </div>
+          </div>
+        </article>
+        <article class="card split-card">
+          <h2>市场主线 / 板块强弱</h2>
+          <div class="section-note">这里只保留晨会最该扫一眼的主线、强弱和跨市场锚点。</div>
+          <div class="list" id="themeHighlights"></div>
+        </article>
+        <article class="card split-card">
+          <h2>关键事件</h2>
+          <div class="section-note">这里集中显示最近需要盯的金融事件和重要时间点。</div>
+          <div class="list" id="keyEvents"></div>
+        </article>
+        <article class="card summary-card">
+          <h2>报告入口</h2>
+          <div class="section-note">保留报告标题、更新时间和摘要；旧报告会明确标为“沿用上一交易日”，全文继续去原报告文件查看。</div>
+          <div class="list" id="reportCards"></div>
+        </article>
+      </section>
+    `,
+    script: `
+      const elements = {
+        accountSelect: document.getElementById("accountSelect"),
+        status: document.getElementById("status"),
+        refreshBtn: document.getElementById("refreshBtn"),
+        marketMeta: document.getElementById("marketMeta"),
+        marketHeadline: document.getElementById("marketHeadline"),
+        marketResearchSummary: document.getElementById("marketResearchSummary"),
+        themeCount: document.getElementById("themeCount"),
+        eventCount: document.getElementById("eventCount"),
+        reportCount: document.getElementById("reportCount"),
+        marketAsOf: document.getElementById("marketAsOf"),
+        themeHighlights: document.getElementById("themeHighlights"),
+        keyEvents: document.getElementById("keyEvents"),
+        reportCards: document.getElementById("reportCards")
+      };
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function navigateToAccount(accountId) {
+        const url = new URL(window.location.href);
+        url.searchParams.set("account", accountId);
+        window.location.href = url.toString();
+      }
+
+      function renderList(target, items, builder, emptyText) {
+        if (!Array.isArray(items) || items.length === 0) {
+          target.innerHTML = '<div class="empty">' + escapeHtml(emptyText) + '</div>';
+          return;
+        }
+        target.innerHTML = items.map(builder).join("");
+      }
+
+      function renderMarket(payload) {
+        elements.status.textContent = "读取市场专题";
+        const themeCount = Number(payload?.themeHighlights?.length ?? 0);
+        const eventCount = Number(payload?.keyEvents?.length ?? 0);
+        const reportCount = Number(payload?.reports?.length ?? 0);
+        elements.marketMeta.innerHTML = [
+          '<span class="tag">' + escapeHtml(payload?.primaryAsOfLabel ?? ("as-of " + (payload?.asOf ?? "--"))) + '</span>',
+          '<span class="tag">sync ' + escapeHtml(payload?.syncStatus?.status ?? "unknown") + '</span>',
+          '<span class="tag">reports ' + escapeHtml(String(reportCount)) + '</span>',
+          '<span class="tag">events ' + escapeHtml(String(eventCount)) + '</span>'
+        ].join("");
+        elements.themeCount.textContent = String(themeCount);
+        elements.eventCount.textContent = String(eventCount);
+        elements.reportCount.textContent = String(reportCount);
+        elements.marketAsOf.textContent = String(payload?.primaryAsOfLabel ?? payload?.asOf ?? "--");
+        elements.marketHeadline.textContent = payload?.headline || "暂无最新市场摘要";
+        elements.marketResearchSummary.textContent =
+          payload?.summaryNote ||
+          payload?.researchSummary ||
+          "暂无附加摘要，当前页面以最新市场 brief / pulse 为主。";
+
+        renderList(
+          elements.themeHighlights,
+          payload?.themeHighlights,
+          (item, index) =>
+            '<div class="row">' +
+              '<div class="row-top">' +
+                '<div class="row-title">' +
+                  escapeHtml(typeof item === "string" ? item : item?.text || "--") +
+                '</div>' +
+                '<span class="row-chip">' +
+                  escapeHtml(typeof item === "string" ? "提要 " + String(index + 1) : item?.label || "--") +
+                '</span>' +
+              '</div>' +
+            '</div>',
+          "当前没有板块/主题摘要。"
+        );
+
+        renderList(
+          elements.keyEvents,
+          payload?.keyEvents,
+          (item) =>
+            '<div class="row">' +
+              '<div class="row-top">' +
+                '<div class="row-title">' + escapeHtml(item.title) + '</div>' +
+                '<span class="row-chip">' + escapeHtml(item.importance || "--") + '</span>' +
+              '</div>' +
+              '<div class="row-sub">时间 ' + escapeHtml(item.scheduledAt || "--") + '</div>' +
+            '</div>',
+          "当前没有关键事件。"
+        );
+
+        renderList(
+          elements.reportCards,
+          payload?.reports,
+          (item) =>
+            '<div class="row">' +
+              '<div class="row-top">' +
+                '<div class="row-title">' + escapeHtml(item.title) + '</div>' +
+                '<span class="row-chip">' + escapeHtml(item.kind || "report") + '</span>' +
+              '</div>' +
+              '<div class="row-metrics">' +
+                '<span class="row-chip">' + escapeHtml(item.stalenessText || ("as-of " + (item.asOf || "--"))) + '</span>' +
+                '<span class="row-chip">updated ' + escapeHtml(item.updatedAt || "--") + '</span>' +
+              '</div>' +
+              '<div class="row-sub">' + escapeHtml(item.summary || "暂无摘要") + '</div>' +
+              '<div class="path-note mono">' + escapeHtml(item.path || "") + '</div>' +
+            '</div>',
+          "当前没有可读取的市场报告。"
+        );
+      }
+
+      async function refreshMarket() {
+        elements.status.textContent = "读取市场专题中...";
+        const url = new URL("/api/market-topics", window.location.origin);
+        url.searchParams.set("account", config.currentAccount);
+        url.searchParams.set("t", String(Date.now()));
+        const response = await fetch(url);
+        const payload = await response.json();
+        renderMarket(payload);
+      }
+
+      elements.accountSelect.addEventListener("change", (event) => {
+        config.currentAccount = event.target.value;
+        navigateToAccount(config.currentAccount);
+      });
+      elements.refreshBtn.addEventListener("click", refreshMarket);
+      refreshMarket().catch((error) => {
+        elements.status.textContent = "读取失败";
+        elements.marketHeadline.textContent = String(error?.message ?? error);
+      });
+    `
+  });
+}
+
 function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
   const optionHtml = availableAccounts
     .map(
@@ -2409,7 +3935,7 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>基金实时看板</title>
+    <title>基金面板</title>
     <style>
       :root {
         --bg: #f3efe7;
@@ -2496,6 +4022,44 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         gap: 8px;
         align-items: center;
         flex-wrap: wrap;
+      }
+
+      .app-nav {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .app-nav-link {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        padding: 7px 11px;
+        border-radius: 12px;
+        border: 1px solid rgba(15, 118, 110, 0.14);
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--ink);
+        text-decoration: none;
+        min-width: 104px;
+      }
+
+      .app-nav-link.active {
+        color: rgba(15, 118, 110, 0.96);
+        background: rgba(15, 118, 110, 0.08);
+      }
+
+      .app-nav-label {
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.2;
+      }
+
+      .app-nav-hint {
+        font-size: 10px;
+        color: rgba(100, 116, 139, 0.88);
+        line-height: 1.15;
       }
 
       .status {
@@ -3745,16 +5309,18 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
       <div class="window">
         <div class="topbar">
           <div class="eyebrow">Portfolio Live View</div>
-          <h1>基金实时看板</h1>
-          <div class="subline">当前账户：<span id="accountLabel">${formatAccountLabel(initialAccountId)}</span>。仅展示场外基金；真钱现金与流动性防线单独展示，不含场内证券。</div>
+          <h1>基金面板</h1>
+          <div class="subline">当前账户：<span id="accountLabel">${formatAccountLabel(initialAccountId)}</span>。这里是默认首页：基金展示优先，交易主脑和市场阅读走上方两条独立入口。仅展示场外基金；CASH 统一表示现金、债券和低波防守承载桶，不含场内证券。</div>
           <div class="toolbar">
             <div class="toolbar-left">
+              <div class="app-nav">${buildSimpleNav("/", initialAccountId)}</div>
               <label class="account-picker">
                 <span>账户</span>
                 <select id="accountSelect">${optionHtml}</select>
               </label>
               <div class="status" id="status">准备连接实时估值链路...</div>
               <div class="toolbar-chip muted" id="confirmedNavHeadline">确认净值状态读取中...</div>
+              <div class="toolbar-chip muted" id="accountingHeadline">确认账本 / 观察估值读取中...</div>
               <div class="toolbar-chip" id="configHeadlineInline">配置读取中...</div>
             </div>
             <button class="btn" id="refreshBtn" type="button">刷新</button>
@@ -3779,12 +5345,12 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
               <div class="ribbon-sub" id="fundCountText">--</div>
               </div>
               <div class="ribbon-item">
-              <div class="ribbon-label">真现金</div>
+              <div class="ribbon-label">CASH 承载桶</div>
               <div class="ribbon-value" id="settledCash">--</div>
               <div class="ribbon-sub" id="settledCashNote">--</div>
               </div>
               <div class="ribbon-item">
-              <div class="ribbon-label">流动性防线</div>
+              <div class="ribbon-label">可动用现金</div>
               <div class="ribbon-value" id="liquiditySleeveAssets">--</div>
               <div class="ribbon-sub" id="liquiditySleeveNote">--</div>
               </div>
@@ -3880,6 +5446,7 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         accountLabel: document.getElementById("accountLabel"),
         accountSelect: document.getElementById("accountSelect"),
         confirmedNavHeadline: document.getElementById("confirmedNavHeadline"),
+        accountingHeadline: document.getElementById("accountingHeadline"),
         configHeadlineInline: document.getElementById("configHeadlineInline"),
         summaryBody: document.getElementById("summaryBody"),
         summaryToggleBtn: document.getElementById("summaryToggleBtn"),
@@ -4477,6 +6044,16 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         window.history.replaceState(null, "", url);
       }
 
+      function syncNavLinks(accountId) {
+        document.querySelectorAll(".app-nav-link").forEach((link) => {
+          try {
+            const url = new URL(link.getAttribute("href"), window.location.origin);
+            url.searchParams.set("account", accountId);
+            link.setAttribute("href", url.pathname + url.search);
+          } catch {}
+        });
+      }
+
       function render(payload) {
         config.currentPayload = payload;
         const rows = Array.isArray(payload?.rows) ? payload.rows : [];
@@ -4514,6 +6091,7 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         config.currentAccount = accountId;
         elements.accountSelect.value = accountId;
         elements.accountLabel.textContent = accountLabel;
+        syncNavLinks(accountId);
         renderSummaryCollapsedState();
         renderFoldStates();
         renderBucketStrip(bucketGroups, fundRows);
@@ -4536,26 +6114,45 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         elements.confirmedNavHeadline.textContent = confirmedNavHeadline.text;
         elements.confirmedNavHeadline.className =
           "toolbar-chip " + (confirmedNavHeadline.tone || "muted");
+        const accountingState = String(payload?.accountingState ?? "--");
+        const accountingParts = [
+          "确认账本 " + String(payload?.snapshotDate ?? payload?.readiness?.snapshotDate ?? "--"),
+          "观察估值 " + String(payload?.summary?.latestQuoteTime ?? "--"),
+          "口径 " + accountingState
+        ];
+        elements.accountingHeadline.textContent =
+          accountingState === "observation_only_stale_snapshot"
+            ? accountingParts.join(" · ") + " · 当前收益含观察估值，严格对账以确认净值链为准"
+            : accountingParts.join(" · ");
+        elements.accountingHeadline.className =
+          "toolbar-chip " + (accountingState === "observation_only_stale_snapshot" ? "warn" : "muted");
 
         elements.totalAssets.textContent = formatCurrency(payload?.summary?.totalPortfolioAssets);
         elements.fundMarketValue.textContent = formatCurrency(payload?.summary?.totalFundAssets);
         elements.fundCountText.textContent =
           String(payload?.summary?.activeFundCount ?? fundRows.length) + " 只基金";
-        elements.settledCash.textContent = formatCurrency(payload?.summary?.settledCashCny);
+        const cashBucketAssets =
+          (hasNumericValue(payload?.summary?.settledCashCny) ? Number(payload.summary.settledCashCny) : 0) +
+          (hasNumericValue(payload?.summary?.liquiditySleeveAssetsCny) ? Number(payload.summary.liquiditySleeveAssetsCny) : 0);
+        elements.settledCash.textContent = formatCurrency(cashBucketAssets);
         elements.settledCash.className = "ribbon-value flat";
-        elements.settledCashNote.textContent =
-          hasNumericValue(payload?.summary?.tradeAvailableCashCny)
-            ? "可交易 " + formatCurrency(payload?.summary?.tradeAvailableCashCny)
-            : "已结算现金";
+        elements.settledCashNote.textContent = [
+          hasNumericValue(payload?.summary?.settledCashCny)
+            ? "已结算 " + formatCurrency(payload?.summary?.settledCashCny)
+            : null,
+          hasNumericValue(payload?.summary?.liquiditySleeveAssetsCny)
+            ? "低波承载 " + formatCurrency(payload?.summary?.liquiditySleeveAssetsCny)
+            : null
+        ].filter(Boolean).join(" · ") || "现金 + 债券 + 低波承载";
         elements.settledCashNote.className = "ribbon-sub flat";
         elements.liquiditySleeveAssets.textContent = formatCurrency(
-          payload?.summary?.liquiditySleeveAssetsCny
+          payload?.summary?.tradeAvailableCashCny ?? payload?.summary?.settledCashCny
         );
         elements.liquiditySleeveAssets.className = "ribbon-value flat";
         elements.liquiditySleeveNote.textContent =
-          hasNumericValue(payload?.summary?.cashLikeFundAssetsCny)
-            ? "现金类基金 " + formatCurrency(payload?.summary?.cashLikeFundAssetsCny)
-            : "不计入真钱现金";
+          hasNumericValue(payload?.summary?.tradeAvailableCashCny)
+            ? "已结算可交易口径"
+            : "以已结算现金为准";
         elements.liquiditySleeveNote.className = "ribbon-sub flat";
         elements.unrealizedHoldingProfit.textContent = formatSignedCurrency(
           payload?.summary?.unrealizedHoldingProfit
@@ -4728,6 +6325,7 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         config.currentAccount = accountId;
         elements.accountSelect.value = accountId;
         elements.accountLabel.textContent = payload?.accountLabel ?? accountId;
+        syncNavLinks(accountId);
         elements.confirmedNavHeadline.textContent = "账户状态未就绪";
         elements.confirmedNavHeadline.className = "toolbar-chip warn";
         elements.configHeadlineInline.hidden = true;
@@ -4736,11 +6334,11 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         elements.fundCountText.textContent = "0 只基金";
         elements.settledCash.textContent = "--";
         elements.settledCash.className = "ribbon-value flat";
-        elements.settledCashNote.textContent = "无已结算现金口径";
+        elements.settledCashNote.textContent = "现金 + 债券 + 低波承载未就绪";
         elements.settledCashNote.className = "ribbon-sub flat";
         elements.liquiditySleeveAssets.textContent = "--";
         elements.liquiditySleeveAssets.className = "ribbon-value flat";
-        elements.liquiditySleeveNote.textContent = "无流动性防线账本";
+        elements.liquiditySleeveNote.textContent = "无可动用现金口径";
         elements.liquiditySleeveNote.className = "ribbon-sub flat";
         elements.unrealizedHoldingProfit.textContent = "--";
         elements.unrealizedHoldingProfit.className = "ribbon-value ribbon-value--profit flat";
@@ -4899,42 +6497,226 @@ async function maybeOpenBrowser(url, shouldOpen) {
 
 let backgroundRefreshTimer = null;
 
-function startBackgroundRefresh(refreshMs) {
+function formatShanghaiDate(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
+function roundCacheAgeHours(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.round(numeric * 100) / 100 : null;
+}
+
+async function buildTradingAgentsSymbolCacheStatus({
+  portfolioRoot,
+  decisionSnapshot = {},
+  now = new Date()
+} = {}) {
+  const bridgeConfig = await loadTradingAgentsBridgeConfig();
+  const providerDefaults = bridgeConfig?.providerDefaults ?? {};
+  const symbols = collectLiveSymbols(bridgeConfig);
+  const tradeDate = String(decisionSnapshot?.asOf ?? formatShanghaiDate(now)).trim();
+  const coverage = await inspectTradingAgentsSymbolCacheCoverage({
+    symbols,
+    tradeDate,
+    providerDefaults,
+    portfolioRoot,
+    now
+  });
+  const entries = new Map(
+    [
+      ...coverage.freshEntries.map((entry) => [entry.symbol, { ...entry, status: "fresh" }]),
+      ...coverage.staleEntries.map((entry) => [entry.symbol, { ...entry, status: "stale" }])
+    ]
+  );
+
+  return {
+    tradeDate,
+    provider: providerDefaults?.llmProvider ?? null,
+    deepModel: providerDefaults?.deepThinkModel ?? null,
+    quickModel: providerDefaults?.quickThinkModel ?? null,
+    ttlHours: coverage.ttlHours,
+    fullyFresh: coverage.fullyFresh,
+    counts: {
+      fresh: coverage.freshSymbols.length,
+      stale: coverage.staleSymbols.length,
+      missing: coverage.missingSymbols.length,
+      total: symbols.length
+    },
+    symbols: symbols.map((symbol) => {
+      const entry = entries.get(symbol);
+      return {
+        symbol,
+        status: entry?.status ?? "missing",
+        rating: entry?.call?.rating ?? null,
+        generatedAt: entry?.payload?.generatedAt ?? null,
+        ageHours: roundCacheAgeHours(entry?.ageHours)
+      };
+    })
+  };
+}
+
+async function scheduleTradingDecisionBackgroundRefresh({
+  accountId,
+  portfolioRoot,
+  loadTradingDecisionSnapshotFn = loadTradingDecisionSnapshot,
+  scheduleTradingAgentsRefreshFn = tradingAgentsBackgroundScheduler.schedule,
+  reason = "dashboard_background_refresh",
+  force = false
+} = {}) {
+  try {
+    const snapshot = await loadTradingDecisionSnapshotFn({
+      portfolioRoot,
+      accountId,
+      allowFixtureFallback: true,
+      now: new Date()
+    });
+    return scheduleTradingAgentsRefreshFn({
+      accountId,
+      portfolioRoot,
+      snapshot,
+      reason,
+      force
+    });
+  } catch (error) {
+    console.warn(
+      JSON.stringify(
+        {
+          status: "tradingagents_background_schedule_failed",
+          accountId,
+          reason,
+          message: String(error?.message ?? error)
+        },
+        null,
+        2
+      )
+    );
+    return {
+      scheduled: false,
+      reason: "tradingagents_background_schedule_failed"
+    };
+  }
+}
+
+function buildTradingDecisionRuntimeStatus(accountId) {
+  const state = tradingAgentsBackgroundScheduler.getState(accountId);
+  if (!state) {
+    return null;
+  }
+
+  return {
+    running: state.running === true,
+    lastQueuedAt: state.lastQueuedAt ?? null,
+    lastCompletedAt: state.lastCompletedAt ?? null,
+    lastReason: state.lastReason ?? null,
+    lastError: state.lastError ?? null,
+    lastSkipReason: state.lastSkipReason ?? null,
+    lastResult: state.lastResult
+      ? {
+          tradeDate: state.lastResult.tradeDate ?? null,
+          prewarmError: state.lastResult.prewarmError ?? null,
+          prewarm: state.lastResult.prewarm
+            ? {
+                requestedSymbols: state.lastResult.prewarm.requestedSymbols ?? [],
+                warmTargets: state.lastResult.prewarm.warmTargets ?? [],
+                warmed: state.lastResult.prewarm.warmed ?? [],
+                failed: state.lastResult.prewarm.failed ?? [],
+                finalCoverage: state.lastResult.prewarm.finalCoverage ?? null
+              }
+            : null,
+          decisionStatus: state.lastResult.decision?.decisionSnapshot?.status ?? null,
+          decisionMode: state.lastResult.decision?.mode ?? null,
+          fallbackReason: state.lastResult.decision?.diagnostics?.fallbackReason ?? null,
+          providerError: state.lastResult.decision?.diagnostics?.providerError ?? null
+        }
+      : null
+  };
+}
+
+async function runBackgroundRefreshTick(
+  refreshMs,
+  {
+    listAvailableAccountsFn = listAvailableAccounts,
+    getLivePayloadFn = getLivePayload,
+    loadTradingDecisionSnapshotFn = loadTradingDecisionSnapshot,
+    scheduleTradingAgentsRefreshFn = tradingAgentsBackgroundScheduler.schedule
+  } = {}
+) {
+  try {
+    const accounts = await listAvailableAccountsFn();
+    const targets =
+      Array.isArray(accounts) && accounts.length > 0
+        ? accounts.map((item) => item.id)
+        : [activeAccountId];
+
+    await Promise.all(
+      targets.map(async (accountId) => {
+        const portfolioRoot =
+          accountId === activeAccountId
+            ? activePortfolioRoot
+            : resolvePortfolioRoot({ user: accountId });
+        await getLivePayloadFn(refreshMs, accountId, true).catch(() => null);
+        await scheduleTradingDecisionBackgroundRefresh({
+          accountId,
+          portfolioRoot,
+          loadTradingDecisionSnapshotFn,
+          scheduleTradingAgentsRefreshFn,
+          reason: "dashboard_background_refresh"
+        });
+      })
+    );
+  } catch (error) {
+    console.warn(
+      JSON.stringify(
+        {
+          status: "background_refresh_failed",
+          message: String(error?.message ?? error)
+        },
+        null,
+        2
+      )
+    );
+  }
+}
+
+export function startBackgroundRefresh(
+  refreshMs,
+  deps = {}
+) {
   if (backgroundRefreshTimer) {
     clearInterval(backgroundRefreshTimer);
   }
 
-  backgroundRefreshTimer = setInterval(async () => {
-    try {
-      const accounts = await listAvailableAccounts();
-      const targets =
-        Array.isArray(accounts) && accounts.length > 0
-          ? accounts.map((item) => item.id)
-          : [activeAccountId];
-
-      await Promise.all(
-        targets.map((accountId) => getLivePayload(refreshMs, accountId, true).catch(() => null))
-      );
-    } catch (error) {
-      console.warn(
-        JSON.stringify(
-          {
-            status: "background_refresh_failed",
-            message: String(error?.message ?? error)
-          },
-          null,
-          2
-        )
-      );
-    }
-  }, Math.max(Number(refreshMs) || defaultRefreshMs, 15_000));
+  const tick = () => runBackgroundRefreshTick(refreshMs, deps);
+  backgroundRefreshTimer = setInterval(
+    tick,
+    Math.max(Number(refreshMs) || defaultRefreshMs, 15_000)
+  );
+  tick().catch(() => null);
+  return backgroundRefreshTimer;
 }
 
 const args = parseArgs(process.argv.slice(2));
 
-export function createFundsLiveDashboardServer(runtimeArgs = parseArgs(process.argv.slice(2))) {
+export function createFundsLiveDashboardServer(
+  runtimeArgs = parseArgs(process.argv.slice(2)),
+  deps = {}
+) {
   activePortfolioRoot = resolvePortfolioRoot(runtimeArgs);
   activeAccountId = resolveAccountId(runtimeArgs);
+  const listAvailableAccountsFn = deps.listAvailableAccounts ?? listAvailableAccounts;
+  const getLivePayloadFn = deps.getLivePayload ?? getLivePayload;
+  const loadTradingAdviceSnapshotFn = deps.loadTradingAdviceSnapshot ?? loadTradingAdviceSnapshot;
+  const loadTradingDecisionSnapshotFn = deps.loadTradingDecisionSnapshot ?? loadTradingDecisionSnapshot;
+  const buildMarketTopicsPayloadFn = deps.buildMarketTopicsPayload ?? buildMarketTopicsPayload;
+  const scheduleTradingAgentsRefreshFn =
+    deps.scheduleTradingAgentsRefresh ?? tradingAgentsBackgroundScheduler.schedule;
+  const getTradingAgentsRefreshStateFn =
+    deps.getTradingAgentsRefreshState ?? buildTradingDecisionRuntimeStatus;
 
   const server = createServer(async (request, response) => {
     const requestUrl = new URL(request.url ?? "/", `http://${runtimeArgs.host}:${runtimeArgs.port}`);
@@ -4943,7 +6725,89 @@ export function createFundsLiveDashboardServer(runtimeArgs = parseArgs(process.a
       if (requestUrl.pathname === "/api/live-funds") {
         const force = requestUrl.searchParams.get("force") === "1";
         const requestedAccountId = requestUrl.searchParams.get("account") || activeAccountId;
-        const payload = await getLivePayload(runtimeArgs.refreshMs, requestedAccountId, force);
+        const payload = await getLivePayloadFn(runtimeArgs.refreshMs, requestedAccountId, force);
+        sendJson(response, 200, payload);
+        return;
+      }
+
+      if (requestUrl.pathname === "/api/trading-advice") {
+        const availableAccounts = await listAvailableAccountsFn();
+        const accountId = pickValidAccountId(
+          requestUrl.searchParams.get("account"),
+          availableAccounts,
+          activeAccountId
+        );
+        const portfolioRoot =
+          accountId === activeAccountId
+            ? activePortfolioRoot
+            : resolvePortfolioRoot({ user: accountId });
+        const payload = await loadTradingAdviceSnapshotFn({
+          portfolioRoot,
+          accountId,
+          allowFixtureFallback: true,
+          now: new Date()
+        });
+        sendJson(response, 200, payload);
+        return;
+      }
+
+      if (requestUrl.pathname === "/api/trading-decision") {
+        const availableAccounts = await listAvailableAccountsFn();
+        const accountId = pickValidAccountId(
+          requestUrl.searchParams.get("account"),
+          availableAccounts,
+          activeAccountId
+        );
+        const portfolioRoot =
+          accountId === activeAccountId
+            ? activePortfolioRoot
+            : resolvePortfolioRoot({ user: accountId });
+        const payload = await loadTradingDecisionSnapshotFn({
+          portfolioRoot,
+          accountId,
+          allowFixtureFallback: true,
+          now: new Date()
+        });
+        const forceRefresh =
+          requestUrl.searchParams.get("refresh") === "1" ||
+          requestUrl.searchParams.get("prewarm") === "1";
+        scheduleTradingDecisionBackgroundRefresh({
+          accountId,
+          portfolioRoot,
+          loadTradingDecisionSnapshotFn: async () => payload,
+          scheduleTradingAgentsRefreshFn,
+          reason: forceRefresh ? "api_trading_decision_manual_prewarm" : "api_trading_decision_read",
+          force: forceRefresh
+        }).catch(() => null);
+        const symbolCacheCoverage = await buildTradingAgentsSymbolCacheStatus({
+          portfolioRoot,
+          decisionSnapshot: payload,
+          now: new Date()
+        });
+        sendJson(response, 200, {
+          ...payload,
+          symbolCacheCoverage,
+          runtimeRefresh: getTradingAgentsRefreshStateFn(accountId)
+        });
+        return;
+      }
+
+      if (requestUrl.pathname === "/api/market-topics") {
+        const availableAccounts = await listAvailableAccountsFn();
+        const accountId = pickValidAccountId(
+          requestUrl.searchParams.get("account"),
+          availableAccounts,
+          activeAccountId
+        );
+        const portfolioRoot =
+          accountId === activeAccountId
+            ? activePortfolioRoot
+            : resolvePortfolioRoot({ user: accountId });
+        const payload = await buildMarketTopicsPayloadFn({
+          portfolioRoot,
+          accountId,
+          now: new Date()
+        });
         sendJson(response, 200, payload);
         return;
       }
@@ -4951,7 +6815,7 @@ export function createFundsLiveDashboardServer(runtimeArgs = parseArgs(process.a
       if (requestUrl.pathname === "/api/live-funds/health") {
         const requestedAccountId = requestUrl.searchParams.get("account") || activeAccountId;
         try {
-          const payload = await getLivePayload(runtimeArgs.refreshMs, requestedAccountId, false);
+          const payload = await getLivePayloadFn(runtimeArgs.refreshMs, requestedAccountId, false);
           sendJson(response, 200, buildLiveHealthPayload(payload));
         } catch (error) {
           const payload = error?.readiness ?? (await buildFundsDashboardHealth(requestedAccountId));
@@ -4967,7 +6831,7 @@ export function createFundsLiveDashboardServer(runtimeArgs = parseArgs(process.a
       }
 
       if (requestUrl.pathname === "/" || requestUrl.pathname === "/index.html") {
-        const availableAccounts = await listAvailableAccounts();
+        const availableAccounts = await listAvailableAccountsFn();
         const initialAccountId = pickValidAccountId(
           requestUrl.searchParams.get("account"),
           availableAccounts,
@@ -4984,6 +6848,40 @@ export function createFundsLiveDashboardServer(runtimeArgs = parseArgs(process.a
         return;
       }
 
+      if (requestUrl.pathname === "/advice") {
+        const availableAccounts = await listAvailableAccountsFn();
+        const initialAccountId = pickValidAccountId(
+          requestUrl.searchParams.get("account"),
+          availableAccounts,
+          activeAccountId
+        );
+        sendHtml(
+          response,
+          advicePage({
+            initialAccountId,
+            availableAccounts
+          })
+        );
+        return;
+      }
+
+      if (requestUrl.pathname === "/market") {
+        const availableAccounts = await listAvailableAccountsFn();
+        const initialAccountId = pickValidAccountId(
+          requestUrl.searchParams.get("account"),
+          availableAccounts,
+          activeAccountId
+        );
+        sendHtml(
+          response,
+          marketTopicsPage({
+            initialAccountId,
+            availableAccounts
+          })
+        );
+        return;
+      }
+
       sendJson(response, 404, {
         error: "not_found",
         path: requestUrl.pathname
@@ -4991,7 +6889,7 @@ export function createFundsLiveDashboardServer(runtimeArgs = parseArgs(process.a
     } catch (error) {
       const readiness = error?.readiness ?? null;
       if (readiness?.state === "blocked") {
-        const availableAccounts = await listAvailableAccounts();
+        const availableAccounts = await listAvailableAccountsFn();
         const accountId = readiness?.accountId ?? resolveAccountId();
         sendJson(response, 200, {
           generatedAt: new Date().toISOString(),
@@ -5040,7 +6938,6 @@ if (isDirectExecution) {
   server.listen(args.port, args.host, async () => {
     const url = `http://${args.host}:${args.port}`;
     startBackgroundRefresh(args.refreshMs);
-    getLivePayload(args.refreshMs, activeAccountId, true).catch(() => null);
     await maybeOpenBrowser(`${url}/?account=${encodeURIComponent(activeAccountId)}`, args.open);
     console.log(
       JSON.stringify(

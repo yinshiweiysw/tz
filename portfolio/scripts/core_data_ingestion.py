@@ -806,13 +806,31 @@ def ensure_schema(connection: sqlite3.Connection) -> None:
           erp_pct REAL,
           updated_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS factor_history (
+          date TEXT NOT NULL,
+          factor_key TEXT NOT NULL,
+          scope_type TEXT NOT NULL,
+          scope_key TEXT NOT NULL,
+          raw_value REAL,
+          z_score REAL,
+          effective_z_score REAL,
+          quality TEXT DEFAULT 'fresh',
+          source TEXT,
+          PRIMARY KEY (date, factor_key, scope_type, scope_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_factor_history_date
+          ON factor_history(date);
+        CREATE INDEX IF NOT EXISTS idx_factor_history_key
+          ON factor_history(factor_key);
+        CREATE INDEX IF NOT EXISTS idx_factor_history_scope
+          ON factor_history(scope_type, scope_key);
         """
     )
 
 
 def fetch_table_counts(connection: sqlite3.Connection) -> dict[str, int]:
     counts: dict[str, int] = {}
-    for table_name in ("daily_prices", "macro_indicators"):
+    for table_name in ("daily_prices", "macro_indicators", "factor_history"):
         counts[table_name] = int(connection.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0])
     return counts
 

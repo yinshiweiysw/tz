@@ -1,9 +1,61 @@
 import { access, readdir } from "node:fs/promises";
+import { existsSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-export const workspaceRoot = "/Users/yinshiwei/codex/tz";
-export const defaultPortfolioRoot = `${workspaceRoot}/portfolio`;
-export const portfolioUsersRoot = `${workspaceRoot}/portfolio_users`;
+const currentFilePath = fileURLToPath(import.meta.url);
+const derivedWorkspaceRoot = path.resolve(path.dirname(currentFilePath), "..", "..", "..");
+
+const PORTFOLIO_STATE_ANCHORS = [
+  ["state", "portfolio_state.json"],
+  ["data", "dashboard_state.json"],
+  ["data", "live_funds_snapshot.json"],
+  ["latest.json"],
+  ["snapshots", "latest_raw.json"]
+];
+
+function countPortfolioStateAnchors(portfolioRoot) {
+  return PORTFOLIO_STATE_ANCHORS.reduce(
+    (count, segments) => count + (existsSync(path.join(portfolioRoot, ...segments)) ? 1 : 0),
+    0
+  );
+}
+
+function discoverDefaultPortfolioRoot(root) {
+  const parentRoot = path.dirname(root);
+  let siblingRoots = [];
+
+  try {
+    siblingRoots = readdirSync(parentRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(parentRoot, entry.name));
+  } catch {
+    siblingRoots = [];
+  }
+
+  const candidates = [root, ...siblingRoots]
+    .map((candidateRoot) => path.resolve(candidateRoot))
+    .filter((candidateRoot, index, items) => items.indexOf(candidateRoot) === index)
+    .map((candidateRoot) => {
+      const candidatePortfolioRoot = path.join(candidateRoot, "portfolio");
+      const hasAssetMaster = existsSync(path.join(candidatePortfolioRoot, "config", "asset_master.json"));
+      return {
+        portfolioRoot: candidatePortfolioRoot,
+        score: hasAssetMaster ? countPortfolioStateAnchors(candidatePortfolioRoot) : -1,
+        preferred: candidateRoot === root
+      };
+    })
+    .filter((candidate) => candidate.score >= 0)
+    .sort((left, right) => right.score - left.score || Number(right.preferred) - Number(left.preferred));
+
+  return candidates[0]?.portfolioRoot ?? path.join(root, "portfolio");
+}
+
+export const workspaceRoot = path.resolve(
+  String(process.env.PORTFOLIO_WORKSPACE_ROOT ?? derivedWorkspaceRoot).trim() || derivedWorkspaceRoot
+);
+export const defaultPortfolioRoot = discoverDefaultPortfolioRoot(workspaceRoot);
+export const portfolioUsersRoot = path.join(path.dirname(defaultPortfolioRoot), "portfolio_users");
 
 const MAIN_ACCOUNT_ALIASES = new Set(["", "main", "default", "primary", "tz"]);
 const INVALID_ACCOUNT_IDS = new Set(["true", "false", "null", "undefined", "nan"]);

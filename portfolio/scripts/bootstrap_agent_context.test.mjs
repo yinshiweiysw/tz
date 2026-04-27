@@ -74,6 +74,11 @@ test("buildAgentBootstrapContext exposes canonical routes, health, and separated
         meta: {
           dataFreshnessSummary: "ready"
         },
+        systemState: {
+          researchReadiness: {
+            level: "ready"
+          }
+        },
         marketContext: {
           newsCoverageReadiness: "ok",
           eventWatch: {
@@ -134,6 +139,22 @@ test("buildAgentBootstrapContext exposes canonical routes, health, and separated
     )}\n`,
     "utf8"
   );
+  await writeFile(
+    path.join(portfolioRoot, "data", "trading_decision_snapshot.json"),
+    `${JSON.stringify(
+      {
+        generatedAt: "2026-04-08T06:32:00.000Z",
+        asOf: "2026-04-08",
+        mode: "live",
+        provider: "glm",
+        status: "limited_execute",
+        riskLight: "green"
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
 
   const context = await buildAgentBootstrapContext(
     {
@@ -159,45 +180,41 @@ test("buildAgentBootstrapContext exposes canonical routes, health, and separated
   assert.equal(context.accountSummary.tradeAvailableCashCny, 120000);
   assert.equal(context.accountSummary.cashLikeFundAssetsCny, 85000);
   assert.equal(context.accountSummary.liquiditySleeveAssetsCny, 85000);
-  assert.equal(context.intentRouting["分析当前行情"].primaryScript.endsWith("generate_dialogue_analysis_contract.mjs"), true);
-  assert.equal(context.intentRouting["分析当前行情"].requiresExternalNewsRefresh, true);
-  assert.equal(context.intentRouting["分析当前行情"].minimumNewsSources, 2);
-  assert.equal(context.intentRouting["给我执行清单"].primaryScript.endsWith("trade_generator.py"), true);
-  assert.equal(context.intentRouting["看看我现在持仓"].primaryScript.endsWith("generate_risk_dashboard.mjs"), true);
+  assert.deepEqual(context.productSurface, ["基金面板", "交易主脑", "市场/专题"]);
   assert.equal(context.intentRouting["打开基金面板"].primaryScript.endsWith("open_funds_live_dashboard.mjs"), true);
-  assert.equal(context.intentRouting["做回测"].primaryScript.endsWith("run_portfolio_backtest.py"), true);
-  assert.equal(context.intentRouting["收盘后生成日报"].primaryScript.endsWith("generate_market_pulse.mjs"), true);
+  assert.equal(context.intentRouting["刷新基金状态"].primaryScript.endsWith("refresh_account_sidecars.mjs"), true);
+  assert.equal(context.intentRouting["记录基金交易"].primaryScript.endsWith("record_manual_fund_trades.mjs"), true);
+  assert.equal(context.intentRouting["生成交易建议"].primaryScript.endsWith("run_tradingagents_decision_cycle.mjs"), true);
+  assert.equal(context.intentRouting["今天该不该交易"].primaryScript.endsWith("run_tradingagents_decision_cycle.mjs"), true);
+  assert.equal(context.intentRouting["打开市场专题"].routePath, "/market");
   assert.deepEqual(Object.keys(context.intentRouting), [
-    "分析当前行情",
+    "打开基金面板",
+    "刷新基金状态",
+    "记录基金交易",
+    "生成交易建议",
     "今天该不该交易",
     "给我执行清单",
-    "我刚买了/卖了/转换了",
-    "看看我现在持仓",
-    "打开基金面板",
-    "基金面板为什么不对",
-    "刷新市场数据",
-    "做回测",
-    "收盘后生成日报"
+    "看看风险灯",
+    "查看主链决策",
+    "打开市场专题"
   ]);
   assert.deepEqual(context.bootstrapReadOrder, [
     "state-manifest.json",
     "data/agent_bootstrap_context.json",
-    "state/portfolio_state.json"
+    "state/portfolio_state.json",
+    "data/trading_decision_snapshot.json",
+    "data/trading_advice_snapshot.json"
   ]);
   assert.equal(
-    context.intentRouting["分析当前行情"].requiredReads.includes("data/agent_runtime_context.json"),
+    context.intentRouting["生成交易建议"].requiredReads.includes("config/tradingagents_bridge.json"),
     true
   );
   assert.equal(
-    context.intentRouting["分析当前行情"].requiredReads.includes(
-      "data/strategy_decision_contract.json"
-    ),
+    context.intentRouting["打开基金面板"].requiredReads.includes("data/dashboard_state.json"),
     true
   );
   assert.equal(
-    context.intentRouting["分析当前行情"].requiredReads.includes(
-      "data/high_impact_event_calendar.json"
-    ),
+    context.intentRouting["刷新基金状态"].requiredReads.includes("data/nightly_confirmed_nav_status.json"),
     true
   );
   assert.equal(context.entrypointIntegrity.accountIdsAligned, true);
@@ -206,12 +223,14 @@ test("buildAgentBootstrapContext exposes canonical routes, health, and separated
   assert.equal(context.entrypointIntegrity.runtimePositionCount, 1);
   assert.equal(context.entrypointIntegrity.contractPositionFactCount, 1);
   assert.equal(context.analysisReadiness, "ready");
-  assert.equal(context.decisionReadiness, "ready");
+  assert.equal(context.decisionReadiness, "limited_execute");
   assert.equal(context.newsCoverageReadiness, "ok");
   assert.equal(context.eventWatchReadiness, "ready");
   assert.equal(context.upcomingHighImpactEventCount, 2);
   assert.equal(context.nextHighImpactEvent?.eventId, "cn-cpi-2026-04");
   assert.equal(context.portfolioFactsVersion, 1);
+  assert.equal(context.tradingDecision.status, "limited_execute");
+  assert.equal(context.tradingDecision.provider, "glm");
   assert.equal(context.entrypointIntegrity.runtimeGeneratedAt, "2026-04-08T06:30:00.000Z");
   assert.equal(
     context.entrypointIntegrity.strategyDecisionContractGeneratedAt,

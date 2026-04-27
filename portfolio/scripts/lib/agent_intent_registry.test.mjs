@@ -3,30 +3,33 @@ import assert from "node:assert/strict";
 
 import { buildAgentIntentRegistry } from "./agent_intent_registry.mjs";
 
-test("buildAgentIntentRegistry exposes every supported top-level user intent", () => {
+test("buildAgentIntentRegistry exposes the simplified fund routes plus TradingAgents trading aliases", () => {
   const registry = buildAgentIntentRegistry("/tmp/portfolio");
 
   assert.deepEqual(Object.keys(registry), [
-    "分析当前行情",
+    "打开基金面板",
+    "刷新基金状态",
+    "记录基金交易",
+    "生成交易建议",
     "今天该不该交易",
     "给我执行清单",
-    "我刚买了/卖了/转换了",
-    "看看我现在持仓",
-    "打开基金面板",
-    "基金面板为什么不对",
-    "刷新市场数据",
-    "做回测",
-    "收盘后生成日报"
+    "看看风险灯",
+    "查看主链决策",
+    "打开市场专题"
   ]);
-  assert.equal(registry["分析当前行情"].requiresExternalNewsRefresh, true);
-  assert.equal(registry["分析当前行情"].minimumNewsSources, 2);
+  assert.equal(registry["打开基金面板"].routePath, "/");
+  assert.equal(registry["打开市场专题"].routePath, "/market");
+  assert.equal(registry["生成交易建议"].primaryScript.endsWith("run_tradingagents_decision_cycle.mjs"), true);
+  assert.equal(registry["今天该不该交易"].routePath, "/advice");
+  assert.equal(registry["给我执行清单"].routePath, "/advice");
 });
 
-test("agent intent registry requires runtime context and strategy decision contract for all investment intents", () => {
+test("simplified agent intent registry keeps fund truth local and routes trading aliases through decision cycle", () => {
   const registry = buildAgentIntentRegistry("/tmp/portfolio");
-  for (const key of ["分析当前行情", "今天该不该交易", "给我执行清单", "看看我现在持仓"]) {
-    const reads = registry[key].requiredReads;
-    assert.equal(reads.includes("data/agent_runtime_context.json"), true);
-    assert.equal(reads.includes("data/strategy_decision_contract.json"), true);
-  }
+
+  assert.equal(registry["生成交易建议"].requiredReads.includes("config/tradingagents_bridge.json"), true);
+  assert.equal(registry["生成交易建议"].requiredReads.includes("data/trading_decision_snapshot.json"), true);
+  assert.equal(registry["生成交易建议"].forbiddenBehaviors.includes("不要写 execution_ledger.json"), true);
+  assert.equal(registry["看看风险灯"].requiredReads.includes("data/trading_decision_snapshot.json"), true);
+  assert.equal(registry["刷新基金状态"].requiredReads.includes("data/nightly_confirmed_nav_status.json"), true);
 });

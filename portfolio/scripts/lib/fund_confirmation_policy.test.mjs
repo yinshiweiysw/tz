@@ -40,6 +40,42 @@ test("classifyFundConfirmation treats QDII holiday-stretched lag as normal_lag w
   assert.equal(result.confirmedNavDate, "2026-04-03");
 });
 
+test("classifyFundConfirmation keeps QDII Friday NAV publication pending until next CN nightly cutoff", () => {
+  const result = classifyFundConfirmation({
+    targetDate: "2026-04-25",
+    confirmedNavDate: "2026-04-23",
+    asset: {
+      symbol: "006075",
+      market: "US",
+      category: "美股指数/QDII",
+      name: "博时标普500ETF联接(QDII)C"
+    },
+    now: "2026-04-27T09:30:00+08:00"
+  });
+
+  assert.equal(result.state, "normal_lag");
+  assert.equal(result.expectedConfirmedDate, "2026-04-24");
+  assert.equal(result.pendingPublicationLagUntilCutoff, true);
+});
+
+test("classifyFundConfirmation flips QDII publication lag to late_missing after next CN nightly cutoff", () => {
+  const result = classifyFundConfirmation({
+    targetDate: "2026-04-25",
+    confirmedNavDate: "2026-04-23",
+    asset: {
+      symbol: "006075",
+      market: "US",
+      category: "美股指数/QDII",
+      name: "博时标普500ETF联接(QDII)C"
+    },
+    now: "2026-04-27T23:30:00+08:00"
+  });
+
+  assert.equal(result.state, "late_missing");
+  assert.equal(result.expectedConfirmedDate, "2026-04-24");
+  assert.equal(result.pendingPublicationLagUntilCutoff, false);
+});
+
 test("classifyFundConfirmation marks Hong Kong holiday carry-over as holiday_delay", () => {
   const result = classifyFundConfirmation({
     targetDate: "2026-04-03",
