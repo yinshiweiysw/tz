@@ -1760,12 +1760,20 @@ test("health endpoint returns degraded JSON instead of 500 when watchlist is mis
       "utf8"
     );
 
-    const server = createFundsLiveDashboardServer({
-      host: "127.0.0.1",
-      port: 0,
-      refreshMs: 15000,
-      portfolioRoot
-    });
+    const server = createFundsLiveDashboardServer(
+      {
+        host: "127.0.0.1",
+        port: 0,
+        refreshMs: 15000,
+        portfolioRoot
+      },
+      {
+        scheduleTradingAgentsRefresh: () => ({
+          scheduled: false,
+          reason: "test_no_background_refresh"
+        })
+      }
+    );
 
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
     const address = server.address();
@@ -1793,12 +1801,20 @@ test("live funds endpoint returns blocked JSON instead of 503 when the account s
   process.env.PORTFOLIO_ROOT = portfolioRoot;
 
   try {
-    const server = createFundsLiveDashboardServer({
-      host: "127.0.0.1",
-      port: 0,
-      refreshMs: 15000,
-      portfolioRoot
-    });
+    const server = createFundsLiveDashboardServer(
+      {
+        host: "127.0.0.1",
+        port: 0,
+        refreshMs: 15000,
+        portfolioRoot
+      },
+      {
+        scheduleTradingAgentsRefresh: () => ({
+          scheduled: false,
+          reason: "test_no_background_refresh"
+        })
+      }
+    );
 
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
     const address = server.address();
@@ -2450,7 +2466,40 @@ test("dashboard server exposes simplified advice and market routes", async () =>
   assert.match(adviceHtml, /当前持仓/);
   assert.match(adviceHtml, /建议区间/);
   assert.match(adviceHtml, /decisionBriefList/);
+  assert.match(adviceHtml, /今日主结论/);
+  assert.match(adviceHtml, /为什么没有真实动作/);
+  assert.match(adviceHtml, /今天只看三件事/);
+  assert.match(adviceHtml, /基金级 live 主脑/);
+  assert.match(adviceHtml, /深看基金/);
+  assert.match(adviceHtml, /全持仓基金/);
+  assert.match(adviceHtml, /基金原生主脑/);
+  assert.match(adviceHtml, /fundNativeBtn/);
   assert.match(adviceHtml, /TradingAgents 预热链/);
+  assert.match(adviceHtml, /今日建议深看/);
+  assert.match(adviceHtml, /deepDiveCandidates/);
+  assert.match(adviceHtml, /<summary>详情<\/summary>/);
+  assert.match(adviceHtml, /基金级主脑结论/);
+  assert.match(adviceHtml, /主脑原因/);
+  assert.match(adviceHtml, /主脑观察点/);
+  assert.match(adviceHtml, /同类\/重复暴露/);
+  assert.match(adviceHtml, /动作边界/);
+  assert.match(adviceHtml, /本地触发 \/ 输入/);
+  assert.match(adviceHtml, /主脑输入/);
+  assert.match(adviceHtml, /基金资料/);
+  assert.doesNotMatch(adviceHtml, /深看详情 \/ 白话版/);
+  assert.match(adviceHtml, /方向观察/);
+  assert.match(adviceHtml, /动作受限/);
+  assert.match(adviceHtml, /数据限制/);
+  assert.match(adviceHtml, /必须看/);
+  assert.match(adviceHtml, /可选看/);
+  assert.match(adviceHtml, /基金状态矩阵/);
+  assert.match(adviceHtml, /基金资料完整度/);
+  assert.match(adviceHtml, /profile-tag-line/);
+  assert.match(adviceHtml, /fundStatusMatrix/);
+  assert.match(adviceHtml, /同类基金 \/ 代表基金/);
+  assert.match(adviceHtml, /peerFundGroups/);
+  assert.doesNotMatch(adviceHtml, /逐基金观察/);
+  assert.match(adviceHtml, /全组合观察/);
   assert.match(adviceHtml, /markdown-body/);
   assert.match(adviceHtml, /证据详情/);
   assert.doesNotMatch(adviceHtml, /reference_close/);
@@ -2492,8 +2541,22 @@ test("dashboard server exposes trading advice and market topics APIs", async () 
       {
         account_id: "main",
         snapshot_date: "2026-04-24",
-        positions: [],
-        summary: {}
+        positions: [
+          {
+            code: "019118",
+            symbol: "019118",
+            name: "景顺长城纳斯达克科技市值加权ETF联接(QDII)E",
+            amount: 18000,
+            daily_pnl: 90,
+            holding_pnl: 450,
+            confirmation_state: "holiday_delay",
+            status: "active"
+          }
+        ],
+        summary: {
+          total_portfolio_assets_cny: 50000,
+          trade_available_cash_cny: 5000
+        }
       },
       null,
       2
@@ -2510,6 +2573,26 @@ test("dashboard server exposes trading advice and market topics APIs", async () 
         assets: [
           { symbol: "019118", name: "景顺长城纳斯达克科技市值加权ETF联接(QDII)E", bucket: "GLB_MOM" }
         ]
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  await writeFile(
+    path.join(portfolioRoot, "config", "fund_factor_profiles.json"),
+    `${JSON.stringify(
+      {
+        asOf: "2026-04-28",
+        profiles: {
+          "019118": {
+            primaryFactor: "US_TECH",
+            secondaryFactors: [],
+            proxySymbols: ["QQQ"],
+            region: "US",
+            confidence: 0.82
+          }
+        }
       },
       null,
       2
@@ -2592,6 +2675,71 @@ test("dashboard server exposes trading advice and market topics APIs", async () 
     "utf8"
   );
   await writeFile(
+    path.join(portfolioRoot, "data", "fund_live_analysis_snapshot.json"),
+    `${JSON.stringify(
+      {
+        generatedAt: "2026-04-24T10:08:00+08:00",
+        asOf: "2026-04-24",
+        accountId: "main",
+        mode: "live",
+        source: "TradingAgents fund live analyzer",
+        status: "ready",
+        scope: "deep_dive",
+        count: 1,
+        analyses: [
+          {
+            fundCode: "019118",
+            fundName: "景顺长城纳斯达克科技市值加权ETF联接(QDII)E",
+            provider: "glm",
+            model: "glm-5.1",
+            status: "success",
+            verdict: "continue_hold",
+            verdictLabel: "继续持有",
+            riskLevel: "medium",
+            headline: "纳指基金可继续观察持有。",
+            reasons: ["代理资产仍偏强"],
+            watchPoints: ["观察 QQQ 是否继续走强"],
+            actionBoundary: "只读复核，不构成订单。"
+          }
+        ]
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  await writeFile(
+    path.join(portfolioRoot, "data", "fund_native_analysis_snapshot.json"),
+    `${JSON.stringify(
+      {
+        generatedAt: "2026-04-24T10:09:00+08:00",
+        mode: "fund_native",
+        source: "TradingAgents fund-native compatibility mode",
+        status: "ready",
+        scope: "deep_dive",
+        count: 1,
+        analyses: [
+          {
+            fundCode: "019118",
+            fundName: "景顺长城纳斯达克科技市值加权ETF联接(QDII)E",
+            provider: "glm",
+            status: "success",
+            verdictLabel: "可考虑买入",
+            oneLine: "基金原生主脑认为可尾盘前复核申购。",
+            execution: {
+              executionIntent: "review_only",
+              fundExecutionStyle: "end_of_day_t1_review",
+              timingNote: "尾盘前复核，按基金净值确认。"
+            }
+          }
+        ]
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  await writeFile(
     marketBriefPath,
     "# 2026-04-24 市场日报\n\n成长风格继续偏强，市场更像结构轮动。\n",
     "utf8"
@@ -2601,12 +2749,20 @@ test("dashboard server exposes trading advice and market topics APIs", async () 
   process.env.PORTFOLIO_ROOT = portfolioRoot;
 
   try {
-    const server = createFundsLiveDashboardServer({
-      host: "127.0.0.1",
-      port: 0,
-      refreshMs: 15000,
-      portfolioRoot
-    });
+    const server = createFundsLiveDashboardServer(
+      {
+        host: "127.0.0.1",
+        port: 0,
+        refreshMs: 15000,
+        portfolioRoot
+      },
+      {
+        scheduleTradingAgentsRefresh: () => ({
+          scheduled: false,
+          reason: "test_no_background_refresh"
+        })
+      }
+    );
 
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
     const address = server.address();
@@ -2614,15 +2770,52 @@ test("dashboard server exposes trading advice and market topics APIs", async () 
 
     const advicePayload = await fetch(`${baseUrl}/api/trading-advice?account=main`).then((response) => response.json());
     const decisionPayload = await fetch(`${baseUrl}/api/trading-decision?account=main`).then((response) => response.json());
+    const adapterPayload = await fetch(`${baseUrl}/api/fund-tradingagents-adapter?account=main`).then((response) => response.json());
+    const fundLivePayload = await fetch(`${baseUrl}/api/fund-live-analysis?account=main`).then((response) => response.json());
+    const fundNativePayload = await fetch(`${baseUrl}/api/fund-native-analysis?account=main`).then((response) => response.json());
     const marketPayload = await fetch(`${baseUrl}/api/market-topics?account=main`).then((response) => response.json());
 
     assert.equal(advicePayload.source, "TradingAgents");
     assert.equal(advicePayload.fundSuggestions[0].fundCode, "019118");
     assert.equal(decisionPayload.status, "limited_execute");
     assert.equal(decisionPayload.riskLight, "green");
-    assert.equal(decisionPayload.symbolCacheCoverage.provider, "deepseek");
+    assert.equal(decisionPayload.symbolCacheCoverage.provider, "glm");
     assert.equal(decisionPayload.symbolCacheCoverage.counts.total, 5);
     assert.equal(decisionPayload.symbolCacheCoverage.counts.missing, 5);
+    assert.equal(Array.isArray(decisionPayload.symbolCacheCoverage.providers), true);
+    assert.equal(Array.isArray(decisionPayload.providerHealth), true);
+    assert.equal(decisionPayload.providerHealth[0].provider, "glm");
+    assert.equal(decisionPayload.providerHealth[0].brainProfile, "fast");
+    assert.equal(decisionPayload.providerHealth[0].status, "missing_cache");
+    assert.equal(decisionPayload.providerRuntime.brainProfile, "fast");
+    assert.equal(decisionPayload.providerRuntime.providerAttempted[0].cacheCoverage.counts.total, 5);
+    assert.equal(Array.isArray(decisionPayload.fundAnalyses), true);
+    assert.equal(decisionPayload.fundAnalyses.length, 1);
+    assert.equal(decisionPayload.fundAnalyses[0].factorProfile.primaryFactor, "US_TECH");
+    assert.equal(typeof decisionPayload.fundAnalyses[0].researchProfile?.profileOneLine, "string");
+    assert.equal(typeof decisionPayload.fundAnalyses[0].researchProfileQuality?.status, "string");
+    assert.equal(Array.isArray(decisionPayload.fundAnalyses[0].researchProfileQuality?.tags), true);
+    assert.match(decisionPayload.fundAnalyses[0].factorOneLine, /美股科技/);
+    assert.equal(typeof decisionPayload.fundAnalyses[0].deepDiveTrigger?.needed, "boolean");
+    assert.equal(typeof decisionPayload.portfolioAnalysis?.oneLine, "string");
+    assert.equal(decisionPayload.portfolioAnalysis.factorExposureSummary[0].factor, "US_TECH");
+    assert.equal(Array.isArray(decisionPayload.portfolioAnalysis.deepDiveCandidates), true);
+    assert.equal(Array.isArray(decisionPayload.portfolioAnalysis.peerGroupSummary), true);
+    assert.equal(decisionPayload.fundTradingAgentsAdapter.adapterMode, "context_only");
+    assert.equal(Array.isArray(decisionPayload.fundTradingAgentsAdapter.contexts), true);
+    assert.equal(adapterPayload.adapterMode, "context_only");
+    assert.equal(Array.isArray(adapterPayload.contexts), true);
+    assert.equal(decisionPayload.fundLiveAnalysis.status, "ready");
+    assert.equal(decisionPayload.fundLiveBrainSummary.statusLabel, "基金级 live 已完成");
+    assert.match(decisionPayload.fundLivePortfolioConclusion.oneLine, /基金级 live 主脑/);
+    assert.equal(decisionPayload.fundNativeAnalysis.status, "ready");
+    assert.equal(decisionPayload.fundNativeAnalysis.analyses[0].fundCode, "019118");
+    assert.equal(fundNativePayload.status, "ready");
+    assert.equal(fundNativePayload.analyses[0].verdictLabel, "可考虑买入");
+    assert.equal(fundLivePayload.summary.coverageLabel, "1/1");
+    assert.match(fundLivePayload.portfolioConclusion.oneLine, /基金级 live 主脑/);
+    assert.equal(fundLivePayload.analyses[0].verdict, "continue_hold");
+    assert.equal(typeof decisionPayload.marketDataTier, "string");
     assert.match(marketPayload.headline, /结构轮动|偏强/);
     assert.equal(Array.isArray(marketPayload.reports), true);
     assert.equal(typeof marketPayload.reports[0].stalenessLabel, "string");
@@ -2638,14 +2831,117 @@ test("dashboard server exposes trading advice and market topics APIs", async () 
   }
 });
 
-test("dashboard trading decision API returns snapshot immediately and queues background refresh for degraded state", async () => {
-  const refreshCalls = [];
+test("live funds health exposes confirmed nav diagnostics for late missing rows", async () => {
   const server = createFundsLiveDashboardServer(
     {
       host: "127.0.0.1",
       port: 0,
       refreshMs: 15000,
-      portfolioRoot: "/tmp/tradingagents-dashboard"
+      portfolioRoot: "/tmp/funds-dashboard-health-diagnostics"
+    },
+    {
+      getLivePayload: async () => ({
+        readiness: {
+          state: "degraded",
+          confirmedNavState: "late_missing"
+        },
+        snapshotDate: "2026-04-25",
+        accountingState: "observation_only_stale_snapshot",
+        confirmedNavStatus: {
+          state: "late_missing",
+          targetDate: "2026-04-25",
+          accountRun: {
+            finishedAt: "2026-04-28T01:10:00.000Z"
+          }
+        },
+        summary: {
+          activeFundCount: 2,
+          confirmedFundCount: 1,
+          normalLagFundCount: 0,
+          lateMissingFundCount: 1,
+          confirmationCoveragePct: 50
+        },
+        rows: [
+          {
+            code: "000001",
+            name: "测试基金A",
+            confirmationState: "confirmed",
+            confirmedNavDate: "2026-04-25"
+          },
+          {
+            code: "000002",
+            name: "测试基金B",
+            confirmationState: "late_missing",
+            confirmationLabel: "确认净值待补 · 预期2026-04-25",
+            confirmedNavDate: "2026-04-24",
+            expectedConfirmedDate: "2026-04-25"
+          }
+        ]
+      })
+    }
+  );
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const payload = await fetch(`http://127.0.0.1:${address.port}/api/live-funds/health?account=main`).then((response) =>
+      response.json()
+    );
+
+    assert.equal(payload.confirmedNavDiagnostics.state, "late_missing");
+    assert.equal(payload.confirmedNavDiagnostics.pendingConfirmFundCount, 1);
+    assert.equal(payload.confirmedNavDiagnostics.strictComparable, false);
+    assert.equal(payload.lateMissingFunds[0].code, "000002");
+    assert.equal(payload.lastConfirmedNavRunAt, "2026-04-28T01:10:00.000Z");
+    assert.equal(payload.nextExpectedConfirmAt, "2026-04-25 23:00 Asia/Shanghai");
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
+});
+
+test("dashboard trading decision API returns snapshot immediately and queues background refresh for degraded state", async () => {
+  const refreshCalls = [];
+  const portfolioRoot = await mkdtemp(path.join(os.tmpdir(), "tradingagents-dashboard-"));
+  await mkdir(path.join(portfolioRoot, "data"), { recursive: true });
+  await writeFile(
+    path.join(portfolioRoot, "data", "tradingagents_prewarm_status.json"),
+    `${JSON.stringify(
+      {
+        generatedAt: "2026-04-25T09:10:00+08:00",
+        providers: {
+          "deepseek/deepseek-v4-pro/deepseek-v4-pro": {
+            provider: "deepseek",
+            deepModel: "deepseek-v4-pro",
+            quickModel: "deepseek-v4-pro",
+            tradeDate: "2026-04-25",
+            symbols: {
+              QQQ: {
+                symbol: "QQQ",
+                tradeDate: "2026-04-25",
+                provider: "deepseek",
+                deepModel: "deepseek-v4-pro",
+                quickModel: "deepseek-v4-pro",
+                status: "timeout",
+                error: "provider_timeout:deepseek",
+                lastAttemptAt: "2026-04-25T09:10:00+08:00",
+                cooldownUntil: "2026-04-25T09:40:00+08:00"
+              }
+            }
+          }
+        }
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  const server = createFundsLiveDashboardServer(
+    {
+      host: "127.0.0.1",
+      port: 0,
+      refreshMs: 15000,
+      user: "main",
+      portfolioRoot
     },
     {
       listAvailableAccounts: async () => [{ id: "main", label: "主账户" }],
@@ -2655,6 +2951,15 @@ test("dashboard trading decision API returns snapshot immediately and queues bac
         mode: "fallback_fixture",
         source: "TradingAgents",
         provider: "glm",
+        providerRuntime: {
+          providerUsed: "fallback_fixture",
+          providerMode: "fallback_fixture",
+          latestLiveAttempt: {
+            provider: "deepseek",
+            status: "timeout",
+            error: "provider_timeout:deepseek"
+          }
+        },
         status: "observe_only",
         riskLight: "yellow",
         decisionHeadline: "今天以观察为主",
@@ -2669,6 +2974,11 @@ test("dashboard trading decision API returns snapshot immediately and queues bac
           freshnessLabel: "fresh",
           fallbackReason: "decision_snapshot_missing_using_non_live_source"
         }
+      }),
+      refreshMarketProxyQuotes: async () => ({
+        status: "ready",
+        refreshed: true,
+        quotes: [{ symbol: "QQQ", quoteTier: "live" }]
       }),
       scheduleTradingAgentsRefresh: (options) => {
         refreshCalls.push(options);
@@ -2698,10 +3008,133 @@ test("dashboard trading decision API returns snapshot immediately and queues bac
 
     assert.equal(payload.mode, "fallback_fixture");
     assert.equal(payload.status, "observe_only");
+    assert.equal(payload.providerUsed, "fallback_fixture");
+    assert.equal(payload.providerMode, "fallback_fixture");
+    assert.equal(payload.providerRuntime.latestLiveAttempt.symbol, "QQQ");
+    assert.equal(payload.providerRuntime.latestLiveAttempt.error, "provider_timeout:deepseek");
+    assert.equal(payload.symbolCacheCoverage.provider, "glm");
+    assert.equal(payload.providerHealth.find((item) => item.provider === "glm").status, "missing_cache");
+    assert.equal(payload.providerHealth.find((item) => item.provider === "deepseek").status, "timeout");
+    assert.equal(payload.liveBrainState, "live_brain_paused");
+    assert.equal(payload.manualRetryAllowed, true);
+    assert.equal(payload.backgroundSchedule.scheduled, true);
+    assert.equal(
+      payload.symbolCacheCoverage.providers.find((item) => item.provider === "deepseek").symbols.find((item) => item.symbol === "QQQ").status,
+      "timeout"
+    );
     assert.equal(payload.runtimeRefresh?.running, false);
     assert.equal(refreshCalls.length, 1);
     assert.equal(refreshCalls[0].accountId, "main");
     assert.equal(refreshCalls[0].reason, "api_trading_decision_read");
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
+});
+
+test("dashboard trading decision API exposes slow graph circuit breaker diagnostics", async () => {
+  const portfolioRoot = await mkdtemp(path.join(os.tmpdir(), "tradingagents-dashboard-"));
+  await mkdir(path.join(portfolioRoot, "data"), { recursive: true });
+  await writeFile(
+    path.join(portfolioRoot, "data", "tradingagents_prewarm_status.json"),
+    `${JSON.stringify(
+      {
+        generatedAt: "2026-04-25T10:00:00+08:00",
+        providers: {
+          "deepseek/deepseek-v4-pro/deepseek-v4-pro": {
+            provider: "deepseek",
+            deepModel: "deepseek-v4-pro",
+            quickModel: "deepseek-v4-pro",
+            tradeDate: "2026-04-25",
+            circuitBreaker: {
+              status: "open",
+              reason: "tradingagents_original_graph_timeout",
+              provider: "deepseek",
+              deepModel: "deepseek-v4-pro",
+              quickModel: "deepseek-v4-pro",
+              tradeDate: "2026-04-25",
+              openedAt: "2026-04-25T09:30:00+08:00",
+              cooldownUntil: "2099-04-25T12:00:00+08:00",
+              timeoutCount: 3,
+              timeoutSymbols: ["QQQ", "SOXX", "KWEB"],
+              threshold: 3
+            },
+            symbols: {
+              QQQ: { symbol: "QQQ", tradeDate: "2026-04-25", status: "timeout", error: "provider_timeout:deepseek" },
+              SOXX: { symbol: "SOXX", tradeDate: "2026-04-25", status: "timeout", error: "provider_timeout:deepseek" },
+              KWEB: { symbol: "KWEB", tradeDate: "2026-04-25", status: "timeout", error: "provider_timeout:deepseek" }
+            }
+          }
+        }
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  const server = createFundsLiveDashboardServer(
+    {
+      host: "127.0.0.1",
+      port: 0,
+      refreshMs: 15000,
+      user: "main",
+      portfolioRoot
+    },
+    {
+      listAvailableAccounts: async () => [{ id: "main", label: "主账户" }],
+      loadTradingDecisionSnapshot: async () => ({
+        generatedAt: "2026-04-25T10:10:00+08:00",
+        asOf: "2026-04-25",
+        mode: "fallback_fixture",
+        source: "TradingAgents",
+        provider: "glm",
+        providerRuntime: {
+          providerUsed: "fallback_fixture",
+          providerMode: "fallback_fixture",
+          latestLiveAttempt: {
+            provider: "deepseek",
+            status: "timeout",
+            symbol: "KWEB",
+            error: "provider_timeout:deepseek"
+          }
+        },
+        status: "observe_only",
+        riskLight: "yellow",
+        decisionHeadline: "今天以观察为主",
+        decisionSummary: "当前仅有降级观察结果。",
+        executionChecklist: { realActions: [], observeLine: [], blockedSuggestions: [] },
+        bucketVerdicts: [],
+        diagnostics: { freshnessLabel: "fresh" }
+      }),
+      scheduleTradingAgentsRefresh: () => ({ scheduled: false, reason: "test_no_background_refresh" }),
+      getTradingAgentsRefreshState: () => ({
+        running: false,
+        lastQueuedAt: null,
+        lastCompletedAt: null,
+        lastReason: null,
+        lastError: null,
+        lastSkipReason: "test_no_background_refresh",
+        lastResult: null
+      })
+    }
+  );
+
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    const payload = await fetch(`http://127.0.0.1:${address.port}/api/trading-decision?account=main`).then((response) =>
+      response.json()
+    );
+    const deepseekCoverage = payload.symbolCacheCoverage.providers.find((item) => item.provider === "deepseek");
+
+    assert.equal(payload.providerRuntime.slowGraphCircuitBreaker.active, true);
+    assert.equal(payload.providerRuntime.slowGraphCircuitBreaker.reason, "tradingagents_original_graph_timeout");
+    assert.equal(payload.providerFallbackReason, "tradingagents_original_graph_timeout");
+    assert.equal(payload.providerHealth.find((item) => item.provider === "deepseek").status, "circuit_open");
+    assert.equal(payload.liveBrainState, "live_brain_paused");
+    assert.equal(payload.backgroundSchedule.reason, "live_brain_paused_until_retry");
+    assert.equal(payload.nextRetryAt, "2099-04-25T04:00:00.000Z");
+    assert.equal(deepseekCoverage.circuitBreaker.active, true);
+    assert.deepEqual(deepseekCoverage.circuitBreaker.timeoutSymbols, ["QQQ", "SOXX", "KWEB"]);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
@@ -2766,6 +3199,7 @@ test("dashboard trading decision API still stays snapshot-first when snapshot is
 
     assert.equal(payload.mode, "live");
     assert.equal(payload.status, "limited_execute");
+    assert.equal(payload.marketProxyQuoteRefresh?.status, "ready");
     assert.equal(payload.runtimeRefresh?.running, false);
     assert.equal(refreshCalls.length, 1);
     assert.equal(refreshCalls[0].reason, "api_trading_decision_manual_prewarm");

@@ -62,12 +62,31 @@ import {
 import { round } from "./lib/format_utils.mjs";
 import { loadTradingAdviceSnapshot, loadTradingAgentsBridgeConfig } from "./lib/tradingagents_bridge.mjs";
 import { loadTradingDecisionSnapshot } from "./lib/tradingagents_decision.mjs";
+import {
+  buildFundLiveAnalysisSummary,
+  buildFundLivePortfolioConclusion,
+  loadFundLiveAnalysisSnapshot,
+  persistFundLiveAnalysisSnapshot,
+  runFundLiveAnalysis
+} from "./lib/fund_live_analyzer.mjs";
+import {
+  loadFundNativeAnalysisSnapshot,
+  persistFundNativeAnalysisSnapshot,
+  runFundNativeTradingAgents
+} from "./lib/fund_native_tradingagents.mjs";
+import { refreshMarketProxyQuotes } from "./lib/market_proxy_quotes.mjs";
 import { createTradingAgentsBackgroundScheduler } from "./lib/tradingagents_runtime_refresh.mjs";
 import { buildMarketTopicsPayload } from "./lib/market_topics.mjs";
 import {
   collectLiveSymbols,
   inspectTradingAgentsSymbolCacheCoverage
 } from "./run_tradingagents_bridge.mjs";
+import {
+  buildTradingAgentsPrewarmLegacyProviderKey,
+  buildTradingAgentsPrewarmProviderKey,
+  loadTradingAgentsPrewarmStatus,
+  normalizeTradingAgentsPrewarmCircuitBreaker
+} from "./run_tradingagents_prewarm.mjs";
 
 const defaultHost = "127.0.0.1";
 const defaultPort = 8766;
@@ -141,6 +160,14 @@ function parseArgs(argv) {
   result.refreshMs = Number(result.refreshMs) || defaultRefreshMs;
   result.open = Boolean(result.open);
   return result;
+}
+
+function parseBoundedInt(value, fallback, { min = 1, max = 50 } = {}) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, Math.trunc(numeric)));
 }
 
 function parseAmountValue(value) {
@@ -1262,16 +1289,83 @@ function overlayConfirmedNavStatusFromDashboardState(confirmedNavStatus, dashboa
 }
 
 function buildLiveHealthPayload(payload) {
+  const confirmedNavDiagnostics =
+    payload.confirmedNavDiagnostics ??
+    buildConfirmedNavDiagnostics({
+      rows: payload.rows ?? [],
+      summary: payload.summary ?? {},
+      confirmedNavStatus: payload.confirmedNavStatus ?? payload.readiness?.confirmedNavStatus ?? {},
+      snapshotDate: payload.snapshotDate ?? payload.readiness?.snapshotDate ?? null,
+      accountingState: payload.accountingState ?? payload.readiness?.accountingState ?? null
+    });
   return {
     ...payload.readiness,
     snapshotDate: payload.snapshotDate ?? payload.readiness?.snapshotDate ?? null,
     accountingState: payload.accountingState ?? payload.readiness?.accountingState ?? null,
+    confirmedNavDiagnostics,
+    lateMissingFunds: confirmedNavDiagnostics.lateMissingFunds,
+    lastConfirmedNavRunAt: confirmedNavDiagnostics.lastConfirmedNavRunAt,
+    nextExpectedConfirmAt: confirmedNavDiagnostics.nextExpectedConfirmAt,
     summary: {
       confirmedFundCount: payload.summary?.confirmedFundCount ?? 0,
       normalLagFundCount: payload.summary?.normalLagFundCount ?? 0,
       lateMissingFundCount: payload.summary?.lateMissingFundCount ?? 0,
       confirmationCoveragePct: payload.summary?.confirmationCoveragePct ?? null
     }
+  };
+}
+
+function buildConfirmedNavDiagnostics({
+  rows = [],
+  summary = {},
+  confirmedNavStatus = {},
+  snapshotDate = null,
+  accountingState = null
+} = {}) {
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  const lateMissingFunds = normalizedRows
+    .filter((row) => ["late_missing", "source_missing"].includes(String(row?.confirmationState ?? "").trim()))
+    .map((row) => ({
+      code: row?.code ?? null,
+      name: row?.name ?? null,
+      confirmationState: row?.confirmationState ?? null,
+      confirmationLabel: row?.confirmationLabel ?? null,
+      confirmedNavDate: row?.confirmedNavDate ?? null,
+      expectedConfirmedDate: row?.expectedConfirmedDate ?? null,
+      quoteDate: row?.quoteDate ?? null
+    }));
+  const totalFundCount = Number(summary?.activeFundCount ?? normalizedRows.length ?? 0);
+  const confirmedFundCount = Number(summary?.confirmedFundCount ?? 0);
+  const normalLagFundCount = Number(summary?.normalLagFundCount ?? 0);
+  const lateMissingFundCount = Number(summary?.lateMissingFundCount ?? lateMissingFunds.length);
+  const pendingConfirmFundCount = Math.max(0, totalFundCount - confirmedFundCount);
+  const targetDate = String(confirmedNavStatus?.targetDate ?? snapshotDate ?? "").trim() || null;
+  const lastConfirmedNavRunAt =
+    confirmedNavStatus?.accountRun?.finishedAt ??
+    confirmedNavStatus?.statusGeneratedAt ??
+    confirmedNavStatus?.generatedAt ??
+    null;
+  const confirmedState = String(confirmedNavStatus?.state ?? "").trim();
+  const strictComparable =
+    String(accountingState ?? "").trim() === "snapshot_fresh_for_accounting" &&
+    !["late_missing", "source_missing", "blocked"].includes(confirmedState) &&
+    lateMissingFunds.length === 0;
+
+  return {
+    state: confirmedState || null,
+    targetDate,
+    snapshotDate,
+    accountingState,
+    totalFundCount,
+    confirmedFundCount,
+    normalLagFundCount,
+    lateMissingFundCount,
+    pendingConfirmFundCount,
+    confirmationCoveragePct: summary?.confirmationCoveragePct ?? null,
+    strictComparable,
+    lastConfirmedNavRunAt,
+    nextExpectedConfirmAt: targetDate ? `${targetDate} 23:00 Asia/Shanghai` : null,
+    lateMissingFunds
   };
 }
 
@@ -1463,6 +1557,21 @@ export async function buildFundsDashboardHealth(requestedAccountId, now = new Da
     }
   }
 
+  const summaryForDiagnostics = {
+    activeFundCount: Number(dashboardStatePayload?.summary?.activeFundCount ?? 0),
+    confirmedFundCount: Number(dashboardStatePayload?.summary?.confirmedFundCount ?? 0),
+    normalLagFundCount: Number(dashboardStatePayload?.summary?.normalLagFundCount ?? 0),
+    lateMissingFundCount: Number(dashboardStatePayload?.summary?.lateMissingFundCount ?? 0),
+    confirmationCoveragePct: dashboardStatePayload?.summary?.confirmationCoveragePct ?? null
+  };
+  const confirmedNavDiagnostics = buildConfirmedNavDiagnostics({
+    rows: [],
+    summary: summaryForDiagnostics,
+    confirmedNavStatus,
+    snapshotDate,
+    accountingState: resolveAccountingState(snapshotDate, today)
+  });
+
   return {
     state: resolveHealthState({ blocked, degraded }),
     reasons: [...new Set(reasons.filter(Boolean))],
@@ -1474,6 +1583,10 @@ export async function buildFundsDashboardHealth(requestedAccountId, now = new Da
     snapshotDate,
     confirmedNavState: confirmedNavStatus?.state ?? null,
     confirmedNavStatus,
+    confirmedNavDiagnostics,
+    lateMissingFunds: confirmedNavDiagnostics.lateMissingFunds,
+    lastConfirmedNavRunAt: confirmedNavDiagnostics.lastConfirmedNavRunAt,
+    nextExpectedConfirmAt: confirmedNavDiagnostics.nextExpectedConfirmAt,
     accountingState: resolveAccountingState(snapshotDate, today)
   };
 }
@@ -2298,6 +2411,19 @@ export async function buildLivePayload(refreshMs, requestedAccountId, deps = {})
       )
     },
     confirmedNavStatus: effectiveConfirmedNavStatus,
+    confirmedNavDiagnostics: buildConfirmedNavDiagnostics({
+      rows,
+      summary: {
+        activeFundCount,
+        confirmedFundCount: confirmationSummary.confirmedFundCount,
+        normalLagFundCount: confirmationSummary.normalLagFundCount + confirmationSummary.holidayDelayFundCount,
+        lateMissingFundCount: confirmationSummary.lateMissingFundCount + confirmationSummary.sourceMissingFundCount,
+        confirmationCoveragePct: confirmationSummary.confirmationCoveragePct
+      },
+      confirmedNavStatus: effectiveConfirmedNavStatus,
+      snapshotDate: latest?.snapshot_date ?? null,
+      accountingState
+    }),
     bucketGroups,
     rows,
     pendingRows,
@@ -2783,6 +2909,53 @@ function simplePageShell({
         font-size: 12px;
       }
 
+      .row-chip.warn {
+        color: #b45309;
+        border-color: rgba(180, 83, 9, 0.22);
+        background: rgba(255, 251, 235, 0.72);
+      }
+
+      .profile-tag-line {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 5px;
+      }
+
+      .profile-chip {
+        display: inline-flex;
+        align-items: center;
+        max-width: 96px;
+        padding: 2px 6px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.74);
+        color: var(--muted);
+        font-size: 10px;
+        line-height: 1.25;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .profile-chip.ok {
+        color: #047857;
+        border-color: rgba(4, 120, 87, 0.2);
+        background: rgba(236, 253, 245, 0.68);
+      }
+
+      .profile-chip.warn {
+        color: #b45309;
+        border-color: rgba(180, 83, 9, 0.22);
+        background: rgba(255, 251, 235, 0.72);
+      }
+
+      .profile-chip.danger {
+        color: #991b1b;
+        border-color: rgba(153, 27, 27, 0.2);
+        background: rgba(254, 242, 242, 0.72);
+      }
+
       .row-sub {
         margin-top: 6px;
         color: var(--muted);
@@ -2854,6 +3027,25 @@ function simplePageShell({
         background: rgba(255, 255, 255, 0.68);
       }
 
+      .fund-brain-panel {
+        margin-top: 12px;
+        border: 1px solid rgba(15, 118, 110, 0.18);
+        border-radius: 14px;
+        padding: 10px 12px;
+        background: linear-gradient(135deg, rgba(240, 253, 250, 0.76), rgba(255, 255, 255, 0.74));
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .fund-brain-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
       .prewarm-head {
         display: flex;
         justify-content: space-between;
@@ -2910,6 +3102,15 @@ function simplePageShell({
         background: rgba(254, 242, 242, 0.72);
       }
 
+      .symbol-chip.timeout,
+      .symbol-chip.rate_limited,
+      .symbol-chip.connection_error,
+      .symbol-chip.failed {
+        color: #9f1239;
+        border-color: rgba(159, 18, 57, 0.24);
+        background: rgba(255, 241, 242, 0.76);
+      }
+
       .terminal-row {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
@@ -2917,6 +3118,35 @@ function simplePageShell({
         align-items: center;
         padding: 10px 12px;
         border-bottom: 1px solid var(--line);
+      }
+
+      .terminal-group {
+        border-bottom: 1px solid var(--line);
+      }
+
+      .terminal-group:last-child {
+        border-bottom: 0;
+      }
+
+      .terminal-group-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: baseline;
+        padding: 9px 12px 7px;
+        background: rgba(241, 245, 249, 0.76);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .terminal-group-title {
+        font-size: 12px;
+        font-weight: 800;
+        color: var(--ink);
+      }
+
+      .terminal-group-note {
+        font-size: 11px;
+        color: var(--soft);
       }
 
       .action-terminal-row {
@@ -2927,6 +3157,18 @@ function simplePageShell({
 
       .observe-terminal-row {
         grid-template-columns: minmax(170px, 0.8fr) minmax(86px, 0.36fr) minmax(96px, 0.36fr) minmax(0, 1.4fr);
+        gap: 10px;
+        align-items: start;
+      }
+
+      .fund-analysis-row {
+        grid-template-columns: minmax(170px, 0.82fr) minmax(72px, 0.28fr) minmax(90px, 0.34fr) minmax(108px, 0.42fr) minmax(116px, 0.46fr) minmax(0, 1.1fr);
+        gap: 10px;
+        align-items: start;
+      }
+
+      .fund-status-row {
+        grid-template-columns: minmax(90px, 0.34fr) minmax(190px, 0.9fr) minmax(132px, 0.54fr) minmax(96px, 0.38fr) minmax(112px, 0.44fr) minmax(0, 0.9fr);
         gap: 10px;
         align-items: start;
       }
@@ -3146,6 +3388,14 @@ function simplePageShell({
           grid-template-columns: 1fr;
         }
 
+        .fund-analysis-row {
+          grid-template-columns: 1fr;
+        }
+
+        .fund-status-row {
+          grid-template-columns: 1fr;
+        }
+
         .terminal-side {
           justify-content: flex-start;
         }
@@ -3216,6 +3466,17 @@ function advicePage({ initialAccountId, availableAccounts }) {
               <div class="row-title mono" id="decisionHeadline">读取中...</div>
               <div class="row-sub" id="decisionSummary">等待交易主脑结果。</div>
               <div class="decision-brief-list" id="decisionBriefList"></div>
+              <div class="fund-brain-panel" id="fundBrainPanel">
+                <div>
+                  <div class="prewarm-title">基金级 live 主脑</div>
+                  <div class="section-note" id="fundBrainSummary">读取基金主脑状态...</div>
+                </div>
+                <div class="fund-brain-actions">
+                  <button class="mini-button" type="button" id="fundNativeBtn">基金原生主脑</button>
+                  <button class="mini-button" type="button" id="fundLiveBtn">深看基金</button>
+                  <button class="mini-button" type="button" id="fundLiveAllBtn">全持仓基金</button>
+                </div>
+              </div>
               <div class="section-note" id="decisionRuntimeState">后台刷新状态未知。</div>
               <div class="prewarm-panel">
                 <div class="prewarm-head">
@@ -3268,6 +3529,27 @@ function advicePage({ initialAccountId, availableAccounts }) {
           <div class="section-note">默认看每个桶的一行结论；TradingAgents 长论证继续折叠，避免把页面变回后台日志。</div>
           <div class="compact-list" id="bucketEvidence"></div>
         </article>
+        <article class="card summary-card">
+          <h2>今日建议深看</h2>
+          <div class="section-note">本地触发器只挑异常基金；展开后直接看基金级 live 主脑的结论、原因和观察点。</div>
+          <div class="terminal-list" id="deepDiveCandidates"></div>
+        </article>
+        <article class="card summary-card">
+          <h2>基金状态矩阵</h2>
+          <div class="section-note">按交易语义把 24 只基金排成终端列表：先看状态，再看基金资料完整度、桶、因子、收益和确认状态。</div>
+          <div class="row-metrics" id="fundStatusSummary"></div>
+          <div class="terminal-list" id="fundStatusMatrix"></div>
+        </article>
+        <article class="card summary-card">
+          <h2>同类基金 / 代表基金</h2>
+          <div class="section-note">把同一因子下的重复基金收成一组：先看代表基金，再看哪些只是重复暴露或资料不够完整。</div>
+          <div class="terminal-list" id="peerFundGroups"></div>
+        </article>
+        <article class="card summary-card">
+          <h2>全组合观察</h2>
+          <div class="section-note">把基金状态矩阵收成组合层面的晨会结论，方便每天最后扫一眼。</div>
+          <div class="compact-list" id="portfolioAnalysis"></div>
+        </article>
       </section>
     `,
     script: `
@@ -3279,6 +3561,11 @@ function advicePage({ initialAccountId, availableAccounts }) {
         decisionHeadline: document.getElementById("decisionHeadline"),
         decisionSummary: document.getElementById("decisionSummary"),
         decisionBriefList: document.getElementById("decisionBriefList"),
+        fundBrainPanel: document.getElementById("fundBrainPanel"),
+        fundBrainSummary: document.getElementById("fundBrainSummary"),
+        fundNativeBtn: document.getElementById("fundNativeBtn"),
+        fundLiveBtn: document.getElementById("fundLiveBtn"),
+        fundLiveAllBtn: document.getElementById("fundLiveAllBtn"),
         decisionRuntimeState: document.getElementById("decisionRuntimeState"),
         prewarmBtn: document.getElementById("prewarmBtn"),
         prewarmStatusNote: document.getElementById("prewarmStatusNote"),
@@ -3291,8 +3578,14 @@ function advicePage({ initialAccountId, availableAccounts }) {
         realActions: document.getElementById("realActions"),
         observeLine: document.getElementById("observeLine"),
         blockedSuggestions: document.getElementById("blockedSuggestions"),
-        bucketEvidence: document.getElementById("bucketEvidence")
+        bucketEvidence: document.getElementById("bucketEvidence"),
+        deepDiveCandidates: document.getElementById("deepDiveCandidates"),
+        fundStatusSummary: document.getElementById("fundStatusSummary"),
+        fundStatusMatrix: document.getElementById("fundStatusMatrix"),
+        peerFundGroups: document.getElementById("peerFundGroups"),
+        portfolioAnalysis: document.getElementById("portfolioAnalysis")
       };
+      let lastPrewarmProvider = "provider";
 
       function escapeHtml(value) {
         return String(value ?? "")
@@ -3315,12 +3608,85 @@ function advicePage({ initialAccountId, availableAccounts }) {
         }).format(numeric);
       }
 
+      function formatSignedCurrency(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+          return "--";
+        }
+        return (numeric > 0 ? "+" : "") + formatCurrency(numeric);
+      }
+
       function formatPct(value) {
         const numeric = Number(value);
         if (!Number.isFinite(numeric)) {
           return "--";
         }
         return numeric.toFixed(numeric >= 10 ? 0 : 1) + "%";
+      }
+
+      function statusRank(stance) {
+        const text = String(stance ?? "");
+        if (/候选/.test(text)) return 1;
+        if (/增配|减配|复核|观察/.test(text)) return 2;
+        if (/防守|维持/.test(text)) return 3;
+        return 4;
+      }
+
+      function statusGroupLabel(stance) {
+        const text = String(stance ?? "");
+        if (/候选/.test(text)) return "候选";
+        if (/增配|减配|复核|观察/.test(text)) return "观察";
+        if (/防守/.test(text)) return "防守";
+        if (/维持/.test(text)) return "维持";
+        return "其他";
+      }
+
+      function compactConfirmation(value) {
+        const text = String(value ?? "").trim();
+        if (text === "confirmed") return "已确认";
+        if (text === "normal_lag") return "正常滞后";
+        if (text === "holiday_delay") return "假期/跨市场滞后";
+        if (text === "materialized_from_execution_ledger") return "账本物化";
+        if (text === "late_missing") return "确认待补";
+        return text || "--";
+      }
+
+      function profileQualityFallback(item) {
+        const profile = item?.researchProfile ?? {};
+        const lookthrough = profile?.lookthrough ?? {};
+        const topHoldings = Array.isArray(lookthrough.topHoldings) ? lookthrough.topHoldings : [];
+        const managerLoaded = Boolean(profile?.manager?.name);
+        const tags = [
+          { label: profile?.source === "fund_research_profiles" ? "资料已同步" : "本地推断", tone: profile?.source === "fund_research_profiles" ? "ok" : "warn" },
+          { label: managerLoaded ? "经理已同步" : "经理未加载", tone: managerLoaded ? "ok" : "warn" }
+        ];
+        if (lookthrough.status === "latest_quarter_holdings" || topHoldings.length > 0) {
+          tags.push({ label: "重仓已穿透", tone: "ok" });
+        } else if (lookthrough.status === "theme_only" || lookthrough.status === "fund_of_funds_theme" || lookthrough.status === "profile_partial") {
+          tags.push({ label: "仅主题穿透", tone: "warn" });
+        } else {
+          tags.push({ label: "穿透未加载", tone: "danger" });
+        }
+        return {
+          status: "fallback",
+          statusLabel: "资料状态",
+          tags,
+          oneLine: tags.map((tag) => tag.label).join(" · ")
+        };
+      }
+
+      function renderProfileQualityTags(item) {
+        const quality = item?.researchProfileQuality ?? profileQualityFallback(item);
+        const tags = Array.isArray(quality?.tags) ? quality.tags : [];
+        if (tags.length === 0) {
+          return '<div class="profile-tag-line"><span class="profile-chip warn">资料待补</span></div>';
+        }
+        return '<div class="profile-tag-line">' + tags.slice(0, 3).map((tag) => {
+          const tone = ["ok", "warn", "danger"].includes(String(tag?.tone ?? "")) ? String(tag.tone) : "flat";
+          return '<span class="profile-chip ' + escapeHtml(tone) + '" title="' + escapeHtml(quality?.oneLine || tag?.label || "") + '">' +
+            escapeHtml(tag?.label || tag) +
+          '</span>';
+        }).join('') + '</div>';
       }
 
       function formatAmountRange(range) {
@@ -3344,6 +3710,73 @@ function advicePage({ initialAccountId, availableAccounts }) {
         }
         const text = String(label ?? raw).trim();
         return text === "前收参考" ? "前收参考 · 非实时" : text || "--";
+      }
+
+      function displayProviderSource(providerUsed, providerMode) {
+        const provider = String(providerUsed ?? "").trim();
+        const mode = String(providerMode ?? "").trim();
+        if (provider === "fallback_fixture" || mode === "fallback_fixture") {
+          return "fallback fixture · 非 live";
+        }
+        return (provider || "--") + (mode ? " · " + mode : "");
+      }
+
+      function displayBrainProfile(profile) {
+        const text = String(profile ?? "").trim().toLowerCase();
+        if (text === "fast") {
+          return "快速主脑";
+        }
+        if (text === "full") {
+          return "完整原图";
+        }
+        return "主脑档位未知";
+      }
+
+      function displayLiveAttempt(attempt) {
+        if (!attempt) {
+          return "暂无 live 尝试记录";
+        }
+        const provider = String(attempt.provider ?? "--");
+        const model = attempt.deepModel ? " " + String(attempt.deepModel) : "";
+        const profile = attempt.brainProfile ? " · " + displayBrainProfile(attempt.brainProfile) : "";
+        const status = String(attempt.status ?? "unknown");
+        const symbol = attempt.symbol ? " · " + String(attempt.symbol) : "";
+        const duration = Number.isFinite(Number(attempt.durationMs))
+          ? " · " + String(Math.round(Number(attempt.durationMs) / 1000)) + "s"
+          : "";
+        const error = attempt.error ? " · " + String(attempt.error) : "";
+        return provider + model + profile + " · " + status + symbol + duration + error;
+      }
+
+      function displayCircuitBreaker(circuitBreaker) {
+        if (!circuitBreaker?.active) {
+          return "";
+        }
+        const symbols = Array.isArray(circuitBreaker.timeoutSymbols)
+          ? circuitBreaker.timeoutSymbols.slice(0, 5).join("/")
+          : "";
+        const until = circuitBreaker.cooldownUntil ? " · 暂停至 " + String(circuitBreaker.cooldownUntil) : "";
+        return "原图整体超时" +
+          (symbols ? " · " + symbols : "") +
+          until;
+      }
+
+      function displayProviderHealth(item) {
+        if (!item) {
+          return "来源 -- 状态未知";
+        }
+        const role = item.role === "primary" ? "主源" : item.role === "fallback" ? "后备" : "来源";
+        const counts = item.counts ?? {};
+        const cache = String(counts.fresh ?? 0) + "/" + String(counts.total ?? 0);
+        const profile = item.brainProfile ? " " + displayBrainProfile(item.brainProfile) : "";
+        const pause = item.circuitBreaker?.active && item.circuitBreaker?.cooldownUntil
+          ? " · 暂停至 " + String(item.circuitBreaker.cooldownUntil)
+          : "";
+        return role + " " + String(item.provider ?? "--") + profile + " " + String(item.statusLabel ?? item.status ?? "--") + " " + cache + pause;
+      }
+
+      function hasLiveTradingAgentsProvider(providerHealth) {
+        return Array.isArray(providerHealth) && providerHealth.some((item) => String(item?.status ?? "") === "available");
       }
 
       function renderInlineMarkdown(value) {
@@ -3421,29 +3854,91 @@ function advicePage({ initialAccountId, availableAccounts }) {
       function renderPrewarmStatus(payload) {
         const coverage = payload?.symbolCacheCoverage ?? null;
         const symbols = Array.isArray(coverage?.symbols) ? coverage.symbols : [];
+        const liveBrainState = String(payload?.liveBrainState ?? "");
+        const manualRetryAllowed = payload?.manualRetryAllowed !== false;
         if (!coverage || symbols.length === 0) {
           elements.prewarmStatusNote.textContent = "暂无 symbol cache 状态。";
           elements.prewarmSymbols.innerHTML = '<span class="symbol-chip missing">-- missing</span>';
           return;
         }
         const counts = coverage.counts ?? {};
+        const brainProfile = payload?.brainProfile ?? payload?.providerRuntime?.brainProfile ?? coverage?.brainProfile;
+        const providers = Array.isArray(coverage.providers) ? coverage.providers : [];
+        const providerHealth = Array.isArray(payload?.providerHealth)
+          ? payload.providerHealth
+          : Array.isArray(payload?.providerRuntime?.providerHealth)
+            ? payload.providerRuntime.providerHealth
+            : [];
+        const circuitBreaker = coverage?.circuitBreaker?.active ? coverage.circuitBreaker : null;
+        const circuitBreakerText = displayCircuitBreaker(circuitBreaker);
+        const providerSummary = providerHealth.length > 0
+          ? providerHealth.map(displayProviderHealth).join(" · ")
+          : providers.length > 0
+            ? providers.map((item) => {
+                const itemCounts = item.counts ?? {};
+                const role = item.role === "primary" ? "主源" : item.role === "fallback" ? "后备" : "来源";
+                return role + " " + String(item.provider ?? "--") + " " + String(itemCounts.fresh ?? 0) + "/" + String(itemCounts.total ?? 0);
+              }).join(" · ")
+          : "";
+        const runtimePrewarm = payload?.runtimeRefresh?.lastResult?.prewarm ?? null;
+        const runtimeFailure = Array.isArray(runtimePrewarm?.failed) && runtimePrewarm.failed.length > 0
+          ? " · 最近失败 " + String(runtimePrewarm.failed[0].symbol ?? "--") + " " + String(runtimePrewarm.failed[0].error ?? "")
+          : "";
+        const quoteRows = Array.isArray(payload?.marketProxyQuoteCoverage?.quotes)
+          ? payload.marketProxyQuoteCoverage.quotes
+          : [];
+        const quoteSummary = quoteRows.length > 0
+          ? " · 行情 " + quoteRows.map((quote) =>
+              String(quote.symbol ?? "--") +
+              " " +
+              String(quote.displayLabel ?? quote.quoteTier ?? "--") +
+              " " +
+              String(quote.source ?? quote.error ?? "--")
+            ).join(" / ")
+          : "";
         elements.prewarmStatusNote.textContent =
-          String(coverage.provider ?? "provider") +
-          " · as-of " +
-          String(coverage.tradeDate ?? "--") +
-          " · fresh " +
-          String(counts.fresh ?? 0) +
-          "/" +
-          String(counts.total ?? symbols.length);
+          circuitBreakerText
+            ? circuitBreakerText +
+              " · 当前结果保持 fallback/cache，只读观察" +
+              (providerSummary ? " · " + providerSummary : "") +
+              quoteSummary
+            : "当前 " +
+              String(coverage.provider ?? "provider") +
+              " " +
+              String(coverage.deepModel ?? "") +
+              " · " +
+              displayBrainProfile(brainProfile) +
+              " · as-of " +
+              String(coverage.tradeDate ?? "--") +
+              " · fresh " +
+              String(counts.fresh ?? 0) +
+              "/" +
+              String(counts.total ?? symbols.length) +
+              (providerSummary ? " · " + providerSummary : "") +
+              runtimeFailure +
+              quoteSummary;
+        elements.prewarmBtn.dataset.blocked = manualRetryAllowed ? "0" : "1";
+        if (!elements.prewarmBtn.disabled) {
+          lastPrewarmProvider = String(coverage.provider ?? "provider");
+          elements.prewarmBtn.disabled = !manualRetryAllowed;
+          elements.prewarmBtn.dataset.label =
+            liveBrainState === "live_brain_paused"
+              ? "手动重试"
+              : "预热 " + lastPrewarmProvider;
+          elements.prewarmBtn.textContent = elements.prewarmBtn.dataset.label;
+        } else {
+          lastPrewarmProvider = String(coverage.provider ?? "provider");
+        }
         elements.prewarmSymbols.innerHTML = symbols
           .map((item) => {
             const status = String(item?.status ?? "missing");
             const age = item?.ageHours === null || item?.ageHours === undefined ? "--" : String(item.ageHours) + "h";
             const rating = item?.rating ? " · " + String(item.rating) : "";
+            const profile = item?.brainProfile && item.brainProfile !== brainProfile ? " · " + displayBrainProfile(item.brainProfile) : "";
             return (
               '<span class="symbol-chip ' + escapeHtml(status) + '">' +
                 '<strong>' + escapeHtml(item?.symbol ?? "--") + '</strong>' +
-                escapeHtml(" " + status + " · " + age + rating) +
+                escapeHtml(" " + status + " · " + age + rating + profile) +
               '</span>'
             );
           })
@@ -3453,6 +3948,17 @@ function advicePage({ initialAccountId, availableAccounts }) {
       function renderDecisionBriefList(payload, realActions, observeLine) {
         const riskLight = String(payload?.riskLight ?? "--").toUpperCase();
         const hasRealActions = realActions.length > 0;
+        const morningBrief = payload?.morningBrief ?? {};
+        const providerRuntime = payload?.providerRuntime ?? payload?.diagnostics?.providerRuntime ?? {};
+        const providerMode = String(payload?.providerMode ?? providerRuntime?.providerMode ?? payload?.mode ?? "--");
+        const providerUsed = String(payload?.providerUsed ?? providerRuntime?.providerUsed ?? payload?.provider ?? "--");
+        const providerFallbackReason = payload?.providerFallbackReason ?? providerRuntime?.providerFallbackReason ?? null;
+        const latestLiveAttempt = providerRuntime?.latestLiveAttempt ?? null;
+        const slowGraphCircuitBreaker = providerRuntime?.slowGraphCircuitBreaker ?? null;
+        const providerHealth = Array.isArray(payload?.providerHealth) ? payload.providerHealth : providerRuntime?.providerHealth ?? [];
+        const liveProviderAvailable = hasLiveTradingAgentsProvider(providerHealth);
+        const liveBrainLabel = payload?.liveBrainStateLabel ?? payload?.liveBrainState ?? "live 主脑状态未知";
+        const brainProfile = payload?.brainProfile ?? providerRuntime?.brainProfile;
         const marketLabel = displayMarketDataTierLabel(
           payload?.decisionContext?.marketDataTier,
           payload?.decisionContext?.marketDataTierLabel
@@ -3461,20 +3967,32 @@ function advicePage({ initialAccountId, availableAccounts }) {
           ? " · as-of " + String(payload.decisionContext.marketDataAsOf)
           : "";
         const topObserve = observeLine[0]?.note ? oneLineReason(observeLine[0].note) : null;
+        const watchFocus = Array.isArray(morningBrief.watchFocus) ? morningBrief.watchFocus : [];
         const items = [
           {
-            label: "风险灯",
-            text: riskLight + " · " + (payload?.decisionSummary ? oneLineReason(payload.decisionSummary) : "等待 TradingAgents 主链。")
+            label: "今日主结论",
+            text: morningBrief.headline || (riskLight + " · " + (payload?.decisionSummary ? oneLineReason(payload.decisionSummary) : "等待 TradingAgents 主链。"))
           },
           {
-            label: "动作",
-            text: hasRealActions
+            label: hasRealActions ? "为什么有动作" : "为什么没有真实动作",
+            text: morningBrief.actionExplanation || (hasRealActions
               ? "形成 " + String(realActions.length) + " 条只读动作候选；建议区间不是订单。"
-              : "当前没有真实动作候选，先看观察线和被拦原因。"
+              : "当前没有真实动作候选，先看观察线和被拦原因。")
           },
           {
-            label: "限制",
-            text: (marketLabel || "行情未知") + marketAsOf + (topObserve ? " · " + topObserve : "")
+            label: "今天只看三件事",
+            text: watchFocus.length > 0
+              ? watchFocus.slice(0, 3).join(" / ")
+              : (marketLabel || "行情未知") + marketAsOf + (topObserve ? " · " + topObserve : "")
+          },
+          {
+            label: "来源",
+            text: liveBrainLabel + " · " + displayBrainProfile(brainProfile) + " · " + displayProviderSource(providerUsed, providerMode) +
+              (!liveProviderAvailable && providerUsed === "fallback_fixture" ? " · 今日无 live TradingAgents 主脑" : "") +
+              (slowGraphCircuitBreaker?.active ? " · " + displayCircuitBreaker(slowGraphCircuitBreaker) : "") +
+              (payload?.nextRetryAt ? " · 下次自动重试 " + String(payload.nextRetryAt) : "") +
+              (providerFallbackReason ? " · fallback " + String(providerFallbackReason) : "") +
+              (latestLiveAttempt ? " · 最近 live " + displayLiveAttempt(latestLiveAttempt) : "")
           }
         ];
         elements.decisionBriefList.innerHTML = items
@@ -3485,6 +4003,328 @@ function advicePage({ initialAccountId, availableAccounts }) {
             '</div>'
           )
           .join('');
+      }
+
+      function renderFundBrainPanel(payload) {
+        const snapshot = payload?.fundLiveAnalysis ?? null;
+        const summary = payload?.fundLiveBrainSummary ?? snapshot?.summary ?? {};
+        const conclusion = payload?.fundLivePortfolioConclusion ?? snapshot?.portfolioConclusion ?? {};
+        const statusLabel = summary.statusLabel || (
+          snapshot?.status === "ready"
+            ? "基金级 live 已完成"
+            : snapshot?.status === "partial"
+              ? "基金级 live 部分完成"
+              : snapshot?.status === "blocked"
+                ? "基金级 live 失败"
+                : "基金级 live 未运行"
+        );
+        const analyses = Array.isArray(snapshot?.analyses) ? snapshot.analyses : [];
+        const highRiskCount = Number.isFinite(Number(summary.highRiskCount))
+          ? Number(summary.highRiskCount)
+          : analyses.filter((item) => String(item?.riskLevel ?? "").toLowerCase() === "high").length;
+        const providerLabel = summary.providerLabel || [...new Set(analyses.map((item) => item?.provider).filter(Boolean))].join(" / ") || "--";
+        const coverageLabel = summary.coverageLabel || String(analyses.filter((item) => item?.status === "success").length) + "/" + String(snapshot?.count ?? analyses.length ?? 0);
+        const latest = snapshot?.generatedAt ? " · " + String(snapshot.generatedAt) : "";
+        elements.fundBrainSummary.textContent =
+          statusLabel +
+          " · " +
+          (summary.scope === "all" || conclusion.scope === "all" ? "全持仓" : "深看") +
+          " · 覆盖 " +
+          coverageLabel +
+          " · 高风险 " +
+          String(highRiskCount) +
+          " · 来源 " +
+          providerLabel +
+          (conclusion.riskLine ? " · " + String(conclusion.riskLine) : "") +
+          latest;
+        elements.fundLiveBtn.dataset.label = "重跑深看基金";
+        elements.fundLiveAllBtn.dataset.label = "跑全持仓基金";
+        if (!elements.fundLiveBtn.disabled) {
+          elements.fundLiveBtn.textContent = elements.fundLiveBtn.dataset.label;
+        }
+        if (!elements.fundLiveAllBtn.disabled) {
+          elements.fundLiveAllBtn.textContent = elements.fundLiveAllBtn.dataset.label;
+        }
+      }
+
+      function renderObservationGroupRow(item, groupKey) {
+        const reasonLabels = Array.isArray(item?.reasonLabels) ? item.reasonLabels : [];
+        const reasons = Array.isArray(item?.reasons) ? item.reasons : [];
+        const label = item?.bucketLabel || item?.bucket || item?.title || "观察";
+        const stateText = [
+          item?.verdict,
+          item?.executionState,
+          reasons.length > 0 ? reasons.slice(0, 2).join("/") : null
+        ].filter(Boolean).join(" · ");
+        return '<div class="terminal-row observe-terminal-row">' +
+          '<div class="terminal-main">' +
+            '<div class="terminal-label">' + escapeHtml(groupKey) + '</div>' +
+            '<div class="terminal-title">' +
+              '<span class="terminal-name">' + escapeHtml(label) + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div class="terminal-label">状态</div>' +
+            '<div class="terminal-value mono">' + escapeHtml(stateText || "--") + '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div class="terminal-label">来源</div>' +
+            '<div class="terminal-value mono">' + escapeHtml(item?.source || item?.bucket || "local") + '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div class="terminal-label">一句话</div>' +
+            '<div class="terminal-reason">' + escapeHtml(oneLineReason(item?.oneLine || item?.note || "继续观察。")) + '</div>' +
+            (reasonLabels.length > 0 ? '<div class="terminal-note">' + escapeHtml(reasonLabels.slice(0, 3).join(" / ")) + '</div>' : '') +
+          '</div>' +
+        '</div>';
+      }
+
+      function renderObservationGroups(target, groups, fallbackObserveLine) {
+        const hasGroups = groups && (
+          Array.isArray(groups.directionObservations) ||
+          Array.isArray(groups.actionConstraints) ||
+          Array.isArray(groups.dataConstraints)
+        );
+        const sections = [
+          {
+            key: "方向观察",
+            note: "TradingAgents 给出的桶方向，只影响今日主结论。",
+            items: hasGroups ? groups.directionObservations : fallbackObserveLine
+          },
+          {
+            key: "动作受限",
+            note: "本地基金护栏拦下的原因，不等于没有方向。",
+            items: hasGroups ? groups.actionConstraints : []
+          },
+          {
+            key: "数据限制",
+            note: "行情、确认净值或 provider 状态带来的可用性约束。",
+            items: hasGroups ? groups.dataConstraints : []
+          }
+        ];
+        target.innerHTML = sections.map((section) => {
+          const rows = Array.isArray(section.items) ? section.items : [];
+          return '<div class="terminal-group">' +
+            '<div class="terminal-group-head">' +
+              '<div class="terminal-group-title">' + escapeHtml(section.key) + '</div>' +
+              '<div class="terminal-group-note">' + escapeHtml(section.note) + '</div>' +
+            '</div>' +
+            (rows.length > 0
+              ? rows.map((item) => renderObservationGroupRow(item, section.key)).join("")
+              : '<div class="terminal-row"><div class="empty">暂无' + escapeHtml(section.key) + '。</div></div>') +
+          '</div>';
+        }).join("");
+      }
+
+      function renderFundNativeDetail(nativeAnalysis) {
+        if (!nativeAnalysis || nativeAnalysis.status !== "success") {
+          return '<p><strong>基金原生主脑：</strong>基金原生 TradingAgents 未完成，当前为本地降级观察。</p>';
+        }
+        const riskNotes = Array.isArray(nativeAnalysis.riskReview?.notes) ? nativeAnalysis.riskReview.notes : [];
+        const uncertainties = Array.isArray(nativeAnalysis.uncertainties) ? nativeAnalysis.uncertainties : [];
+        return '<p><strong>基金原生主脑：</strong>' + renderInlineMarkdown([
+            nativeAnalysis.verdictLabel || nativeAnalysis.verdict || "基金结论",
+            nativeAnalysis.riskLight ? "风险灯 " + String(nativeAnalysis.riskLight).toUpperCase() : null,
+            nativeAnalysis.oneLine || "暂无一句话结论"
+          ].filter(Boolean).join(" · ")) + '</p>' +
+          '<p><strong>风格环境：</strong>' + renderInlineMarkdown([
+            nativeAnalysis.styleEnvironment?.label,
+            nativeAnalysis.styleEnvironment?.reason
+          ].filter(Boolean).join(" · ") || "--") + '</p>' +
+          '<p><strong>基金质量：</strong>' + renderInlineMarkdown([
+            nativeAnalysis.fundQuality?.label,
+            nativeAnalysis.fundQuality?.reason
+          ].filter(Boolean).join(" · ") || "--") + '</p>' +
+          '<p><strong>持仓穿透：</strong>' + renderInlineMarkdown([
+            nativeAnalysis.lookThrough?.label,
+            nativeAnalysis.lookThrough?.reason
+          ].filter(Boolean).join(" · ") || "--") + '</p>' +
+          '<p><strong>同类角色：</strong>' + renderInlineMarkdown([
+            nativeAnalysis.peerRole?.label,
+            nativeAnalysis.peerRole?.reason
+          ].filter(Boolean).join(" · ") || "--") + '</p>' +
+          (riskNotes.length > 0
+            ? '<p><strong>风险复核：</strong></p><ul>' + riskNotes.slice(0, 5).map((line) => '<li>' + renderInlineMarkdown(line) + '</li>').join('') + '</ul>'
+            : '') +
+          '<p><strong>动作边界：</strong>' + renderInlineMarkdown(nativeAnalysis.execution?.timingNote || '尾盘前复核，按基金净值确认；只读，不构成订单。') + '</p>' +
+          (uncertainties.length > 0
+            ? '<p><strong>不确定项：</strong></p><ul>' + uncertainties.slice(0, 5).map((line) => '<li>' + renderInlineMarkdown(line) + '</li>').join('') + '</ul>'
+            : '') +
+          (nativeAnalysis.rawEvidence
+            ? '<details class="terminal-evidence"><summary>基金原生主脑原文</summary><div class="markdown-body">' + markdownToHtml(nativeAnalysis.rawEvidence) + '</div></details>'
+            : '');
+      }
+
+      function renderDeepDiveRow(item, adapterByCode, liveByCode, nativeByCode) {
+        const trigger = item.deepDiveTrigger ?? {};
+        const level = String(trigger.level ?? "medium");
+        const reasonLabels = Array.isArray(trigger.reasonLabels) ? trigger.reasonLabels : [];
+        const analysis = item.deepDiveAnalysis ?? null;
+        const adapter = adapterByCode?.get?.(String(item?.fundCode ?? "")) ?? null;
+        const liveAnalysis = liveByCode?.get?.(String(item?.fundCode ?? "")) ?? null;
+        const nativeAnalysis = nativeByCode?.get?.(String(item?.fundCode ?? "")) ?? null;
+        const researchProfile = adapter?.researchProfile ?? item?.researchProfile ?? null;
+        const lookthrough = researchProfile?.lookthrough ?? {};
+        const researchLine = researchProfile
+          ? [
+              researchProfile.fundType,
+              researchProfile.fundCompany,
+              researchProfile.underlyingIndexOrTheme,
+              "穿透 " + (lookthrough.status || "not_loaded")
+            ].filter(Boolean).join(" · ")
+          : "基金资料未加载";
+        const detailHtml = analysis
+          ? '<details class="terminal-evidence">' +
+              '<summary>详情</summary>' +
+              '<div class="markdown-body">' +
+                renderFundNativeDetail(nativeAnalysis) +
+                (liveAnalysis
+                  ? '<p><strong>基金级主脑结论：</strong>' + renderInlineMarkdown([
+                      liveAnalysis.verdictLabel || liveAnalysis.verdict || "基金级结论",
+                      liveAnalysis.riskLevel ? "风险 " + liveAnalysis.riskLevel : null,
+                      liveAnalysis.headline || "暂无结论"
+                    ].filter(Boolean).join(" · ")) + '</p>'
+                  : '<p><strong>基金级主脑结论：</strong>尚未运行基金级 live 分析；点击“深看基金”或“全持仓基金”后，这里会直接展示 live 大脑结果。</p>') +
+                (liveAnalysis && Array.isArray(liveAnalysis.reasons)
+                  ? '<p><strong>主脑原因：</strong></p><ul>' + liveAnalysis.reasons.slice(0, 6).map((line) => '<li>' + renderInlineMarkdown(line) + '</li>').join('') + '</ul>'
+                  : '') +
+                (liveAnalysis && Array.isArray(liveAnalysis.watchPoints)
+                  ? '<p><strong>主脑观察点：</strong></p><ul>' + liveAnalysis.watchPoints.slice(0, 5).map((line) => '<li>' + renderInlineMarkdown(line) + '</li>').join('') + '</ul>'
+                  : '') +
+                (liveAnalysis?.peerRead
+                  ? '<p><strong>同类/重复暴露：</strong>' + renderInlineMarkdown(liveAnalysis.peerRead) + '</p>'
+                  : '') +
+                (liveAnalysis?.actionBoundary
+                  ? '<p><strong>动作边界：</strong>' + renderInlineMarkdown(liveAnalysis.actionBoundary) + '</p>'
+                  : '<p><strong>动作边界：</strong>只读复核，不构成订单。</p>') +
+                (liveAnalysis && Array.isArray(liveAnalysis.uncertainty) && liveAnalysis.uncertainty.length > 0
+                  ? '<p><strong>不确定项：</strong></p><ul>' + liveAnalysis.uncertainty.slice(0, 5).map((line) => '<li>' + renderInlineMarkdown(line) + '</li>').join('') + '</ul>'
+                  : '') +
+                '<details class="terminal-evidence">' +
+                  '<summary>本地触发 / 输入</summary>' +
+                  '<div class="markdown-body">' +
+                    '<p><strong>本地触发：</strong>' + renderInlineMarkdown(analysis.plainWhy || analysis.whyNow || trigger.oneLine || "触发深看规则。") + '</p>' +
+                    '<p><strong>本地观察：</strong>' + renderInlineMarkdown(analysis.plainWatch || "先看代理资产和亏损是否继续恶化。") + '</p>' +
+                    (adapter
+                      ? '<p><strong>主脑输入：</strong>' + renderInlineMarkdown("已把基金真实持仓、因子、代理资产 " + ((adapter.fundProfile?.proxySymbols || []).join(" / ") || "--") + " 和组合约束送入基金级 live 分析；结论只读，不构成订单。") + '</p>'
+                      : '') +
+                    '<p><strong>基金资料：</strong>' + renderInlineMarkdown(researchLine) + '</p>' +
+                    '<p><strong>因子/代理：</strong>' + renderInlineMarkdown(analysis.factorRead || "--") + '</p>' +
+                    '<p><strong>仓位：</strong>' + renderInlineMarkdown(analysis.positionRead || "--") + '</p>' +
+                    '<p><strong>收益：</strong>' + renderInlineMarkdown(analysis.pnlRead || "--") + '</p>' +
+                    '<p><strong>确认：</strong>' + renderInlineMarkdown(analysis.confirmationRead || "--") + '</p>' +
+                    (adapter && Array.isArray(adapter.analysisQuestions)
+                      ? '<p><strong>给主脑的问题：</strong></p><ul>' + adapter.analysisQuestions.slice(0, 3).map((line) => '<li>' + renderInlineMarkdown(line) + '</li>').join('') + '</ul>'
+                      : '') +
+                    (researchProfile && Array.isArray(researchProfile.limitations)
+                      ? '<p><strong>资料边界：</strong></p><ul>' + researchProfile.limitations.slice(0, 3).map((line) => '<li>' + renderInlineMarkdown(line) + '</li>').join('') + '</ul>'
+                      : '') +
+                  '</div>' +
+                '</details>' +
+              '</div>' +
+            '</details>'
+          : '';
+        return '<div class="terminal-row fund-status-row">' +
+          '<div>' +
+            '<div class="terminal-label">优先级</div>' +
+            '<div class="terminal-value mono">' + escapeHtml(level.toUpperCase()) + '</div>' +
+            '<div class="terminal-note">' + escapeHtml(String(trigger.priority ?? "--")) + '</div>' +
+          '</div>' +
+          '<div class="terminal-main">' +
+            '<div class="terminal-title">' +
+              '<span class="terminal-code mono">' + escapeHtml(item.fundCode || '--') + '</span>' +
+              '<span class="terminal-name">' + escapeHtml(item.fundName || '--') + '</span>' +
+            '</div>' +
+            '<div class="terminal-note">' + escapeHtml(item.tradeStance || '--') + ' · ' + escapeHtml(item.confirmationState || '--') + '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div class="terminal-label">桶 / 因子</div>' +
+            '<div class="terminal-value mono">' + escapeHtml(item.bucketLabel || item.bucket || '--') + '</div>' +
+            '<div class="terminal-note">' + escapeHtml(item.factorLabel || '--') + '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div class="terminal-label">金额</div>' +
+            '<div class="terminal-amount mono">' + escapeHtml(formatCurrency(item.amountCny)) + '</div>' +
+            '<div class="terminal-note">今日 ' + escapeHtml(formatSignedCurrency(item.dayPnl)) + '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div class="terminal-label">持有</div>' +
+            '<div class="terminal-value mono">' + escapeHtml(formatSignedCurrency(item.holdingPnl)) + '</div>' +
+            '<div class="terminal-note">' + escapeHtml(trigger.holdingPnlRatePct === null || trigger.holdingPnlRatePct === undefined ? '--' : formatPct(trigger.holdingPnlRatePct)) + '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div class="terminal-label">触发原因</div>' +
+            '<div class="terminal-reason">' + escapeHtml(oneLineReason(trigger.oneLine || reasonLabels.join(' / ') || '建议复核。')) + '</div>' +
+            '<div class="terminal-note">' + escapeHtml(reasonLabels.slice(0, 3).join(' / ') || '--') + '</div>' +
+          '</div>' +
+          detailHtml +
+        '</div>';
+      }
+
+      function renderDeepDiveGroups(target, candidates, adapter, liveSnapshot, nativeSnapshot) {
+        const adapterContexts = Array.isArray(adapter?.contexts) ? adapter.contexts : [];
+        const adapterByCode = new Map(adapterContexts.map((item) => [String(item?.fundCode ?? ""), item]));
+        const liveRows = Array.isArray(liveSnapshot?.analyses) ? liveSnapshot.analyses : [];
+        const liveByCode = new Map(liveRows.map((item) => [String(item?.fundCode ?? ""), item]));
+        const nativeRows = Array.isArray(nativeSnapshot?.analyses) ? nativeSnapshot.analyses : [];
+        const nativeByCode = new Map(nativeRows.map((item) => [String(item?.fundCode ?? ""), item]));
+        const high = candidates.filter((item) => String(item?.deepDiveTrigger?.level ?? "").toLowerCase() === "high");
+        const optional = candidates.filter((item) => String(item?.deepDiveTrigger?.level ?? "").toLowerCase() !== "high");
+        const sections = [
+          { key: "必须看", note: "亏损、集中或高波触发较强；建议当天人工点开复核。", items: high },
+          { key: "可选看", note: "有异常苗头，但不必每天逐只深挖。", items: optional }
+        ];
+        if (high.length === 0 && optional.length === 0) {
+          target.innerHTML = '<div class="empty">今日没有必须单独深看的基金；看基金状态矩阵即可。</div>';
+          return;
+        }
+        target.innerHTML = sections.map((section) =>
+          '<div class="terminal-group">' +
+            '<div class="terminal-group-head">' +
+              '<div class="terminal-group-title">' + escapeHtml(section.key) + '</div>' +
+              '<div class="terminal-group-note">' + escapeHtml(section.note) + '</div>' +
+            '</div>' +
+            (section.items.length > 0
+              ? section.items.map((item) => renderDeepDiveRow(item, adapterByCode, liveByCode, nativeByCode)).join("")
+              : '<div class="terminal-row"><div class="empty">暂无' + escapeHtml(section.key) + '。</div></div>') +
+          '</div>'
+        ).join("");
+      }
+
+      function renderPeerFundGroups(target, groups) {
+        if (!Array.isArray(groups) || groups.length === 0) {
+          target.innerHTML = '<div class="empty">当前没有明显同类重复基金；按状态矩阵观察即可。</div>';
+          return;
+        }
+        target.innerHTML = groups.map((group) => {
+          const representative = group.representative ?? {};
+          const duplicates = Array.isArray(group.duplicateFunds) ? group.duplicateFunds : [];
+          const notes = Array.isArray(group.notes) ? group.notes : [];
+          return '<div class="terminal-row observe-terminal-row">' +
+            '<div class="terminal-main">' +
+              '<div class="terminal-label">同类因子</div>' +
+              '<div class="terminal-title">' +
+                '<span class="terminal-name">' + escapeHtml(group.groupLabel || group.groupKey || '--') + '</span>' +
+              '</div>' +
+              '<div class="terminal-note">' + escapeHtml(group.oneLine || '') + '</div>' +
+            '</div>' +
+            '<div>' +
+              '<div class="terminal-label">暴露</div>' +
+              '<div class="terminal-value mono">' + escapeHtml(formatCurrency(group.exposureCny)) + '</div>' +
+              '<div class="terminal-note">' + escapeHtml(group.weightPct === null || group.weightPct === undefined ? '--' : formatPct(group.weightPct)) + '</div>' +
+            '</div>' +
+            '<div>' +
+              '<div class="terminal-label">代表基金</div>' +
+              '<div class="terminal-value mono">' + escapeHtml(representative.fundCode || '--') + '</div>' +
+              '<div class="terminal-note">' + escapeHtml(oneLineReason(representative.fundName || group.representativeReason || '--')) + '</div>' +
+            '</div>' +
+            '<div>' +
+              '<div class="terminal-label">重复观察</div>' +
+              '<div class="terminal-reason">' + escapeHtml(duplicates.slice(0, 3).map((item) => item.fundName || item.fundCode).join(' / ') || '暂无') + '</div>' +
+              '<div class="terminal-note">' + escapeHtml(notes.slice(0, 2).join(' / ') || group.representativeReason || '--') + '</div>' +
+            '</div>' +
+          '</div>';
+        }).join('');
       }
 
       function renderDecision(payload) {
@@ -3503,31 +4343,90 @@ function advicePage({ initialAccountId, availableAccounts }) {
             ? payload.bucketVerdicts
             : [];
         const runtimeRefresh = payload?.runtimeRefresh ?? null;
+        const providerRuntime = payload?.providerRuntime ?? payload?.diagnostics?.providerRuntime ?? {};
+        const providerUsed = payload?.providerUsed ?? providerRuntime?.providerUsed ?? payload?.provider ?? "--";
+        const providerMode = payload?.providerMode ?? providerRuntime?.providerMode ?? payload?.mode ?? "--";
+        const providerFallbackReason = payload?.providerFallbackReason ?? providerRuntime?.providerFallbackReason ?? null;
+        const latestLiveAttempt = providerRuntime?.latestLiveAttempt ?? null;
+        const slowGraphCircuitBreaker = providerRuntime?.slowGraphCircuitBreaker ?? null;
+        const providerHealth = Array.isArray(payload?.providerHealth) ? payload.providerHealth : providerRuntime?.providerHealth ?? [];
+        const liveProviderAvailable = hasLiveTradingAgentsProvider(providerHealth);
+        const liveBrainState = String(payload?.liveBrainState ?? "");
+        const liveBrainLabel = payload?.liveBrainStateLabel ?? liveBrainState;
+        const brainProfile = payload?.brainProfile ?? providerRuntime?.brainProfile;
+        const quoteCoverage = payload?.marketProxyQuoteCoverage ?? payload?.decisionContext?.marketProxyQuoteCoverage ?? {};
+        const quoteCoverageText =
+          quoteCoverage && Number.isFinite(Number(quoteCoverage.total))
+              ? "行情覆盖 live " + String(quoteCoverage.live ?? 0) +
+                " / delayed " + String(quoteCoverage.delayed ?? 0) +
+                " / 前收 " + String(quoteCoverage[["reference", "close"].join("_")] ?? 0) +
+                " / 缺失 " + String(quoteCoverage.missing ?? 0)
+            : null;
+        const providerAttemptCount = Array.isArray(payload?.providerAttempted ?? providerRuntime?.providerAttempted)
+          ? (payload.providerAttempted ?? providerRuntime.providerAttempted).length
+          : 0;
 
         elements.status.textContent =
           String(payload?.source ?? "TradingAgents") +
           ' · ' +
-          String(payload?.provider ?? '--') +
+          displayBrainProfile(brainProfile) +
           ' · ' +
-          String(payload?.mode ?? '--');
+          displayProviderSource(providerUsed, providerMode);
         elements.decisionMeta.innerHTML = [
           '<span class="tag">状态 ' + escapeHtml(payload?.status ?? '--') + '</span>',
           '<span class="tag">风险灯 ' + escapeHtml(payload?.riskLight ?? '--') + '</span>',
+          '<span class="tag">主脑 ' + escapeHtml(displayBrainProfile(brainProfile)) + '</span>',
+          '<span class="tag">当前结果 ' + escapeHtml(displayProviderSource(providerUsed, providerMode)) + '</span>',
+          '<span class="tag warn">' + escapeHtml(liveBrainLabel || "live 主脑状态未知") + '</span>',
+          !liveProviderAvailable && providerUsed === "fallback_fixture"
+            ? '<span class="tag warn">今日无 live TradingAgents 主脑</span>'
+            : '',
+          ...providerHealth.slice(0, 2).map((item) =>
+            '<span class="tag">' + escapeHtml(displayProviderHealth(item)) + '</span>'
+          ),
+          latestLiveAttempt
+            ? '<span class="tag warn">最近 live ' + escapeHtml(displayLiveAttempt(latestLiveAttempt)) + '</span>'
+            : '',
+          slowGraphCircuitBreaker?.active
+            ? '<span class="tag warn">' + escapeHtml(displayCircuitBreaker(slowGraphCircuitBreaker)) + '</span>'
+            : '',
+          providerFallbackReason
+            ? '<span class="tag warn">fallback ' + escapeHtml(String(providerFallbackReason)) + '</span>'
+            : providerAttemptCount > 1
+              ? '<span class="tag">候选源 ' + escapeHtml(String(providerAttemptCount)) + '</span>'
+              : '',
+          payload?.nextRetryAt
+            ? '<span class="tag">下次自动重试 ' + escapeHtml(String(payload.nextRetryAt)) + '</span>'
+            : '',
           '<span class="tag">as-of ' + escapeHtml(payload?.asOf ?? '--') + '</span>',
           '<span class="tag">行情 ' +
             escapeHtml(displayMarketDataTierLabel(payload?.decisionContext?.marketDataTier, payload?.decisionContext?.marketDataTierLabel)) +
             (payload?.decisionContext?.marketDataAsOf ? ' · ' + escapeHtml(payload.decisionContext.marketDataAsOf) : '') +
           '</span>',
+          quoteCoverageText ? '<span class="tag">' + escapeHtml(quoteCoverageText) + '</span>' : '',
           '<span class="tag">freshness ' + escapeHtml(payload?.diagnostics?.freshnessLabel ?? '--') + '</span>'
         ].join('');
-        elements.decisionHeadline.textContent = String(payload?.decisionHeadline ?? '等待主链结果');
-        elements.decisionSummary.textContent = String(payload?.decisionSummary ?? '暂无决策摘要。');
+        const morningBrief = payload?.morningBrief ?? {};
+        elements.decisionHeadline.textContent = String(morningBrief.actionStateLabel ?? payload?.decisionHeadline ?? '等待主链结果');
+        elements.decisionSummary.textContent = String(morningBrief.headline ?? payload?.decisionSummary ?? '暂无决策摘要。');
         renderDecisionBriefList(payload, realActions, observeLine);
+        renderFundBrainPanel(payload);
         elements.decisionRuntimeState.textContent =
-          runtimeRefresh?.running
-            ? '后台正在预热/刷新 TradingAgents 快照，请稍候自动回补 live 结果。'
+          liveBrainState === "live_brain_available"
+            ? 'live TradingAgents ' + displayBrainProfile(brainProfile) + '可用；完整原图保留为后台深度复盘，不阻塞页面。当前仍为只读候选，不写账本、不下单。'
+            : runtimeRefresh?.running || liveBrainState === "live_brain_refreshing"
+            ? '后台正在预热/刷新 TradingAgents ' + displayBrainProfile(brainProfile) + '快照，请稍候自动回补 live 结果。'
+            : liveBrainState === "live_brain_paused"
+              ? 'live ' + displayBrainProfile(brainProfile) + '暂停；当前展示降级观察。' +
+                (payload?.nextRetryAt ? ' 下次自动重试 ' + String(payload.nextRetryAt) + '。' : ' 可手动触发一次重试。')
+            : !liveProviderAvailable && providerUsed === "fallback_fixture"
+              ? '今日无 live TradingAgents 主脑；当前展示降级观察和本地基金护栏映射，不构成执行清单。'
+            : slowGraphCircuitBreaker?.active
+              ? 'TradingAgents 原图连续超时，预热已自动暂停；当前展示 fallback/cache，只读观察。'
             : runtimeRefresh?.lastError
               ? '最近一次后台刷新失败：' + String(runtimeRefresh.lastError)
+              : runtimeRefresh?.lastResult?.decisionError
+                ? '最近预热已完成，主链仍等待 cache 补齐：' + String(runtimeRefresh.lastResult.decisionError)
               : runtimeRefresh?.lastCompletedAt
                 ? '最近后台刷新完成于 ' + String(runtimeRefresh.lastCompletedAt)
                 : runtimeRefresh?.lastSkipReason
@@ -3552,6 +4451,8 @@ function advicePage({ initialAccountId, availableAccounts }) {
             const rangeText = formatAmountRange(item.suggestedAmountRangeCny);
             const pctRangeText = formatPctRange(item.suggestedPctRange);
             const warnings = Array.isArray(item?.sizingWarnings) ? item.sizingWarnings : [];
+            const summaryReason = item.fundReasonOneLine || item.actionOneLine || item.reasonSummary || item.verdict || '暂无理由摘要';
+            const evidenceDigest = Array.isArray(item?.evidenceDigest) ? item.evidenceDigest : [];
             return '<div class="terminal-row action-terminal-row">' +
               '<div class="terminal-main terminal-fund">' +
                 '<div class="terminal-title">' +
@@ -3579,10 +4480,13 @@ function advicePage({ initialAccountId, availableAccounts }) {
               '</div>' +
               '<div>' +
                 '<div class="terminal-label">一句话理由</div>' +
-                '<div class="terminal-reason">' + escapeHtml(oneLineReason(item.reasonSummary || item.verdict || '暂无理由摘要')) + '</div>' +
+                '<div class="terminal-reason">' + escapeHtml(oneLineReason(summaryReason)) + '</div>' +
               '</div>' +
               '<details class="terminal-evidence">' +
                 '<summary>证据详情 / TradingAgents 原文</summary>' +
+                (evidenceDigest.length > 0
+                  ? '<div class="markdown-body">' + evidenceDigest.map((line) => '<p>' + renderInlineMarkdown(line) + '</p>').join('') + '</div>'
+                  : '') +
                 '<div class="markdown-body">' + markdownToHtml(item.reasonSummary || '暂无证据详情。') + '</div>' +
               '</details>' +
             '</div>';
@@ -3595,42 +4499,7 @@ function advicePage({ initialAccountId, availableAccounts }) {
           elements.realActions.querySelector(".empty")?.classList.add("risk-watch-empty");
         }
 
-        renderList(
-          elements.observeLine,
-          observeLine,
-          (item) => {
-            const candidates = Array.isArray(item?.candidateFunds) ? item.candidateFunds : [];
-            const confidence = item?.confidence === null || item?.confidence === undefined ? '--' : String(item.confidence);
-            const reasonLabels = Array.isArray(item?.reasonLabels) ? item.reasonLabels : [];
-            return '<div class="terminal-row observe-terminal-row">' +
-              '<div class="terminal-main">' +
-                '<div class="terminal-label">BUCKET</div>' +
-                '<div class="terminal-title">' +
-                  '<span class="terminal-name">' + escapeHtml(item.bucketLabel || item.bucket || '--') + '</span>' +
-                '</div>' +
-              '</div>' +
-              '<div>' +
-                '<div class="terminal-label">VERDICT</div>' +
-                '<div class="terminal-value mono">' + escapeHtml(item.verdict || '--') + '</div>' +
-              '</div>' +
-              '<div>' +
-                '<div class="terminal-label">STATE</div>' +
-                '<div class="terminal-value mono">' + escapeHtml((item.executionState || 'observe') + ' · ' + confidence) + '</div>' +
-              '</div>' +
-              '<div>' +
-                '<div class="terminal-label">NOTE</div>' +
-                '<div class="terminal-reason">' + escapeHtml(oneLineReason(item.note || '继续观察。')) + '</div>' +
-                (reasonLabels.length > 1 ? '<div class="terminal-note">' + escapeHtml(reasonLabels.slice(1, 3).join(' / ')) + '</div>' : '') +
-                (candidates.length > 0 ? '<div class="terminal-note">候选基金 ' + escapeHtml(String(candidates.length)) + ' 只</div>' : '') +
-              '</div>' +
-              '<details class="terminal-evidence">' +
-                '<summary>证据详情</summary>' +
-                '<div class="markdown-body">' + markdownToHtml(item.note || '继续观察。') + '</div>' +
-              '</details>' +
-            '</div>';
-          },
-          '当前没有观察线。'
-        );
+        renderObservationGroups(elements.observeLine, payload?.observationGroups, observeLine);
 
         renderList(
           elements.blockedSuggestions,
@@ -3687,6 +4556,186 @@ function advicePage({ initialAccountId, availableAccounts }) {
           },
           '当前没有 bucket 证据。'
         );
+
+        const deepDiveCandidates = Array.isArray(payload?.deepDiveCandidates)
+          ? payload.deepDiveCandidates
+          : Array.isArray(payload?.portfolioAnalysis?.deepDiveCandidates)
+            ? payload.portfolioAnalysis.deepDiveCandidates
+            : [];
+        renderDeepDiveGroups(
+          elements.deepDiveCandidates,
+          deepDiveCandidates,
+          payload?.fundTradingAgentsAdapter ?? payload?.portfolioAnalysis?.fundTradingAgentsAdapter ?? null,
+          payload?.fundLiveAnalysis ?? null,
+          payload?.fundNativeAnalysis ?? null
+        );
+
+        const fundAnalyses = Array.isArray(payload?.fundAnalyses) ? payload.fundAnalyses : [];
+        const fundLiveRows = Array.isArray(payload?.fundLiveAnalysis?.analyses) ? payload.fundLiveAnalysis.analyses : [];
+        const liveByCode = new Map(fundLiveRows.map((item) => [String(item?.fundCode ?? ""), item]));
+        const fundNativeRows = Array.isArray(payload?.fundNativeAnalysis?.analyses) ? payload.fundNativeAnalysis.analyses : [];
+        const nativeByCode = new Map(fundNativeRows.map((item) => [String(item?.fundCode ?? ""), item]));
+        const statusCounts = fundAnalyses.reduce((acc, item) => {
+          const key = statusGroupLabel(item?.tradeStance);
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {});
+        const unmappedCount = fundAnalyses.filter((item) => String(item?.bucket ?? "") === "UNMAPPED").length;
+        const profileQualities = fundAnalyses.map((item) => item?.researchProfileQuality ?? profileQualityFallback(item));
+        const profileReadyCount = profileQualities.filter((item) => ["ready", "partial", "stale"].includes(String(item?.status ?? ""))).length;
+        const profileLookthroughCount = profileQualities.filter((item) =>
+          (Array.isArray(item?.tags) ? item.tags : []).some((tag) => ["holdings_loaded", "holdings_aging", "holdings_stale"].includes(String(tag?.code ?? "")))
+        ).length;
+        const profileStaleCount = profileQualities.filter((item) => String(item?.status ?? "") === "stale").length;
+        elements.fundStatusSummary.innerHTML = [
+          "候选", "观察", "防守", "维持", "其他"
+        ].filter((key) => statusCounts[key]).map((key) =>
+          '<span class="row-chip">' + escapeHtml(key) + ' · ' + escapeHtml(String(statusCounts[key])) + '</span>'
+        ).join('') +
+        '<span class="row-chip">资料 ' + escapeHtml(String(profileReadyCount)) + '/' + escapeHtml(String(fundAnalyses.length)) + '</span>' +
+        '<span class="row-chip">重仓穿透 ' + escapeHtml(String(profileLookthroughCount)) + '/' + escapeHtml(String(fundAnalyses.length)) + '</span>' +
+        (profileStaleCount > 0 ? '<span class="row-chip warn">重仓陈旧 · ' + escapeHtml(String(profileStaleCount)) + '</span>' : '') + (
+          unmappedCount > 0
+            ? '<span class="row-chip warn">映射待补 · ' + escapeHtml(String(unmappedCount)) + '</span>'
+            : '<span class="row-chip">映射完整</span>'
+        );
+        const statusRows = [...fundAnalyses].sort((left, right) => {
+          const leftRank = statusRank(left?.tradeStance);
+          const rightRank = statusRank(right?.tradeStance);
+          if (leftRank !== rightRank) return leftRank - rightRank;
+          const leftBucket = String(left?.bucketLabel ?? left?.bucket ?? "");
+          const rightBucket = String(right?.bucketLabel ?? right?.bucket ?? "");
+          if (leftBucket !== rightBucket) return leftBucket.localeCompare(rightBucket, "zh-CN");
+          return Number(right?.amountCny ?? 0) - Number(left?.amountCny ?? 0);
+        });
+        renderList(
+          elements.fundStatusMatrix,
+          statusRows,
+              (item) => {
+              const factorProfile = item.factorProfile ?? {};
+              const liveAnalysis = liveByCode.get(String(item?.fundCode ?? ""));
+              const nativeAnalysis = nativeByCode.get(String(item?.fundCode ?? ""));
+                const factorLabels = [
+                  factorProfile.primaryFactorLabel,
+                  ...(Array.isArray(factorProfile.secondaryFactorLabels) ? factorProfile.secondaryFactorLabels.slice(0, 1) : [])
+                ].filter(Boolean).join(' / ');
+                const stateLabel = nativeAnalysis?.verdictLabel
+                  ? "基金原生 · " + nativeAnalysis.verdictLabel
+                  : liveAnalysis?.verdictLabel
+                    ? "基金主脑 · " + liveAnalysis.verdictLabel
+                  : item.tradeStance || "维持观察";
+                const riskLine = nativeAnalysis
+                  ? "基金原生：" + (nativeAnalysis.oneLine || nativeAnalysis.verdictLabel || "已完成基金原生分析")
+                  : liveAnalysis
+                  ? "基金主脑：" + (liveAnalysis.headline || liveAnalysis.verdictLabel || "已完成 live 分析")
+                  : oneLineReason(item.statusOneLine || item.riskNote || item.factorOneLine || '暂无额外风险提示');
+            return '<div class="terminal-row fund-status-row">' +
+              '<div>' +
+                '<div class="terminal-label">状态</div>' +
+                '<div class="terminal-value mono">' + escapeHtml(stateLabel) + '</div>' +
+                '<div class="terminal-note">' + escapeHtml(statusGroupLabel(stateLabel)) + '</div>' +
+              '</div>' +
+              '<div class="terminal-main">' +
+                '<div class="terminal-title">' +
+                  '<span class="terminal-code mono">' + escapeHtml(item.fundCode || '--') + '</span>' +
+                  '<span class="terminal-name">' + escapeHtml(item.fundName || '--') + '</span>' +
+                '</div>' +
+                renderProfileQualityTags(item) +
+              '</div>' +
+              '<div>' +
+                '<div class="terminal-label">桶 / 因子</div>' +
+                '<div class="terminal-value mono">' + escapeHtml(item.bucketLabel || item.bucket || '--') + '</div>' +
+                '<div class="terminal-note">' + escapeHtml(factorLabels || '--') + '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="terminal-label">金额</div>' +
+                '<div class="terminal-amount mono">' + escapeHtml(formatCurrency(item.amountCny)) + '</div>' +
+                '<div class="terminal-note">' + escapeHtml(item.weightPct === null || item.weightPct === undefined ? '--' : formatPct(item.weightPct)) + '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="terminal-label">收益</div>' +
+                '<div class="terminal-value mono">今 ' + escapeHtml(formatSignedCurrency(item.dayPnl)) + '</div>' +
+                '<div class="terminal-note">' + escapeHtml(liveAnalysis?.riskLevel ? "主脑风险 " + liveAnalysis.riskLevel : "持有 " + formatSignedCurrency(item.holdingPnl)) + '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="terminal-label">确认 / 风险</div>' +
+                '<div class="terminal-value mono">' + escapeHtml(compactConfirmation(item.confirmationState)) + '</div>' +
+                '<div class="terminal-note">' + escapeHtml(oneLineReason(riskLine)) + '</div>' +
+              '</div>' +
+            '</div>';
+          },
+          '暂无基金状态矩阵。'
+        );
+
+        const portfolioAnalysis = payload?.portfolioAnalysis ?? null;
+        const fundLiveConclusion = payload?.fundLivePortfolioConclusion ?? payload?.fundLiveAnalysis?.portfolioConclusion ?? null;
+        if (!portfolioAnalysis) {
+          renderPeerFundGroups(elements.peerFundGroups, []);
+          elements.portfolioAnalysis.innerHTML = '<div class="empty">暂无全组合观察。</div>';
+        } else {
+          renderPeerFundGroups(elements.peerFundGroups, portfolioAnalysis.peerGroupSummary);
+          const exposureRows = Array.isArray(portfolioAnalysis.exposureSummary)
+            ? portfolioAnalysis.exposureSummary.slice(0, 6)
+            : [];
+          const factorRows = Array.isArray(portfolioAnalysis.factorExposureSummary)
+            ? portfolioAnalysis.factorExposureSummary.slice(0, 6)
+            : [];
+          const dominantFactorText = Array.isArray(portfolioAnalysis.dominantFactors)
+            ? portfolioAnalysis.dominantFactors.map((item) => item.factorLabel || item.factor).filter(Boolean).slice(0, 3).join(' / ')
+            : '';
+          elements.portfolioAnalysis.innerHTML =
+            (fundLiveConclusion
+              ? '<div class="row">' +
+                  '<div class="row-title">基金主脑组合结论</div>' +
+                  '<div class="row-sub">' + escapeHtml(fundLiveConclusion.oneLine || '基金级 live 主脑暂无组合结论。') + '</div>' +
+                  '<div class="row-metrics">' +
+                    '<span class="row-chip">覆盖 ' + escapeHtml(fundLiveConclusion.coverageLabel || '--') + '</span>' +
+                    '<span class="row-chip">范围 ' + escapeHtml(fundLiveConclusion.scope === "all" ? "全持仓" : "深看基金") + '</span>' +
+                    '<span class="row-chip">' + escapeHtml(fundLiveConclusion.riskLine || '风险待确认') + '</span>' +
+                  '</div>' +
+                '</div>'
+              : '') +
+            '<div class="row">' +
+              '<div class="row-title">' + escapeHtml(portfolioAnalysis.oneLine || '暂无组合结论。') + '</div>' +
+              '<div class="row-sub">' + escapeHtml(
+                (dominantFactorText ? '主要因子：' + dominantFactorText + '。' : '') +
+                (portfolioAnalysis.cashAndDefenseNote ? ' ' + portfolioAnalysis.cashAndDefenseNote : '')
+              ) + '</div>' +
+              '<div class="row-metrics">' +
+                exposureRows.map((item) =>
+                  '<span class="row-chip">' +
+                    escapeHtml(item.bucketLabel || item.bucket || '--') +
+                    ' · ' +
+                    escapeHtml(formatCurrency(item.amountCny)) +
+                    (item.weightPct === null || item.weightPct === undefined ? '' : ' · ' + escapeHtml(formatPct(item.weightPct))) +
+                  '</span>'
+                ).join('') +
+              '</div>' +
+              '<div class="row-metrics">' +
+                factorRows.map((item) =>
+                  '<span class="row-chip">' +
+                    escapeHtml(item.factorLabel || item.factor || '--') +
+                    ' · ' +
+                    escapeHtml(formatCurrency(item.exposureCny)) +
+                    (item.weightPct === null || item.weightPct === undefined ? '' : ' · ' + escapeHtml(formatPct(item.weightPct))) +
+                  '</span>'
+                ).join('') +
+              '</div>' +
+            '</div>' +
+            '<details class="row">' +
+              '<summary class="row-summary">' +
+                '<div>' +
+                  '<div class="row-title">复盘焦点</div>' +
+                  '<div class="row-sub">' + escapeHtml((portfolioAnalysis.nextReviewFocus || []).slice(0, 3).join(' / ') || '等待下一轮 live 主脑。') + '</div>' +
+                '</div>' +
+                '<span class="row-chip">展开</span>' +
+              '</summary>' +
+              '<div class="markdown-body">' + markdownToHtml([
+                ...(portfolioAnalysis.factorRiskNotes || []),
+                ...(portfolioAnalysis.riskNotes || [])
+              ].map((item) => '- ' + item).join('\\n') || '暂无组合风险补充。') + '</div>' +
+            '</details>';
+        }
       }
 
       async function refreshDecision(options = {}) {
@@ -3696,7 +4745,7 @@ function advicePage({ initialAccountId, availableAccounts }) {
         if (options.forcePrewarm) {
           url.searchParams.set('refresh', '1');
           elements.prewarmBtn.disabled = true;
-          elements.prewarmBtn.textContent = '已触发';
+          elements.prewarmBtn.textContent = '手动重试已触发';
         }
         url.searchParams.set('t', String(Date.now()));
         try {
@@ -3704,8 +4753,73 @@ function advicePage({ initialAccountId, availableAccounts }) {
           const payload = await response.json();
           renderDecision(payload);
         } finally {
-          elements.prewarmBtn.disabled = false;
-          elements.prewarmBtn.textContent = '触发预热';
+          if (elements.prewarmBtn.dataset.blocked === "1") {
+            elements.prewarmBtn.disabled = true;
+            elements.prewarmBtn.textContent = '预热暂停';
+          } else {
+            elements.prewarmBtn.disabled = false;
+            elements.prewarmBtn.textContent = elements.prewarmBtn.dataset.label || ('预热 ' + lastPrewarmProvider);
+          }
+        }
+      }
+
+      async function refreshFundLiveAnalysis(options = {}) {
+        const scope = options.scope === "all" ? "all" : "deep_dive";
+        const targetButton = scope === "all" ? elements.fundLiveAllBtn : elements.fundLiveBtn;
+        const peerButton = scope === "all" ? elements.fundLiveBtn : elements.fundLiveAllBtn;
+        elements.fundLiveBtn.disabled = true;
+        elements.fundLiveAllBtn.disabled = true;
+        targetButton.textContent = scope === "all" ? '全持仓运行中...' : '深看运行中...';
+        peerButton.textContent = '等待中';
+        elements.fundBrainSummary.textContent =
+          scope === "all"
+            ? '正在对全持仓基金运行基金级 live 分析；这一步可能较慢，只读，不写账本、不下单。'
+            : '正在对今日深看基金运行基金级 live 分析；这一步只读，不写账本、不下单。';
+        const url = new URL('/api/fund-live-analysis', window.location.origin);
+        url.searchParams.set('account', config.currentAccount);
+        url.searchParams.set('refresh', '1');
+        url.searchParams.set('scope', scope);
+        url.searchParams.set('limit', scope === "all" ? '24' : '4');
+        url.searchParams.set('t', String(Date.now()));
+        try {
+          const response = await fetch(url);
+          const payload = await response.json();
+          if (!response.ok || payload?.status === "blocked") {
+            throw new Error(payload?.diagnostics?.providerAttempted?.[0]?.error || payload?.status || "fund_live_failed");
+          }
+          await refreshDecision();
+        } catch (error) {
+          elements.fundBrainSummary.textContent = '基金级 live 分析失败：' + String(error?.message ?? error);
+        } finally {
+          elements.fundLiveBtn.disabled = false;
+          elements.fundLiveAllBtn.disabled = false;
+          elements.fundLiveBtn.textContent = elements.fundLiveBtn.dataset.label || '重跑深看基金';
+          elements.fundLiveAllBtn.textContent = elements.fundLiveAllBtn.dataset.label || '跑全持仓基金';
+        }
+      }
+
+      async function refreshFundNativeAnalysis() {
+        elements.fundNativeBtn.disabled = true;
+        elements.fundNativeBtn.textContent = '基金主脑运行中...';
+        elements.fundBrainSummary.textContent = '正在运行 TradingAgents 基金原生主脑；只读复核，不写账本、不下单。';
+        const url = new URL('/api/fund-native-analysis', window.location.origin);
+        url.searchParams.set('account', config.currentAccount);
+        url.searchParams.set('refresh', '1');
+        url.searchParams.set('scope', 'deep_dive');
+        url.searchParams.set('limit', '4');
+        url.searchParams.set('t', String(Date.now()));
+        try {
+          const response = await fetch(url);
+          const payload = await response.json();
+          if (!response.ok || payload?.status === "failed") {
+            throw new Error(payload?.providerAttempted?.[0]?.error || payload?.status || "fund_native_failed");
+          }
+          await refreshDecision();
+        } catch (error) {
+          elements.fundBrainSummary.textContent = '基金原生主脑失败：' + String(error?.message ?? error);
+        } finally {
+          elements.fundNativeBtn.disabled = false;
+          elements.fundNativeBtn.textContent = '基金原生主脑';
         }
       }
 
@@ -3715,6 +4829,9 @@ function advicePage({ initialAccountId, availableAccounts }) {
       });
       elements.refreshBtn.addEventListener('click', refreshDecision);
       elements.prewarmBtn.addEventListener('click', () => refreshDecision({ forcePrewarm: true }));
+      elements.fundNativeBtn.addEventListener('click', refreshFundNativeAnalysis);
+      elements.fundLiveBtn.addEventListener('click', () => refreshFundLiveAnalysis({ scope: "deep_dive" }));
+      elements.fundLiveAllBtn.addEventListener('click', () => refreshFundLiveAnalysis({ scope: "all" }));
       refreshDecision().catch((error) => {
         elements.status.textContent = '读取失败';
         elements.decisionHeadline.textContent = '交易主脑读取失败';
@@ -3834,6 +4951,8 @@ function marketTopicsPage({ initialAccountId, availableAccounts }) {
         const reportCount = Number(payload?.reports?.length ?? 0);
         elements.marketMeta.innerHTML = [
           '<span class="tag">' + escapeHtml(payload?.primaryAsOfLabel ?? ("as-of " + (payload?.asOf ?? "--"))) + '</span>',
+          '<span class="tag warn">' + escapeHtml(payload?.generationStatus?.label ?? "今日报告状态未知") + '</span>',
+          '<span class="tag">source ' + escapeHtml(payload?.sourceMode ?? "unknown") + '</span>',
           '<span class="tag">sync ' + escapeHtml(payload?.syncStatus?.status ?? "unknown") + '</span>',
           '<span class="tag">reports ' + escapeHtml(String(reportCount)) + '</span>',
           '<span class="tag">events ' + escapeHtml(String(eventCount)) + '</span>'
@@ -3844,6 +4963,13 @@ function marketTopicsPage({ initialAccountId, availableAccounts }) {
         elements.marketAsOf.textContent = String(payload?.primaryAsOfLabel ?? payload?.asOf ?? "--");
         elements.marketHeadline.textContent = payload?.headline || "暂无最新市场摘要";
         elements.marketResearchSummary.textContent =
+          payload?.generationStatus?.status && payload.generationStatus.status !== "same_day"
+            ? payload.generationStatus.label + "；" + (
+                payload?.summaryNote ||
+                payload?.researchSummary ||
+                "当前页面以可用市场 brief / pulse 为主。"
+              )
+            :
           payload?.summaryNote ||
           payload?.researchSummary ||
           "暂无附加摘要，当前页面以最新市场 brief / pulse 为主。";
@@ -6115,11 +7241,16 @@ function htmlPage({ refreshMs, initialAccountId, availableAccounts }) {
         elements.confirmedNavHeadline.className =
           "toolbar-chip " + (confirmedNavHeadline.tone || "muted");
         const accountingState = String(payload?.accountingState ?? "--");
+        const confirmationDiagnostics = payload?.confirmedNavDiagnostics ?? {};
+        const pendingConfirmFundCount = Number(confirmationDiagnostics?.pendingConfirmFundCount);
+        const strictComparable = confirmationDiagnostics?.strictComparable === true;
         const accountingParts = [
           "确认账本 " + String(payload?.snapshotDate ?? payload?.readiness?.snapshotDate ?? "--"),
           "观察估值 " + String(payload?.summary?.latestQuoteTime ?? "--"),
+          Number.isFinite(pendingConfirmFundCount) ? "待确认净值 " + String(pendingConfirmFundCount) + " 只" : "",
+          "对账 " + (strictComparable ? "可严格对账" : "观察态"),
           "口径 " + accountingState
-        ];
+        ].filter(Boolean);
         elements.accountingHeadline.textContent =
           accountingState === "observation_only_stale_snapshot"
             ? accountingParts.join(" · ") + " · 当前收益含观察估值，严格对账以确认净值链为准"
@@ -6511,52 +7642,542 @@ function roundCacheAgeHours(value) {
   return Number.isFinite(numeric) ? Math.round(numeric * 100) / 100 : null;
 }
 
+function normalizeBrainProfile(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  return ["fast", "full"].includes(text) ? text : null;
+}
+
+function buildTradingAgentsProviderHealth(coverage = {}) {
+  const counts = coverage?.counts ?? {};
+  const symbols = Array.isArray(coverage?.symbols) ? coverage.symbols : [];
+  const circuitBreaker = coverage?.circuitBreaker ?? null;
+  const latestAttempt = symbols
+    .filter((item) => item?.lastAttemptAt)
+    .sort((left, right) => String(right.lastAttemptAt ?? "").localeCompare(String(left.lastAttemptAt ?? "")))[0] ?? null;
+  let status = "missing_cache";
+  let statusLabel = "缺缓存";
+  let reason = "symbol_cache_missing";
+
+  if (circuitBreaker?.active) {
+    status = "circuit_open";
+    statusLabel = "预热暂停";
+    reason = circuitBreaker.reason ?? "tradingagents_provider_circuit_open";
+  } else if (coverage?.fullyFresh === true || (counts.total > 0 && counts.fresh === counts.total)) {
+    status = "available";
+    statusLabel = "可用";
+    reason = null;
+  } else if ((counts.fresh ?? 0) > 0) {
+    status = "partial_cache";
+    statusLabel = "部分缓存";
+    reason = "symbol_cache_partial";
+  } else if ((counts.rate_limited ?? 0) > 0) {
+    status = "rate_limited";
+    statusLabel = "限流";
+    reason = latestAttempt?.error ?? "provider_rate_limited";
+  } else if ((counts.timeout ?? 0) > 0) {
+    status = "timeout";
+    statusLabel = "超时";
+    reason = latestAttempt?.error ?? "provider_timeout";
+  } else if ((counts.connection_error ?? 0) > 0) {
+    status = "connection_error";
+    statusLabel = "连接失败";
+    reason = latestAttempt?.error ?? "provider_connection_error";
+  } else if ((counts.failed ?? 0) > 0) {
+    status = "failed";
+    statusLabel = "失败";
+    reason = latestAttempt?.error ?? "provider_failed";
+  } else if ((counts.stale ?? 0) > 0) {
+    status = "stale_cache";
+    statusLabel = "缓存过期";
+    reason = "symbol_cache_stale";
+  }
+
+  return {
+    provider: coverage?.provider ?? null,
+    role: coverage?.role ?? null,
+    deepModel: coverage?.deepModel ?? null,
+    quickModel: coverage?.quickModel ?? null,
+    brainProfile: normalizeBrainProfile(coverage?.brainProfile),
+    tradeDate: coverage?.tradeDate ?? null,
+    status,
+    statusLabel,
+    reason,
+    counts,
+    fullyFresh: coverage?.fullyFresh === true,
+    circuitBreaker,
+    latestAttempt: latestAttempt
+      ? {
+          symbol: latestAttempt.symbol ?? null,
+          status: latestAttempt.status ?? null,
+          error: latestAttempt.error ?? null,
+          lastAttemptAt: latestAttempt.lastAttemptAt ?? null,
+          lastFinishedAt: latestAttempt.lastFinishedAt ?? null,
+          durationMs: latestAttempt.durationMs ?? null,
+          cooldownUntil: latestAttempt.cooldownUntil ?? null,
+          diagnosticPath: latestAttempt.diagnosticPath ?? null,
+          brainProfile: normalizeBrainProfile(latestAttempt.brainProfile ?? coverage?.brainProfile)
+        }
+      : null
+  };
+}
+
+function parseRuntimeDate(value) {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return null;
+  }
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function resolveLiveBrainRetryAt(providerHealth = [], now = new Date()) {
+  const nowMs = now.getTime();
+  const candidates = [];
+  for (const item of Array.isArray(providerHealth) ? providerHealth : []) {
+    for (const value of [
+      item?.circuitBreaker?.cooldownUntil,
+      item?.latestAttempt?.cooldownUntil
+    ]) {
+      const date = parseRuntimeDate(value);
+      if (date && date.getTime() > nowMs) {
+        candidates.push(date.toISOString());
+      }
+    }
+  }
+  return candidates.sort((left, right) => left.localeCompare(right))[0] ?? null;
+}
+
+function buildLiveBrainStatus({ providerHealth = [], providerRuntime = {}, runtimeRefresh = null, now = new Date() } = {}) {
+  const health = Array.isArray(providerHealth) ? providerHealth : [];
+  const hasAvailableProvider = health.some((item) => String(item?.status ?? "") === "available");
+  const freshCount = health.reduce((sum, item) => sum + Number(item?.counts?.fresh ?? 0), 0);
+  const hasProviders = health.length > 0;
+  const allProvidersUnavailable =
+    hasProviders &&
+    health.every((item) =>
+      [
+        "circuit_open",
+        "timeout",
+        "rate_limited",
+        "connection_error",
+        "failed",
+        "missing_cache",
+        "stale_cache"
+      ].includes(String(item?.status ?? ""))
+    );
+  const nextRetryAt = resolveLiveBrainRetryAt(health, now);
+  const retryDate = parseRuntimeDate(nextRetryAt);
+  const retryBlocked = retryDate ? retryDate.getTime() > now.getTime() : false;
+  const running = runtimeRefresh?.running === true;
+  let liveBrainState = "live_brain_degraded";
+  let liveBrainStateLabel = "live 主脑降级";
+
+  if (hasAvailableProvider) {
+    liveBrainState = "live_brain_available";
+    liveBrainStateLabel = "live 主脑可用";
+  } else if (running) {
+    liveBrainState = "live_brain_refreshing";
+    liveBrainStateLabel = "正在尝试后台预热";
+  } else if (hasProviders && freshCount === 0 && allProvidersUnavailable) {
+    liveBrainState = "live_brain_paused";
+    liveBrainStateLabel = "live 主脑暂停，当前为降级观察";
+  }
+
+  return {
+    liveBrainState,
+    liveBrainStateLabel,
+    nextRetryAt,
+    manualRetryAllowed: !running,
+    autoRetryAllowed: liveBrainState !== "live_brain_paused" || !retryBlocked,
+    pausedReason:
+      liveBrainState === "live_brain_paused"
+        ? providerRuntime?.providerFallbackReason ?? "tradingagents_live_brain_unavailable"
+        : null
+  };
+}
+
 async function buildTradingAgentsSymbolCacheStatus({
   portfolioRoot,
   decisionSnapshot = {},
   now = new Date()
 } = {}) {
   const bridgeConfig = await loadTradingAgentsBridgeConfig();
-  const providerDefaults = bridgeConfig?.providerDefaults ?? {};
+  const prewarmStatus = await loadTradingAgentsPrewarmStatus(portfolioRoot);
+  const chainItems = [
+    { role: "primary", ...(bridgeConfig?.providerChain?.primary ?? {}) },
+    ...(Array.isArray(bridgeConfig?.providerChain?.fallback)
+      ? bridgeConfig.providerChain.fallback
+      : bridgeConfig?.providerChain?.fallback
+        ? [bridgeConfig.providerChain.fallback]
+        : [])
+      .filter(Boolean)
+      .map((item) => ({ role: "fallback", ...item }))
+  ].filter((item) => item?.llmProvider);
+  const runtime = decisionSnapshot?.providerRuntime ?? decisionSnapshot?.diagnostics?.providerRuntime ?? {};
+  const runtimeProvider = String(runtime?.providerUsed ?? decisionSnapshot?.providerUsed ?? "").trim().toLowerCase();
+  const primaryProviderName = String(
+    chainItems.find((item) => item.role === "primary")?.llmProvider ??
+      bridgeConfig?.providerDefaults?.llmProvider ??
+      ""
+  ).trim().toLowerCase();
+  const providerName = String(
+    runtimeProvider === "fallback_fixture"
+      ? primaryProviderName
+      : runtime?.providerUsed ??
+        decisionSnapshot?.providerUsed ??
+        decisionSnapshot?.provider ??
+        primaryProviderName
+  ).trim().toLowerCase();
+  const matchedProvider = chainItems.find(
+    (item) => String(item?.llmProvider ?? "").trim().toLowerCase() === providerName
+  );
+  const providerDefaults = {
+    ...(bridgeConfig?.providerDefaults ?? {}),
+    ...(matchedProvider ?? {})
+  };
   const symbols = collectLiveSymbols(bridgeConfig);
   const tradeDate = String(decisionSnapshot?.asOf ?? formatShanghaiDate(now)).trim();
-  const coverage = await inspectTradingAgentsSymbolCacheCoverage({
-    symbols,
-    tradeDate,
-    providerDefaults,
-    portfolioRoot,
-    now
-  });
-  const entries = new Map(
-    [
-      ...coverage.freshEntries.map((entry) => [entry.symbol, { ...entry, status: "fresh" }]),
-      ...coverage.staleEntries.map((entry) => [entry.symbol, { ...entry, status: "stale" }])
-    ]
-  );
-
-  return {
-    tradeDate,
-    provider: providerDefaults?.llmProvider ?? null,
-    deepModel: providerDefaults?.deepThinkModel ?? null,
-    quickModel: providerDefaults?.quickThinkModel ?? null,
-    ttlHours: coverage.ttlHours,
-    fullyFresh: coverage.fullyFresh,
-    counts: {
-      fresh: coverage.freshSymbols.length,
-      stale: coverage.staleSymbols.length,
-      missing: coverage.missingSymbols.length,
-      total: symbols.length
-    },
-    symbols: symbols.map((symbol) => {
+  const buildCoveragePayload = async (defaults, role = null) => {
+    const coverage = await inspectTradingAgentsSymbolCacheCoverage({
+      symbols,
+      tradeDate,
+      providerDefaults: defaults,
+      portfolioRoot,
+      now
+    });
+    const entries = new Map(
+      [
+        ...coverage.freshEntries.map((entry) => [entry.symbol, { ...entry, status: "fresh" }]),
+        ...coverage.staleEntries.map((entry) => [entry.symbol, { ...entry, status: "stale" }])
+      ]
+    );
+    const providerKey = buildTradingAgentsPrewarmProviderKey(defaults);
+    const legacyProviderKey = buildTradingAgentsPrewarmLegacyProviderKey(defaults);
+    const providerPrewarmStatus =
+      prewarmStatus?.providers?.[providerKey] ?? prewarmStatus?.providers?.[legacyProviderKey] ?? {};
+    const prewarmSymbols = providerPrewarmStatus?.symbols ?? {};
+    const normalizeRuntimeStatus = (symbol, fallbackStatus) => {
+      const runtime = prewarmSymbols?.[symbol];
+      if (!runtime || String(runtime?.tradeDate ?? "").trim() !== tradeDate || fallbackStatus === "fresh") {
+        return {
+          status: fallbackStatus,
+          runtime: null
+        };
+      }
+      const status = String(runtime?.status ?? "").trim();
+      if (["timeout", "rate_limited", "connection_error", "failed"].includes(status)) {
+        return {
+          status,
+          runtime
+        };
+      }
+      return {
+        status: fallbackStatus,
+        runtime: null
+      };
+    };
+    const symbolRows = symbols.map((symbol) => {
       const entry = entries.get(symbol);
+      const { status, runtime } = normalizeRuntimeStatus(symbol, entry?.status ?? "missing");
       return {
         symbol,
-        status: entry?.status ?? "missing",
-        rating: entry?.call?.rating ?? null,
+        status,
+        rating: entry?.call?.rating ?? runtime?.rating ?? null,
         generatedAt: entry?.payload?.generatedAt ?? null,
-        ageHours: roundCacheAgeHours(entry?.ageHours)
+        ageHours: roundCacheAgeHours(entry?.ageHours),
+        brainProfile: normalizeBrainProfile(
+          entry?.call?.runtimeDiagnostics?.brainProfile ??
+          entry?.payload?.runtimeConfig?.brainProfile ??
+          runtime?.brainProfile ??
+          defaults?.brainProfile
+        ),
+        lastAttemptAt: runtime?.lastAttemptAt ?? null,
+        lastFinishedAt: runtime?.lastFinishedAt ?? null,
+        durationMs: runtime?.durationMs ?? null,
+        cooldownUntil: runtime?.cooldownUntil ?? null,
+        error: runtime?.error ?? null,
+        diagnosticPath: runtime?.diagnosticPath ?? null
       };
-    })
+    });
+    const statusCounts = symbolRows.reduce(
+      (acc, item) => {
+        const status = String(item?.status ?? "missing");
+        acc[status] = (acc[status] ?? 0) + 1;
+        acc.total += 1;
+        return acc;
+      },
+      { fresh: 0, stale: 0, missing: 0, timeout: 0, rate_limited: 0, connection_error: 0, failed: 0, total: 0 }
+    );
+    return {
+      role,
+      tradeDate,
+      provider: defaults?.llmProvider ?? null,
+      deepModel: defaults?.deepThinkModel ?? null,
+      quickModel: defaults?.quickThinkModel ?? null,
+      brainProfile: normalizeBrainProfile(defaults?.brainProfile),
+      ttlHours: coverage.ttlHours,
+      fullyFresh: coverage.fullyFresh,
+      circuitBreaker: normalizeTradingAgentsPrewarmCircuitBreaker(providerPrewarmStatus?.circuitBreaker, now),
+      counts: statusCounts,
+      symbols: symbolRows
+    };
+  };
+
+  const current = await buildCoveragePayload(providerDefaults, matchedProvider?.role ?? null);
+  const providers = [];
+  const seen = new Set();
+  for (const item of chainItems) {
+    const defaults = {
+      ...(bridgeConfig?.providerDefaults ?? {}),
+      ...item
+    };
+    const key = [
+      defaults?.llmProvider,
+      defaults?.deepThinkModel,
+      defaults?.quickThinkModel
+    ].join("/");
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    providers.push(await buildCoveragePayload(defaults, item.role));
+  }
+  const providerHealth = providers.map((item) => buildTradingAgentsProviderHealth(item));
+
+  return {
+    ...current,
+    providerHealth,
+    providers
+  };
+}
+
+function mergeProviderRuntimeCacheStatus(payload = {}, symbolCacheCoverage = null, runtimeRefresh = null) {
+  const baseRuntime = payload?.providerRuntime ?? payload?.diagnostics?.providerRuntime ?? {};
+  const snapshotMode = String(payload?.mode ?? "").trim().toLowerCase();
+  const providerCoverages = Array.isArray(symbolCacheCoverage?.providers) ? symbolCacheCoverage.providers : [];
+  const coverageByProvider = new Map(
+    providerCoverages.map((item) => [String(item?.provider ?? "").trim().toLowerCase(), item])
+  );
+  const attempted = Array.isArray(baseRuntime?.providerAttempted)
+    ? baseRuntime.providerAttempted
+    : Array.isArray(payload?.providerAttempted)
+      ? payload.providerAttempted
+      : [];
+  const providerHealth = Array.isArray(symbolCacheCoverage?.providerHealth)
+    ? symbolCacheCoverage.providerHealth
+    : providerCoverages.map((item) => buildTradingAgentsProviderHealth(item));
+  const healthByProvider = new Map(
+    providerHealth.map((item) => [String(item?.provider ?? "").trim().toLowerCase(), item])
+  );
+  const allProviderNames = [
+    ...attempted.map((item) => String(item?.provider ?? "").trim().toLowerCase()).filter(Boolean),
+    ...providerCoverages.map((item) => String(item?.provider ?? "").trim().toLowerCase()).filter(Boolean)
+  ];
+  const providerAttempted = [...new Set(allProviderNames)].map((provider) => {
+    const attempt = attempted.find((item) => String(item?.provider ?? "").trim().toLowerCase() === provider) ?? {
+      provider,
+      status: provider === String(baseRuntime?.providerUsed ?? payload?.providerUsed ?? "").trim().toLowerCase()
+        ? "current"
+        : "not_attempted",
+      error: null
+    };
+    const cacheCoverage = coverageByProvider.get(provider) ?? null;
+    const prewarmFailure = runtimeRefresh?.lastResult?.prewarm?.failed?.find(
+      (item) => String(item?.provider ?? runtimeRefresh?.lastResult?.prewarm?.provider ?? "").trim().toLowerCase() === provider
+    );
+    return {
+      ...attempt,
+      cacheCoverage: cacheCoverage
+        ? {
+            role: cacheCoverage.role ?? null,
+            deepModel: cacheCoverage.deepModel ?? null,
+            quickModel: cacheCoverage.quickModel ?? null,
+            brainProfile: normalizeBrainProfile(cacheCoverage.brainProfile),
+            counts: cacheCoverage.counts ?? null,
+            fullyFresh: cacheCoverage.fullyFresh === true
+          }
+        : null,
+      prewarmStatus: prewarmFailure
+        ? {
+            status: "failed",
+            symbol: prewarmFailure.symbol ?? null,
+            normalizedStatus: prewarmFailure.status ?? null,
+            error: prewarmFailure.error ?? null
+          }
+        : null,
+      health: healthByProvider.get(provider) ?? null
+    };
+  });
+  const latestPrewarmFailure =
+    Array.isArray(runtimeRefresh?.lastResult?.prewarm?.failed) && runtimeRefresh.lastResult.prewarm.failed.length > 0
+      ? runtimeRefresh.lastResult.prewarm.failed[0]
+      : null;
+  const failedSymbolStatuses = ["timeout", "rate_limited", "connection_error", "failed"];
+  const latestCoverageFailure = providerCoverages
+    .flatMap((coverage) =>
+      (Array.isArray(coverage?.symbols) ? coverage.symbols : [])
+        .filter((symbol) => failedSymbolStatuses.includes(String(symbol?.status ?? "")))
+        .map((symbol) => ({
+          provider: coverage?.provider ?? null,
+          status: symbol?.status ?? "failed",
+          symbol: symbol?.symbol ?? null,
+          error: symbol?.error ?? null,
+          lastAttemptAt: symbol?.lastAttemptAt ?? null,
+          lastFinishedAt: symbol?.lastFinishedAt ?? null,
+          durationMs: symbol?.durationMs ?? null,
+          cooldownUntil: symbol?.cooldownUntil ?? null,
+          diagnosticPath: symbol?.diagnosticPath ?? null,
+          deepModel: coverage?.deepModel ?? null,
+          quickModel: coverage?.quickModel ?? null,
+          brainProfile: normalizeBrainProfile(symbol?.brainProfile ?? coverage?.brainProfile)
+        }))
+    )
+    .sort((left, right) => String(right.lastAttemptAt ?? "").localeCompare(String(left.lastAttemptAt ?? "")))[0] ?? null;
+  const latestAttemptFromRuntime = Array.isArray(baseRuntime?.providerAttempted)
+    ? [...baseRuntime.providerAttempted].reverse().find((item) => item?.status && item.status !== "pending")
+    : null;
+  const latestLiveAttempt = latestPrewarmFailure
+    ? {
+        provider: latestPrewarmFailure.provider ?? runtimeRefresh?.lastResult?.prewarm?.provider ?? null,
+        status: latestPrewarmFailure.status ?? "failed",
+        symbol: latestPrewarmFailure.symbol ?? null,
+        error: latestPrewarmFailure.error ?? null,
+        startedAt: latestPrewarmFailure.startedAt ?? null,
+        finishedAt: latestPrewarmFailure.finishedAt ?? null,
+        durationMs: latestPrewarmFailure.durationMs ?? null,
+        diagnosticPath: latestPrewarmFailure.diagnosticPath ?? null,
+        deepModel: runtimeRefresh?.lastResult?.prewarm?.deepModel ?? null,
+        quickModel: runtimeRefresh?.lastResult?.prewarm?.quickModel ?? null
+      }
+    : latestCoverageFailure ?? baseRuntime?.latestLiveAttempt ?? latestAttemptFromRuntime ?? null;
+  const providerUsed =
+    snapshotMode === "fallback_fixture"
+      ? "fallback_fixture"
+      : baseRuntime?.providerUsed ?? payload?.providerUsed ?? null;
+  const providerMode =
+    snapshotMode === "fallback_fixture"
+      ? "fallback_fixture"
+      : baseRuntime?.providerMode ?? payload?.providerMode ?? null;
+  const currentProviderHealth = healthByProvider.get(String(providerUsed ?? "").trim().toLowerCase()) ?? null;
+  const currentProviderAvailable = String(currentProviderHealth?.status ?? "") === "available";
+  const slowGraphCircuitBreaker = currentProviderHealth?.circuitBreaker?.active
+    ? currentProviderHealth.circuitBreaker
+    : currentProviderAvailable
+      ? null
+      : providerCoverages.find((coverage) => coverage?.circuitBreaker?.active)?.circuitBreaker ?? null;
+  const fallbackReasonCandidate =
+    slowGraphCircuitBreaker?.reason ??
+    baseRuntime?.providerFallbackReason ??
+    payload?.providerFallbackReason ??
+    latestLiveAttempt?.error ??
+    payload?.diagnostics?.fallbackReason ??
+    null;
+  const providerFallbackReason =
+    providerMode === "live" && providerUsed !== "fallback_fixture"
+      ? (baseRuntime?.providerFallbackReason ?? payload?.providerFallbackReason ?? null)
+      : fallbackReasonCandidate;
+  return {
+    ...baseRuntime,
+    providerUsed,
+    providerMode,
+    providerFallbackReason,
+    latestLiveAttempt,
+    slowGraphCircuitBreaker,
+    providerHealth,
+    providerAttempted,
+    brainProfile:
+      normalizeBrainProfile(baseRuntime?.brainProfile) ??
+      normalizeBrainProfile(payload?.brainProfile) ??
+      normalizeBrainProfile(symbolCacheCoverage?.brainProfile)
+  };
+}
+
+function labelApiMarketDataTier(tier, label) {
+  const text = String(label ?? "").trim();
+  if (text) {
+    return text === "前收参考" ? "前收参考 · 非实时" : text;
+  }
+  switch (String(tier ?? "").trim()) {
+    case "live":
+      return "实时行情";
+    case "delayed":
+      return "延迟行情";
+    case "reference_close":
+      return "前收参考 · 非实时";
+    case "missing":
+      return "行情缺失";
+    default:
+      return "行情缺失";
+  }
+}
+
+function summarizeMarketProxyQuoteCoverage(marketProxyQuotes = null) {
+  const quotes = Array.isArray(marketProxyQuotes?.quotes) ? marketProxyQuotes.quotes : [];
+  const coverage = marketProxyQuotes?.coverage && typeof marketProxyQuotes.coverage === "object"
+    ? marketProxyQuotes.coverage
+    : quotes.reduce(
+        (acc, quote) => {
+          const tier = String(quote?.quoteTier ?? "missing").trim() || "missing";
+          acc[tier] = (acc[tier] ?? 0) + 1;
+          acc.total += 1;
+          return acc;
+        },
+        { live: 0, delayed: 0, reference_close: 0, missing: 0, total: 0 }
+      );
+  return {
+    ...coverage,
+    quotes: quotes.map((quote) => ({
+      symbol: quote?.symbol ?? null,
+      quoteTier: quote?.quoteTier ?? null,
+      displayLabel: quote?.displayLabel ?? null,
+      source: quote?.source ?? null,
+      quoteTime: quote?.quoteTime ?? null,
+      error: quote?.error ?? null
+    }))
+  };
+}
+
+function normalizeApiMarketDataFields(payload = {}) {
+  const marketProxyQuotes =
+    payload?.marketProxyQuotes ??
+    payload?.diagnostics?.marketProxyQuotes ??
+    payload?.decisionContext?.marketProxyQuotes ??
+    null;
+  const marketProxyQuoteCoverage = summarizeMarketProxyQuoteCoverage(marketProxyQuotes);
+  const marketDataTier = String(
+    payload?.marketDataTier ??
+      payload?.decisionContext?.marketDataTier ??
+      payload?.diagnostics?.marketDataTier ??
+      "missing"
+  ).trim() || "missing";
+  const marketDataTierLabel = labelApiMarketDataTier(
+    marketDataTier,
+    payload?.marketDataTierLabel ?? payload?.decisionContext?.marketDataTierLabel ?? payload?.diagnostics?.marketDataTierLabel
+  );
+  const marketDataAsOf =
+    payload?.marketDataAsOf ??
+    payload?.decisionContext?.marketDataAsOf ??
+    payload?.diagnostics?.marketDataAsOf ??
+    null;
+  return {
+    marketDataTier,
+    marketDataTierLabel,
+    marketDataAsOf,
+    marketProxyQuoteCoverage,
+    decisionContext: {
+      ...(payload?.decisionContext ?? {}),
+      marketDataTier,
+      marketDataTierLabel,
+      marketDataAsOf,
+      marketProxyQuoteCoverage
+    },
+    diagnostics: {
+      ...(payload?.diagnostics ?? {}),
+      marketDataTier,
+      marketDataTierLabel,
+      marketDataAsOf,
+      marketProxyQuoteCoverage
+    }
   };
 }
 
@@ -6575,6 +8196,28 @@ async function scheduleTradingDecisionBackgroundRefresh({
       allowFixtureFallback: true,
       now: new Date()
     });
+    if (!force) {
+      const symbolCacheCoverage = await buildTradingAgentsSymbolCacheStatus({
+        portfolioRoot,
+        decisionSnapshot: snapshot,
+        now: new Date()
+      });
+      const runtimeRefresh = buildTradingDecisionRuntimeStatus(accountId);
+      const providerRuntime = mergeProviderRuntimeCacheStatus(snapshot, symbolCacheCoverage, runtimeRefresh);
+      const liveBrainStatus = buildLiveBrainStatus({
+        providerHealth: providerRuntime.providerHealth,
+        providerRuntime,
+        runtimeRefresh,
+        now: new Date()
+      });
+      if (!liveBrainStatus.autoRetryAllowed) {
+        return {
+          scheduled: false,
+          reason: "live_brain_paused_until_retry",
+          nextRetryAt: liveBrainStatus.nextRetryAt
+        };
+      }
+    }
     return scheduleTradingAgentsRefreshFn({
       accountId,
       portfolioRoot,
@@ -6621,8 +8264,14 @@ function buildTradingDecisionRuntimeStatus(accountId) {
           prewarmError: state.lastResult.prewarmError ?? null,
           prewarm: state.lastResult.prewarm
             ? {
+                provider: state.lastResult.prewarm.provider ?? null,
+                deepModel: state.lastResult.prewarm.deepModel ?? null,
+                quickModel: state.lastResult.prewarm.quickModel ?? null,
+                brainProfile: normalizeBrainProfile(state.lastResult.prewarm.brainProfile),
                 requestedSymbols: state.lastResult.prewarm.requestedSymbols ?? [],
                 warmTargets: state.lastResult.prewarm.warmTargets ?? [],
+                skippedReason: state.lastResult.prewarm.skippedReason ?? null,
+                circuitBreaker: state.lastResult.prewarm.circuitBreaker ?? null,
                 warmed: state.lastResult.prewarm.warmed ?? [],
                 failed: state.lastResult.prewarm.failed ?? [],
                 finalCoverage: state.lastResult.prewarm.finalCoverage ?? null
@@ -6630,6 +8279,7 @@ function buildTradingDecisionRuntimeStatus(accountId) {
             : null,
           decisionStatus: state.lastResult.decision?.decisionSnapshot?.status ?? null,
           decisionMode: state.lastResult.decision?.mode ?? null,
+          decisionError: state.lastResult.decisionError ?? null,
           fallbackReason: state.lastResult.decision?.diagnostics?.fallbackReason ?? null,
           providerError: state.lastResult.decision?.diagnostics?.providerError ?? null
         }
@@ -6712,7 +8362,14 @@ export function createFundsLiveDashboardServer(
   const getLivePayloadFn = deps.getLivePayload ?? getLivePayload;
   const loadTradingAdviceSnapshotFn = deps.loadTradingAdviceSnapshot ?? loadTradingAdviceSnapshot;
   const loadTradingDecisionSnapshotFn = deps.loadTradingDecisionSnapshot ?? loadTradingDecisionSnapshot;
+  const refreshMarketProxyQuotesFn = deps.refreshMarketProxyQuotes ?? refreshMarketProxyQuotes;
   const buildMarketTopicsPayloadFn = deps.buildMarketTopicsPayload ?? buildMarketTopicsPayload;
+  const loadFundLiveAnalysisSnapshotFn = deps.loadFundLiveAnalysisSnapshot ?? loadFundLiveAnalysisSnapshot;
+  const runFundLiveAnalysisFn = deps.runFundLiveAnalysis ?? runFundLiveAnalysis;
+  const persistFundLiveAnalysisSnapshotFn = deps.persistFundLiveAnalysisSnapshot ?? persistFundLiveAnalysisSnapshot;
+  const loadFundNativeAnalysisSnapshotFn = deps.loadFundNativeAnalysisSnapshot ?? loadFundNativeAnalysisSnapshot;
+  const runFundNativeTradingAgentsFn = deps.runFundNativeTradingAgents ?? runFundNativeTradingAgents;
+  const persistFundNativeAnalysisSnapshotFn = deps.persistFundNativeAnalysisSnapshot ?? persistFundNativeAnalysisSnapshot;
   const scheduleTradingAgentsRefreshFn =
     deps.scheduleTradingAgentsRefresh ?? tradingAgentsBackgroundScheduler.schedule;
   const getTradingAgentsRefreshStateFn =
@@ -6762,32 +8419,245 @@ export function createFundsLiveDashboardServer(
           accountId === activeAccountId
             ? activePortfolioRoot
             : resolvePortfolioRoot({ user: accountId });
+        const forceRefresh =
+          requestUrl.searchParams.get("refresh") === "1" ||
+          requestUrl.searchParams.get("prewarm") === "1";
+        let marketProxyQuoteRefresh = null;
+        if (forceRefresh) {
+          try {
+            const bridgeConfig = await loadTradingAgentsBridgeConfig();
+            marketProxyQuoteRefresh = await refreshMarketProxyQuotesFn({
+              portfolioRoot,
+              symbols: collectLiveSymbols(bridgeConfig),
+              force: true
+            });
+          } catch (error) {
+            marketProxyQuoteRefresh = {
+              status: "failed",
+              refreshed: false,
+              error: String(error?.message ?? error)
+            };
+          }
+        }
         const payload = await loadTradingDecisionSnapshotFn({
           portfolioRoot,
           accountId,
           allowFixtureFallback: true,
           now: new Date()
         });
-        const forceRefresh =
-          requestUrl.searchParams.get("refresh") === "1" ||
-          requestUrl.searchParams.get("prewarm") === "1";
-        scheduleTradingDecisionBackgroundRefresh({
-          accountId,
-          portfolioRoot,
-          loadTradingDecisionSnapshotFn: async () => payload,
-          scheduleTradingAgentsRefreshFn,
-          reason: forceRefresh ? "api_trading_decision_manual_prewarm" : "api_trading_decision_read",
-          force: forceRefresh
-        }).catch(() => null);
+        const fundLiveAnalysis = await loadFundLiveAnalysisSnapshotFn({ portfolioRoot });
+        const fundLiveBrainSummary = buildFundLiveAnalysisSummary(fundLiveAnalysis ?? {});
+        const fundLivePortfolioConclusion = buildFundLivePortfolioConclusion(fundLiveAnalysis ?? {});
+        const fundNativeAnalysis = await loadFundNativeAnalysisSnapshotFn({ portfolioRoot });
         const symbolCacheCoverage = await buildTradingAgentsSymbolCacheStatus({
           portfolioRoot,
           decisionSnapshot: payload,
           now: new Date()
         });
+        const runtimeRefreshBeforeSchedule = getTradingAgentsRefreshStateFn(accountId);
+        const providerRuntimeBeforeSchedule = mergeProviderRuntimeCacheStatus(
+          payload,
+          symbolCacheCoverage,
+          runtimeRefreshBeforeSchedule
+        );
+        const liveBrainStatusBeforeSchedule = buildLiveBrainStatus({
+          providerHealth: providerRuntimeBeforeSchedule.providerHealth,
+          providerRuntime: providerRuntimeBeforeSchedule,
+          runtimeRefresh: runtimeRefreshBeforeSchedule,
+          now: new Date()
+        });
+        const backgroundSchedule =
+          forceRefresh || liveBrainStatusBeforeSchedule.autoRetryAllowed
+            ? await scheduleTradingDecisionBackgroundRefresh({
+                accountId,
+                portfolioRoot,
+                loadTradingDecisionSnapshotFn: async () => payload,
+                scheduleTradingAgentsRefreshFn,
+                reason: forceRefresh ? "api_trading_decision_manual_prewarm" : "api_trading_decision_read",
+                force: forceRefresh
+              })
+            : {
+                scheduled: false,
+                reason: "live_brain_paused_until_retry",
+                nextRetryAt: liveBrainStatusBeforeSchedule.nextRetryAt
+              };
+        const runtimeRefresh = getTradingAgentsRefreshStateFn(accountId);
+        const providerRuntime = mergeProviderRuntimeCacheStatus(payload, symbolCacheCoverage, runtimeRefresh);
+        const liveBrainStatus = buildLiveBrainStatus({
+          providerHealth: providerRuntime.providerHealth,
+          providerRuntime,
+          runtimeRefresh,
+          now: new Date()
+        });
+        const marketDataFields = normalizeApiMarketDataFields(payload);
         sendJson(response, 200, {
           ...payload,
+          fundLiveAnalysis: fundLiveAnalysis
+            ? {
+                ...fundLiveAnalysis,
+                summary: fundLiveAnalysis.summary ?? fundLiveBrainSummary,
+                portfolioConclusion: fundLiveAnalysis.portfolioConclusion ?? fundLivePortfolioConclusion
+              }
+            : null,
+          fundNativeAnalysis: fundNativeAnalysis ?? {
+            generatedAt: new Date().toISOString(),
+            mode: "fund_native",
+            source: "TradingAgents fund-native compatibility mode",
+            status: "missing",
+            count: 0,
+            analyses: []
+          },
+          fundLiveBrainSummary,
+          fundLivePortfolioConclusion,
+          ...marketDataFields,
+          ...liveBrainStatus,
+          brainProfile: providerRuntime.brainProfile ?? payload?.brainProfile ?? null,
+          providerUsed: providerRuntime.providerUsed,
+          providerMode: providerRuntime.providerMode,
+          providerFallbackReason: providerRuntime.providerFallbackReason,
+          providerRuntime: {
+            ...providerRuntime,
+            ...liveBrainStatus
+          },
+          providerAttempted: providerRuntime.providerAttempted,
+          providerHealth: providerRuntime.providerHealth,
+          latestLiveAttempt: providerRuntime.latestLiveAttempt,
+          diagnostics: {
+            ...(marketDataFields.diagnostics ?? {}),
+            ...liveBrainStatus,
+            providerRuntime: {
+              ...providerRuntime,
+              ...liveBrainStatus
+            }
+          },
+          marketProxyQuoteRefresh,
           symbolCacheCoverage,
-          runtimeRefresh: getTradingAgentsRefreshStateFn(accountId)
+          runtimeRefresh,
+          backgroundSchedule
+        });
+        return;
+      }
+
+      if (requestUrl.pathname === "/api/fund-tradingagents-adapter") {
+        const availableAccounts = await listAvailableAccountsFn();
+        const accountId = pickValidAccountId(
+          requestUrl.searchParams.get("account"),
+          availableAccounts,
+          activeAccountId
+        );
+        const portfolioRoot =
+          accountId === activeAccountId
+            ? activePortfolioRoot
+            : resolvePortfolioRoot({ user: accountId });
+        const payload = await loadTradingDecisionSnapshotFn({
+          portfolioRoot,
+          accountId,
+          allowFixtureFallback: true,
+          now: new Date()
+        });
+        sendJson(response, 200, {
+          accountId,
+          generatedAt: new Date().toISOString(),
+          ...(payload?.fundTradingAgentsAdapter ?? payload?.portfolioAnalysis?.fundTradingAgentsAdapter ?? {
+            adapterVersion: 1,
+            adapterMode: "context_only",
+            status: "empty",
+            scope: "deep_dive_candidates",
+            count: 0,
+            contexts: []
+          })
+        });
+        return;
+      }
+
+      if (requestUrl.pathname === "/api/fund-native-analysis") {
+        const availableAccounts = await listAvailableAccountsFn();
+        const accountId = pickValidAccountId(
+          requestUrl.searchParams.get("account"),
+          availableAccounts,
+          activeAccountId
+        );
+        const portfolioRoot =
+          accountId === activeAccountId
+            ? activePortfolioRoot
+            : resolvePortfolioRoot({ user: accountId });
+        const shouldRefresh = requestUrl.searchParams.get("refresh") === "1";
+        let payload = shouldRefresh
+          ? await runFundNativeTradingAgentsFn({
+              decisionSnapshot: await loadTradingDecisionSnapshotFn({
+                portfolioRoot,
+                accountId,
+                allowFixtureFallback: true,
+                now: new Date()
+              }),
+              bridgeConfig: await loadTradingAgentsBridgeConfig(),
+              scope: String(requestUrl.searchParams.get("scope") || "deep_dive"),
+              limit: parseBoundedInt(requestUrl.searchParams.get("limit"), 4, { min: 1, max: 8 })
+            })
+          : await loadFundNativeAnalysisSnapshotFn({ portfolioRoot });
+        if (shouldRefresh) {
+          await persistFundNativeAnalysisSnapshotFn({ portfolioRoot, snapshot: payload });
+        }
+        payload = payload ?? {
+          generatedAt: new Date().toISOString(),
+          mode: "fund_native",
+          source: "TradingAgents fund-native compatibility mode",
+          status: "missing",
+          count: 0,
+          analyses: []
+        };
+        sendJson(response, 200, { ...payload, refreshed: shouldRefresh });
+        return;
+      }
+
+      if (requestUrl.pathname === "/api/fund-live-analysis") {
+        const availableAccounts = await listAvailableAccountsFn();
+        const accountId = pickValidAccountId(
+          requestUrl.searchParams.get("account"),
+          availableAccounts,
+          activeAccountId
+        );
+        const portfolioRoot =
+          accountId === activeAccountId
+            ? activePortfolioRoot
+            : resolvePortfolioRoot({ user: accountId });
+        const shouldRefresh = requestUrl.searchParams.get("refresh") === "1";
+        let payload = shouldRefresh
+          ? await runFundLiveAnalysisFn({
+              portfolioRoot,
+              accountId,
+              mode: String(requestUrl.searchParams.get("mode") || "live"),
+              scope: String(requestUrl.searchParams.get("scope") || "deep_dive"),
+              limit: parseBoundedInt(
+                requestUrl.searchParams.get("limit"),
+                requestUrl.searchParams.get("scope") === "all" ? 24 : 4,
+                { min: 1, max: 24 }
+              )
+            })
+          : await loadFundLiveAnalysisSnapshotFn({ portfolioRoot });
+        if (shouldRefresh) {
+          await persistFundLiveAnalysisSnapshotFn({ portfolioRoot, snapshot: payload });
+        }
+        const fallbackPayload = {
+          accountId,
+          generatedAt: new Date().toISOString(),
+          mode: "missing",
+          source: "TradingAgents fund live analyzer",
+          brainMode: "fund_live_analysis",
+          status: "missing",
+          count: 0,
+          analyses: []
+        };
+        payload = payload ?? {
+          ...fallbackPayload,
+          summary: buildFundLiveAnalysisSummary(fallbackPayload),
+          portfolioConclusion: buildFundLivePortfolioConclusion(fallbackPayload)
+        };
+        sendJson(response, 200, {
+          ...payload,
+          refreshed: shouldRefresh,
+          summary: payload.summary ?? buildFundLiveAnalysisSummary(payload),
+          portfolioConclusion: payload.portfolioConclusion ?? buildFundLivePortfolioConclusion(payload)
         });
         return;
       }
