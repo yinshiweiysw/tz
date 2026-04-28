@@ -46,6 +46,7 @@ test("runLiveRawSnapshot forwards market lake path to the TradingAgents python r
       requestTimeoutSeconds: 55,
       requestMaxRetries: 4,
       selectedAnalysts: ["market"],
+      brainProfile: "fast",
       maxTokens: 777,
       temperature: 0.1,
       thinkingType: "disabled",
@@ -59,8 +60,13 @@ test("runLiveRawSnapshot forwards market lake path to the TradingAgents python r
       symbolBackoffSeconds: 21,
       symbolMaxBackoffSeconds: 75,
       symbolIntervalSeconds: 6,
+      symbolWallTimeoutSeconds: 88,
       symbolCacheTtlHours: 14,
       allowStaleSymbolCacheOnError: 0,
+      fastContextMaxChars: 6000,
+      maxDebateRounds: 0,
+      maxRiskDiscussRounds: 0,
+      maxRecurLimit: 60,
       processTimeoutMs: 123456
     },
     spawnSyncFn(command, args, options) {
@@ -74,14 +80,20 @@ test("runLiveRawSnapshot forwards market lake path to the TradingAgents python r
           source: "TradingAgents",
           calls: []
         }),
-        stderr: ""
+        stderr: "[tradingagents_diagnostic] path=/tmp/ta-diag/live.json\n"
       };
     }
   });
 
   assert.equal(rawSnapshot.asOf, "2026-04-24");
+  assert.equal(rawSnapshot.brainProfile, "fast");
+  assert.equal(rawSnapshot.runtimeConfig.brainProfile, "fast");
+  assert.equal(rawSnapshot.runtimeDiagnostics.brainProfile, "fast");
+  assert.equal(rawSnapshot.runtimeDiagnostics.runDiagnosticPath, "/tmp/ta-diag/live.json");
+  assert.equal(received?.args.filter((item) => item === "QQQ").length, 1);
   assert.equal(received?.options?.env?.TRADINGAGENTS_MARKET_LAKE_DB, "/shared/market_lake.db");
   assert.equal(received?.options?.env?.PORTFOLIO_ROOT, portfolioRoot);
+  assert.equal(received?.options?.env?.LANGCHAIN_OPENAI_TCP_KEEPALIVE, "0");
   assert.equal(received?.options?.timeout, 123456);
   assert.ok(received?.args.includes("--request-timeout-seconds"));
   assert.ok(received?.args.includes("55"));
@@ -107,10 +119,21 @@ test("runLiveRawSnapshot forwards market lake path to the TradingAgents python r
   assert.ok(received?.args.includes("7"));
   assert.ok(received?.args.includes("--symbol-interval-seconds"));
   assert.ok(received?.args.includes("6"));
+  assert.ok(received?.args.includes("--symbol-wall-timeout-seconds"));
+  assert.ok(received?.args.includes("88"));
   assert.ok(received?.args.includes("--symbol-cache-ttl-hours"));
   assert.ok(received?.args.includes("14"));
   assert.ok(received?.args.includes("--allow-stale-symbol-cache-on-error"));
   assert.ok(received?.args.includes("0"));
+  assert.ok(received?.args.includes("--brain-profile"));
+  assert.ok(received?.args.includes("fast"));
+  assert.ok(received?.args.includes("--fast-context-max-chars"));
+  assert.ok(received?.args.includes("6000"));
+  assert.ok(received?.args.includes("--max-debate-rounds"));
+  assert.ok(received?.args.includes("--max-risk-discuss-rounds"));
+  assert.ok(received?.args.includes("--max-recur-limit"));
+  assert.ok(received?.args.includes("--diagnostics-dir"));
+  assert.ok(received?.args.includes("60"));
 });
 
 test("runLiveRawSnapshot surfaces process timeout as a readable error", () => {
@@ -146,7 +169,8 @@ test("inspectTradingAgentsSymbolCacheCoverage finds fresh and missing symbols", 
     "2026-04-24",
     "glm",
     "glm-5.1",
-    "glm-5"
+    "glm-5",
+    "fast"
   );
   await mkdir(cacheDir, { recursive: true });
   await writeFile(
@@ -173,6 +197,7 @@ test("inspectTradingAgentsSymbolCacheCoverage finds fresh and missing symbols", 
       llmProvider: "glm",
       deepThinkModel: "glm-5.1",
       quickThinkModel: "glm-5",
+      brainProfile: "fast",
       symbolCacheTtlHours: 18
     },
     portfolioRoot,
@@ -207,9 +232,10 @@ test("runTradingAgentsBridge reuses fully fresh symbol cache without spawning py
     "data",
     "tradingagents_symbol_cache",
     "2026-04-24",
-    "deepseek",
-    "deepseek-v4-flash",
-    "deepseek-v4-flash"
+    "glm",
+    "glm-5.1",
+    "glm-5",
+    "fast"
   );
   await mkdir(cacheDir, { recursive: true });
 

@@ -83,6 +83,8 @@ test("buildMarketTopicsPayload aggregates latest reports and key events", async 
   assert.match(payload.headline, /盘中热点|结构轮动|偏强/);
   assert.equal(payload.reports.length, 3);
   assert.equal(payload.primaryAsOfLabel, "今日报告 · 2026-04-24");
+  assert.equal(payload.generationStatus.status, "same_day");
+  assert.equal(payload.sourceMode, "simplified");
   assert.equal(payload.syncStatus.status, "synced");
   assert.equal(payload.reports.every((item) => item.stalenessLabel === "same_day"), true);
   assert.equal(payload.keyEvents[0].eventId, "us-cpi-2026-04");
@@ -130,6 +132,8 @@ test("buildMarketTopicsPayload labels carried-forward previous-trading-day repor
 
   assert.equal(payload.asOf, "2026-04-24");
   assert.equal(payload.primaryAsOfLabel, "沿用上一交易日 · 2026-04-24");
+  assert.equal(payload.generationStatus.status, "today_report_missing");
+  assert.match(payload.generationStatus.label, /今日报告未生成/);
   assert.equal(payload.reports[0].asOf, "2026-04-24");
   assert.equal(payload.reports[0].stalenessLabel, "carry_forward_previous_trading_day");
   assert.match(payload.headline, /早盘成长|AI 硬件/);

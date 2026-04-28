@@ -11,6 +11,7 @@ const defaultDecisionCycleScriptPath = fileURLToPath(
   new URL("../run_tradingagents_decision_cycle.mjs", import.meta.url)
 );
 const defaultDebounceMs = 5 * 60 * 1000;
+const defaultCacheWarmupDebounceMs = 30 * 1000;
 const defaultProviderCooldownMs = 30 * 60 * 1000;
 
 function trimText(value) {
@@ -68,6 +69,23 @@ function resolveSnapshotMode(snapshot = {}) {
   return String(snapshot?.mode ?? "").trim().toLowerCase() || "unknown";
 }
 
+function resolveSnapshotProvider(snapshot = {}) {
+  const runtime = snapshot?.providerRuntime ?? snapshot?.diagnostics?.providerRuntime ?? {};
+  const runtimeProvider = trimText(runtime?.providerUsed);
+  if (runtimeProvider === "fallback_fixture") {
+    // Fallback snapshots should warm the primary provider first; provider failover
+    // is handled by the prewarm runner/provider health, not by pinning the last
+    // failed live attempt forever.
+    return null;
+  }
+  return (
+    runtimeProvider ??
+    trimText(snapshot?.providerUsed) ??
+    trimText(snapshot?.provider) ??
+    null
+  );
+}
+
 function resolveSnapshotGeneratedAt(snapshot = {}) {
   return parseIsoDate(snapshot?.generatedAt ?? snapshot?.diagnostics?.generatedAt);
 }
@@ -97,14 +115,29 @@ export function classifyTradingDecisionRefreshNeed(
 
   const mode = resolveSnapshotMode(snapshot);
   const providerError = trimText(snapshot?.diagnostics?.providerError);
-  if (mode !== "live" && (isProviderBackoffError(providerError) || isCacheWarmupBackoffError(providerError))) {
+  const providerFallbackReason =
+    trimText(snapshot?.providerFallbackReason) ??
+    trimText(snapshot?.providerRuntime?.providerFallbackReason) ??
+    trimText(snapshot?.diagnostics?.providerRuntime?.providerFallbackReason);
+  const providerRefreshReason = providerError ?? providerFallbackReason;
+  if (isProviderBackoffError(providerRefreshReason)) {
     const generatedAt = resolveSnapshotGeneratedAt(snapshot);
     if (generatedAt && now.getTime() - generatedAt.getTime() < providerCooldownMs) {
       return {
         needsRefresh: false,
-        reason: `${isProviderBackoffError(providerError) ? "provider_cooldown" : "cache_warmup_cooldown"}:${providerError}`
+        reason: `provider_cooldown:${providerRefreshReason}`
       };
     }
+    return {
+      needsRefresh: true,
+      reason: providerRefreshReason
+    };
+  }
+  if (isCacheWarmupBackoffError(providerRefreshReason)) {
+    return {
+      needsRefresh: true,
+      reason: providerRefreshReason
+    };
   }
 
   if (mode !== "live") {
@@ -131,10 +164,10 @@ export function classifyTradingDecisionRefreshNeed(
   }
 
   const fallbackReason = trimText(snapshot?.diagnostics?.fallbackReason);
-  if (providerError || fallbackReason) {
+  if (providerError || providerFallbackReason || fallbackReason) {
     return {
       needsRefresh: true,
-      reason: providerError ?? fallbackReason
+      reason: providerError ?? providerFallbackReason ?? fallbackReason
     };
   }
 
@@ -202,6 +235,7 @@ export function createTradingAgentsBackgroundScheduler({
   spawnFn = spawn,
   env = process.env,
   debounceMs = defaultDebounceMs,
+  cacheWarmupDebounceMs = defaultCacheWarmupDebounceMs,
   prewarmScriptPath = defaultPrewarmScriptPath,
   decisionCycleScriptPath = defaultDecisionCycleScriptPath,
   now = () => new Date()
@@ -229,7 +263,7 @@ export function createTradingAgentsBackgroundScheduler({
     return next;
   }
 
-  async function runRefreshChain({ accountId, portfolioRoot, tradeDate }) {
+  async function runRefreshChain({ accountId, portfolioRoot, tradeDate, provider, ignoreCooldown = false }) {
     const baseArgs = [
       "--portfolioRoot",
       portfolioRoot,
@@ -238,35 +272,44 @@ export function createTradingAgentsBackgroundScheduler({
       "--trade-date",
       tradeDate
     ];
+    const prewarmArgs = [
+      ...(provider ? [...baseArgs, "--provider", provider] : baseArgs),
+      ...(ignoreCooldown ? ["--ignore-cooldown", "1"] : [])
+    ];
 
     let prewarm = null;
-    let prewarmError = null;
     try {
-      prewarm = await runNodeJsonScript(prewarmScriptPath, baseArgs, {
+      prewarm = await runNodeJsonScript(prewarmScriptPath, prewarmArgs, {
         nodeBinary,
         spawnFn,
         env
       });
     } catch (error) {
-      prewarmError = compactError(error);
+      throw new Error(compactError(error));
     }
 
-    const decision = await runNodeJsonScript(
-      decisionCycleScriptPath,
-      [...baseArgs, "--mode", "live", "--cache-only", "1"],
-      {
-        nodeBinary,
-        spawnFn,
-        env
-      }
-    );
+    let decision = null;
+    let decisionError = null;
+    try {
+      decision = await runNodeJsonScript(
+        decisionCycleScriptPath,
+        [...baseArgs, "--mode", "live", "--cache-only", "1"],
+        {
+          nodeBinary,
+          spawnFn,
+          env
+        }
+      );
+    } catch (error) {
+      decisionError = compactError(error);
+    }
 
     return {
       tradeDate,
       prewarm: prewarm?.payload ?? null,
-      prewarmError,
+      prewarmError: null,
       decision: decision?.payload ?? null,
-      decisionError: null
+      decisionError
     };
   }
 
@@ -301,9 +344,12 @@ export function createTradingAgentsBackgroundScheduler({
       };
     }
 
-    if (state.lastQueuedAt) {
+    if (!force && state.lastQueuedAt) {
       const lastQueued = parseIsoDate(state.lastQueuedAt);
-      if (lastQueued && nowDate.getTime() - lastQueued.getTime() < debounceMs) {
+      const activeDebounceMs = isCacheWarmupBackoffError(refreshNeed.reason)
+        ? cacheWarmupDebounceMs
+        : debounceMs;
+      if (lastQueued && nowDate.getTime() - lastQueued.getTime() < activeDebounceMs) {
         state.lastSkipReason = "background_refresh_debounced";
         return {
           scheduled: false,
@@ -321,7 +367,9 @@ export function createTradingAgentsBackgroundScheduler({
     state.currentPromise = runRefreshChain({
       accountId: state.accountId,
       portfolioRoot,
-      tradeDate: formatShanghaiDate(nowDate)
+      tradeDate: formatShanghaiDate(nowDate),
+      provider: resolveSnapshotProvider(snapshot),
+      ignoreCooldown: force
     })
       .then((result) => {
         state.lastCompletedAt = now().toISOString();

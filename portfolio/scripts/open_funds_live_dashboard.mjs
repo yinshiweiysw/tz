@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildPortfolioPath, resolveAccountId, resolvePortfolioRoot } from "./lib/account_root.mjs";
 import { syncMarketTopicReports } from "./lib/market_report_sync.mjs";
+import { refreshMarketProxyQuotes } from "./lib/market_proxy_quotes.mjs";
 import { runDashboardStateBuild } from "./build_dashboard_state.mjs";
 
 const defaultHost = "127.0.0.1";
@@ -417,6 +418,18 @@ async function main() {
   const marketTopicsSyncResult = await syncMarketTopicReports({
     portfolioRoot
   });
+  let marketProxyQuoteRefreshResult = null;
+  try {
+    marketProxyQuoteRefreshResult = await refreshMarketProxyQuotes({
+      portfolioRoot
+    });
+  } catch (error) {
+    marketProxyQuoteRefreshResult = {
+      status: "failed",
+      refreshed: false,
+      error: String(error?.message ?? error)
+    };
+  }
   const dashboardStateResult = await runDashboardStateBuild({
     user: accountId,
     portfolioRoot,
@@ -521,6 +534,7 @@ async function main() {
         stoppedPids,
         materializeResult,
         marketTopicsSyncResult,
+        marketProxyQuoteRefreshResult,
         dashboardStateResult,
         tradingBrainEnv: launcherEnvPresence,
         loginShellEnvProbe: {

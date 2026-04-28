@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from run_tradingagents_raw_snapshot import (
     build_symbol_cache_path,
     enrich_call_with_cache_metadata,
+    install_local_model_catalog_compat,
     install_llm_runtime_patch,
     install_tool_runtime_limits,
     load_cached_symbol_call,
@@ -20,8 +21,11 @@ from run_tradingagents_raw_snapshot import (
     persist_symbol_call_cache,
     resolve_provider_api_keys,
     TradingAgentsGraph,
+    RunDiagnostics,
+    SymbolWallTimeout,
     with_provider_api_key,
     tradingagents_openai_client,
+    tradingagents_model_validators,
 )
 
 
@@ -33,8 +37,16 @@ def make_args(**overrides):
         "selected_analysts": "market,social,news,fundamentals",
         "trade_date": "2026-04-24",
         "symbol_cache_ttl_hours": 18.0,
+        "symbol_wall_timeout_seconds": 120.0,
         "market_data_tool_max_rows": 120,
         "indicator_tool_max_lookback_days": 30,
+        "symbols": "QQQ",
+        "brain_profile": "full",
+        "fast_context_max_chars": 12000,
+        "max_debate_rounds": 0,
+        "max_risk_discuss_rounds": 0,
+        "max_recur_limit": 60,
+        "diagnostics_dir": "",
     }
     base.update(overrides)
     return argparse.Namespace(**base)
@@ -144,6 +156,7 @@ class TradingAgentsRawSnapshotCacheTests(unittest.TestCase):
 
         self.assertEqual(kwargs["max_tokens"], 789)
         self.assertEqual(kwargs["temperature"], 0.15)
+        self.assertEqual(kwargs["extra_body"], {"thinking": {"type": "disabled"}})
         self.assertIn("max_tokens", tradingagents_openai_client._PASSTHROUGH_KWARGS)
         self.assertIn("temperature", tradingagents_openai_client._PASSTHROUGH_KWARGS)
         self.assertIn("extra_body", tradingagents_openai_client._PASSTHROUGH_KWARGS)
@@ -169,6 +182,26 @@ class TradingAgentsRawSnapshotCacheTests(unittest.TestCase):
 
         self.assertEqual(kwargs["extra_body"], {"thinking": {"type": "disabled"}})
 
+    def test_local_model_catalog_accepts_deepseek_v4_pro(self):
+        original = list(tradingagents_model_validators.VALID_MODELS.get("deepseek", []))
+        try:
+            tradingagents_model_validators.VALID_MODELS["deepseek"] = [
+                item for item in original if item != "deepseek-v4-pro"
+            ]
+
+            install_local_model_catalog_compat()
+
+            self.assertIn("deepseek-v4-pro", tradingagents_model_validators.VALID_MODELS["deepseek"])
+        finally:
+            tradingagents_model_validators.VALID_MODELS["deepseek"] = original
+
+    def test_symbol_wall_timeout_raises_provider_timeout(self):
+        with self.assertRaisesRegex(TimeoutError, r"provider_timeout:deepseek symbol=QQQ"):
+            with SymbolWallTimeout(0.01, "deepseek", "QQQ"):
+                import time
+
+                time.sleep(0.1)
+
     def test_tool_runtime_limits_are_exposed_as_env_controls(self):
         previous_rows = os.environ.get("TRADINGAGENTS_MARKET_DATA_TOOL_MAX_ROWS")
         previous_lookback = os.environ.get("TRADINGAGENTS_INDICATOR_TOOL_MAX_LOOKBACK_DAYS")
@@ -191,6 +224,23 @@ class TradingAgentsRawSnapshotCacheTests(unittest.TestCase):
                 os.environ.pop("TRADINGAGENTS_INDICATOR_TOOL_MAX_LOOKBACK_DAYS", None)
             else:
                 os.environ["TRADINGAGENTS_INDICATOR_TOOL_MAX_LOOKBACK_DAYS"] = previous_lookback
+
+    def test_run_diagnostics_writes_stage_events_without_prompt_content(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            args = make_args(diagnostics_dir=tmpdir)
+            diagnostics = RunDiagnostics(args)
+
+            diagnostics.record("graph_propagate_start", symbol="QQQ", prompt="should_not_be_written")
+            diagnostics.finish("failed")
+
+            payload = json.loads(Path(diagnostics.path).read_text(encoding="utf-8"))
+            self.assertEqual(payload["provider"], "glm")
+            self.assertEqual(payload["maxDebateRounds"], 0)
+            self.assertEqual(payload["maxRiskDiscussRounds"], 0)
+            self.assertEqual(payload["status"], "failed")
+            self.assertEqual(payload["events"][0]["event"], "graph_propagate_start")
+            self.assertEqual(payload["events"][0]["symbol"], "QQQ")
+            self.assertNotIn("prompt", payload["events"][0])
 
     def test_parse_selected_analysts_defaults_and_normalizes(self):
         self.assertEqual(parse_selected_analysts("market, NEWS,market"), ["market", "news", "market"])

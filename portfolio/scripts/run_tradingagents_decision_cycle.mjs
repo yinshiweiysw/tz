@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { resolveAccountId, resolvePortfolioRoot } from "./lib/account_root.mjs";
+import { refreshMarketProxyQuotes } from "./lib/market_proxy_quotes.mjs";
 import { loadTradingAgentsBridgeConfig, loadTradingAgentsRawFixture, persistTradingAdviceArtifacts } from "./lib/tradingagents_bridge.mjs";
 import {
   persistTradingDecisionArtifacts,
@@ -22,6 +23,21 @@ const PROVIDER_ENV_VARS = {
   openrouter: "OPENROUTER_API_KEY",
   qwen: "DASHSCOPE_API_KEY",
   glm: "ZHIPU_API_KEY"
+};
+const PROVIDER_PRESETS = {
+  glm: {
+    llmProvider: "glm",
+    deepThinkModel: "glm-5.1",
+    quickThinkModel: "glm-5",
+    backendUrl: "https://api.z.ai/api/paas/v4/"
+  },
+  deepseek: {
+    llmProvider: "deepseek",
+    deepThinkModel: "deepseek-v4-pro",
+    quickThinkModel: "deepseek-v4-pro",
+    backendUrl: "https://api.deepseek.com",
+    thinkingType: "disabled"
+  }
 };
 
 function parseArgs(argv) {
@@ -61,6 +77,71 @@ function trimText(value) {
   return text || null;
 }
 
+function normalizeProviderName(value) {
+  return String(value ?? "").trim().toLowerCase() || null;
+}
+
+function normalizeBrainProfile(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  return ["fast", "full"].includes(text) ? text : null;
+}
+
+function hasProviderKey(env = {}, envName = "") {
+  if (!envName) {
+    return true;
+  }
+  if (trimText(env?.[envName]) || trimText(env?.[`${envName}_POOL`])) {
+    return true;
+  }
+  for (let index = 2; index <= 5; index += 1) {
+    if (trimText(env?.[`${envName}_${index}`])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function providerAttemptFromConfig(item) {
+  if (typeof item === "string") {
+    const provider = normalizeProviderName(item);
+    return provider ? { ...(PROVIDER_PRESETS[provider] ?? {}), llmProvider: provider } : null;
+  }
+  const provider = normalizeProviderName(item?.llmProvider ?? item?.provider);
+  return provider ? { ...(PROVIDER_PRESETS[provider] ?? {}), ...item, llmProvider: provider } : null;
+}
+
+export function resolveProviderAttempts(bridgeConfig = {}) {
+  const chain = bridgeConfig?.providerChain;
+  const configured = [];
+  if (Array.isArray(chain)) {
+    configured.push(...chain);
+  } else if (chain && typeof chain === "object") {
+    if (chain.primary) {
+      configured.push(chain.primary);
+    }
+    configured.push(...(Array.isArray(chain.fallback) ? chain.fallback : chain.fallback ? [chain.fallback] : []));
+  }
+  if (configured.length === 0) {
+    configured.push(bridgeConfig?.providerDefaults ?? { llmProvider: "glm" });
+  }
+
+  const attempts = [];
+  const seen = new Set();
+  for (const item of configured) {
+    const attempt = providerAttemptFromConfig(item);
+    const provider = normalizeProviderName(attempt?.llmProvider);
+    if (!provider || seen.has(provider)) {
+      continue;
+    }
+    seen.add(provider);
+    attempts.push({
+      ...(bridgeConfig?.providerDefaults ?? {}),
+      ...attempt
+    });
+  }
+  return attempts;
+}
+
 function parseJsonOutput(stdout) {
   const text = String(stdout ?? "").trim();
   if (!text) {
@@ -72,7 +153,7 @@ function parseJsonOutput(stdout) {
 export function checkTradingAgentsProviderReady({ bridgeConfig = {}, env = process.env } = {}) {
   const provider = String(bridgeConfig?.providerDefaults?.llmProvider ?? "glm").trim().toLowerCase() || "glm";
   const envName = PROVIDER_ENV_VARS[provider] ?? null;
-  if (envName && !trimText(env?.[envName])) {
+  if (envName && !hasProviderKey(env, envName)) {
     return {
       ready: false,
       provider,
@@ -188,13 +269,15 @@ export async function runTradingAgentsDecisionCycle(rawOptions = {}, deps = {}) 
   const portfolioRoot = resolvePortfolioRoot(rawOptions);
   const accountId = resolveAccountId(rawOptions);
   const bridgeConfig = await loadTradingAgentsBridgeConfig(rawOptions?.configPath);
-  const providerName = String(bridgeConfig?.providerDefaults?.llmProvider ?? "glm").trim().toLowerCase() || "glm";
+  const providerAttempts = resolveProviderAttempts(bridgeConfig);
+  const primaryProviderName = normalizeProviderName(providerAttempts[0]?.llmProvider) ?? "glm";
   const tradeDate = String(rawOptions?.tradeDate ?? rawOptions?.["trade-date"] ?? formatShanghaiDate()).trim();
   const mode = String(rawOptions?.mode ?? "live").trim().toLowerCase() || "live";
   const allowFallback = rawOptions?.allowFallback !== false && rawOptions?.["allow-fallback"] !== "0";
   const executeBridge = deps.runBridge ?? runTradingAgentsBridge;
   const persistDecision = deps.persistDecision ?? persistTradingDecisionArtifacts;
   const refreshMarketLake = deps.refreshMarketLake ?? runTradingAgentsMarketLakeRefresh;
+  const refreshProxyQuotes = deps.refreshMarketProxyQuotes ?? refreshMarketProxyQuotes;
   const checkProviderReady = deps.checkProviderReady ?? checkTradingAgentsProviderReady;
   const now = new Date();
 
@@ -204,49 +287,125 @@ export async function runTradingAgentsDecisionCycle(rawOptions = {}, deps = {}) 
   let providerError = null;
   let fallbackReason = null;
   let marketDataRefresh = null;
+  let marketProxyQuotes = null;
+  const providerRuntime = {
+    providerAttempted: [],
+    providerUsed: null,
+    providerFallbackReason: null,
+    providerMode: mode === "live" ? null : "fallback_fixture"
+  };
 
   if (mode === "live") {
-    const providerReady = checkProviderReady({
-      bridgeConfig,
-      env: deps.env ?? process.env
-    });
-    if (!providerReady.ready) {
-      providerError = normalizeCycleProviderError(providerReady.error, providerReady.provider);
-      fallbackReason = "missing_provider_key_using_fixture";
-      marketDataRefresh = {
-        status: "skipped_missing_provider_key",
-        triggered: false,
-        reason: providerError
+    try {
+      marketProxyQuotes = await refreshProxyQuotes({
+        portfolioRoot,
+        symbols: collectLiveSymbols(bridgeConfig),
+        force: rawOptions?.refreshQuotes === true || rawOptions?.["refresh-quotes"] === "1",
+        ttlMs: Number(rawOptions?.marketProxyQuoteTtlMs ?? rawOptions?.["market-proxy-quote-ttl-ms"]) || undefined,
+        now
+      });
+    } catch (error) {
+      marketProxyQuotes = {
+        generatedAt: now.toISOString(),
+        status: "failed",
+        refreshed: false,
+        error: summarizeCycleDiagnosticError(error?.message ?? error, primaryProviderName),
+        quotes: []
       };
-      if (!allowFallback) {
-        throw new Error(providerError);
-      }
-    } else {
-      try {
-        marketDataRefresh = await refreshMarketLake({
-          portfolioRoot,
-          tradeDate,
-          symbols: collectLiveSymbols(bridgeConfig),
-          marketLakeDbPath: await resolveTradingAgentsMarketLakeDbPath(portfolioRoot),
-          externalPython: String(
-            rawOptions?.refreshPython ??
-              rawOptions?.externalPython ??
-              "/Users/yinshiwei/codex/external/TradingAgents/.venv/bin/python"
-          ),
-          maxStaleDays: Number(rawOptions?.marketDataMaxStaleDays ?? rawOptions?.["market-data-max-stale-days"]) || 4
-        });
-      } catch (error) {
+    }
+
+    try {
+      marketDataRefresh = await refreshMarketLake({
+        portfolioRoot,
+        tradeDate,
+        symbols: collectLiveSymbols(bridgeConfig),
+        marketLakeDbPath: await resolveTradingAgentsMarketLakeDbPath(portfolioRoot),
+        externalPython: String(
+          rawOptions?.refreshPython ??
+            rawOptions?.externalPython ??
+            "/Users/yinshiwei/codex/external/TradingAgents/.venv/bin/python"
+        ),
+        maxStaleDays: Number(rawOptions?.marketDataMaxStaleDays ?? rawOptions?.["market-data-max-stale-days"]) || 4
+      });
+    } catch (error) {
       marketDataRefresh = {
         status: "failed",
         triggered: true,
-        error: summarizeCycleDiagnosticError(error?.message ?? error, providerName)
+        error: summarizeCycleDiagnosticError(error?.message ?? error, primaryProviderName)
       };
-      }
     }
   }
 
-  try {
-    if (!providerError) {
+  if (mode === "live") {
+    for (const providerDefaults of providerAttempts) {
+      const providerName = normalizeProviderName(providerDefaults?.llmProvider) ?? "provider";
+      const attempt = {
+        provider: providerName,
+        brainProfile: normalizeBrainProfile(providerDefaults?.brainProfile),
+        status: "pending",
+        error: null
+      };
+      providerRuntime.providerAttempted.push(attempt);
+      const attemptBridgeConfig = {
+        ...bridgeConfig,
+        providerDefaults
+      };
+      const providerReady = checkProviderReady({
+        bridgeConfig: attemptBridgeConfig,
+        env: deps.env ?? process.env
+      });
+      if (!providerReady.ready) {
+        attempt.status = "missing_key";
+        attempt.error = normalizeCycleProviderError(providerReady.error, providerReady.provider);
+        providerError = attempt.error;
+        continue;
+      }
+      try {
+        bridgeResult = await executeBridge({
+          ...rawOptions,
+          portfolioRoot,
+          user: accountId,
+          mode,
+          tradeDate,
+          "trade-date": tradeDate,
+          providerDefaults
+        });
+        rawSnapshot = bridgeResult?.rawSnapshot ?? null;
+        adviceSnapshot = bridgeResult?.adviceSnapshot ?? null;
+        attempt.status = "success";
+        providerRuntime.providerUsed = providerName;
+        providerRuntime.brainProfile =
+          normalizeBrainProfile(rawSnapshot?.runtimeConfig?.brainProfile) ??
+          normalizeBrainProfile(providerDefaults?.brainProfile) ??
+          providerRuntime.brainProfile ??
+          null;
+        providerRuntime.providerMode =
+          providerRuntime.providerAttempted.findIndex((item) => item.provider === providerName) === 0
+            ? "live"
+            : "fallback_provider";
+        providerRuntime.providerFallbackReason =
+          providerRuntime.providerMode === "fallback_provider"
+            ? providerRuntime.providerAttempted.find((item) => item.status !== "success")?.error ?? "primary_provider_failed"
+            : null;
+        providerError = null;
+        fallbackReason = null;
+        break;
+      } catch (error) {
+        attempt.status = "failed";
+        attempt.error = normalizeCycleProviderError(String(error?.message ?? error), providerName);
+        providerError = attempt.error;
+      }
+    }
+    if (providerError && !rawSnapshot) {
+      fallbackReason = providerAttempts.every((attempt) => !checkProviderReady({
+        bridgeConfig: { ...bridgeConfig, providerDefaults: attempt },
+        env: deps.env ?? process.env
+      }).ready)
+        ? "missing_provider_key_using_fixture"
+        : "live_call_failed_using_fixture";
+    }
+  } else {
+    try {
       bridgeResult = await executeBridge({
         ...rawOptions,
         portfolioRoot,
@@ -257,17 +416,27 @@ export async function runTradingAgentsDecisionCycle(rawOptions = {}, deps = {}) 
       });
       rawSnapshot = bridgeResult?.rawSnapshot ?? null;
       adviceSnapshot = bridgeResult?.adviceSnapshot ?? null;
+    } catch (error) {
+      providerError = normalizeCycleProviderError(String(error?.message ?? error), primaryProviderName);
+      fallbackReason = "non_live_mode_requested";
     }
-  } catch (error) {
-    providerError = normalizeCycleProviderError(String(error?.message ?? error), providerName);
-    if (!allowFallback) {
-      throw new Error(providerError);
-    }
-
-    fallbackReason = mode === "live" ? "live_call_failed_using_fixture" : "non_live_mode_requested";
   }
 
   if (providerError && !rawSnapshot) {
+    if (!allowFallback) {
+      throw new Error(providerError);
+    }
+  }
+
+  if (providerError && !rawSnapshot) {
+    providerRuntime.providerMode = "fallback_fixture";
+    providerRuntime.providerUsed = "fallback_fixture";
+    providerRuntime.providerFallbackReason = providerError;
+    providerRuntime.brainProfile =
+      normalizeBrainProfile(providerRuntime.brainProfile) ??
+      normalizeBrainProfile(bridgeConfig?.providerDefaults?.brainProfile);
+    providerRuntime.latestLiveAttempt =
+      [...providerRuntime.providerAttempted].reverse().find((item) => item?.status && item.status !== "pending") ?? null;
     rawSnapshot = buildFallbackRawSnapshot({
       fixture: await loadTradingAgentsRawFixture(),
       tradeDate,
@@ -303,7 +472,9 @@ export async function runTradingAgentsDecisionCycle(rawOptions = {}, deps = {}) 
       liveRequested: mode === "live",
       fallbackReason,
       providerError,
-      marketDataRefresh
+      providerRuntime,
+      marketDataRefresh,
+      marketProxyQuotes
     },
     now
   });
@@ -320,7 +491,9 @@ export async function runTradingAgentsDecisionCycle(rawOptions = {}, deps = {}) 
     diagnostics: {
       fallbackReason,
       providerError,
-      marketDataRefresh
+      providerRuntime,
+      marketDataRefresh,
+      marketProxyQuotes
     }
   };
 }

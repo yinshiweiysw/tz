@@ -311,6 +311,44 @@ function labelStaleness(stalenessLabel, asOf = null) {
   }
 }
 
+function resolveGenerationStatus(primaryStalenessLabel, reports = []) {
+  if (!Array.isArray(reports) || reports.length === 0) {
+    return {
+      status: "missing",
+      label: "今日报告未生成"
+    };
+  }
+  if (primaryStalenessLabel === "same_day") {
+    return {
+      status: "same_day",
+      label: "今日报告已生成"
+    };
+  }
+  if (primaryStalenessLabel === "carry_forward_previous_trading_day") {
+    return {
+      status: "today_report_missing",
+      label: "今日报告未生成，沿用上一交易日"
+    };
+  }
+  return {
+    status: "stale",
+    label: "今日报告未生成，当前报告已陈旧"
+  };
+}
+
+function resolveSourceMode({ reports = [], syncStatus = null, portfolioRoot = "" } = {}) {
+  if (!Array.isArray(reports) || reports.length === 0) {
+    return "missing";
+  }
+  if (syncStatus?.sourcePortfolioRoot) {
+    return "legacy_sync";
+  }
+  const root = String(portfolioRoot ?? "").replace(/\/$/, "");
+  return reports.every((report) => String(report?.path ?? "").startsWith(root))
+    ? "simplified"
+    : "missing";
+}
+
 function reportPriority(kind = "") {
   switch (kind) {
     case "market_pulse_close":
@@ -491,6 +529,8 @@ export async function buildMarketTopicsPayload({
   const reports = [latestPulse, marketBrief, dailyBrief].filter(Boolean).sort(compareReports);
   const primaryReport = reports[0] ?? null;
   const primaryStalenessLabel = resolveStalenessLabel(primaryReport?.asOf, now);
+  const generationStatus = resolveGenerationStatus(primaryStalenessLabel, reports);
+  const sourceMode = resolveSourceMode({ reports, syncStatus, portfolioRoot });
   const marketOverview = buildMarketOverview({
     latestPulse,
     marketBrief,
@@ -503,6 +543,8 @@ export async function buildMarketTopicsPayload({
     headline: marketOverview.headline,
     asOf: primaryReport?.asOf ?? latestPulse?.asOf ?? marketBrief?.asOf ?? dailyBrief?.asOf ?? null,
     primaryAsOfLabel: labelStaleness(primaryStalenessLabel, primaryReport?.asOf),
+    generationStatus,
+    sourceMode,
     syncStatus,
     reports: reports.map((report) => {
       const stalenessLabel = resolveStalenessLabel(report.asOf, now);

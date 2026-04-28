@@ -2,18 +2,36 @@
   "phase1Buckets": ["A_CORE", "GLB_MOM", "TACTICAL"],
   "blockedBuckets": ["HEDGE", "INCOME", "CASH"],
   "staleAfterHours": 36,
+  "providerChain": {
+    "primary": {
+      "llmProvider": "glm",
+      "deepThinkModel": "glm-5.1",
+      "quickThinkModel": "glm-5",
+      "backendUrl": "https://api.z.ai/api/paas/v4/"
+    },
+    "fallback": [
+      {
+        "llmProvider": "deepseek",
+        "deepThinkModel": "deepseek-v4-pro",
+        "quickThinkModel": "deepseek-v4-pro",
+        "backendUrl": "https://api.deepseek.com"
+      }
+    ]
+  },
   "providerDefaults": {
-    "llmProvider": "deepseek",
-    "deepThinkModel": "deepseek-v4-flash",
-    "quickThinkModel": "deepseek-v4-flash",
+    "llmProvider": "glm",
+    "deepThinkModel": "glm-5.1",
+    "quickThinkModel": "glm-5",
     "selectedAnalysts": ["market"],
-    "backendUrl": "https://api.deepseek.com",
+    "brainProfile": "fast",
+    "backendUrl": "https://api.z.ai/api/paas/v4/",
     "outputLanguage": "Chinese",
     "requestTimeoutSeconds": 90,
     "requestMaxRetries": 0,
-    "maxTokens": 1200,
+    "maxTokens": 800,
     "temperature": 0.2,
     "thinkingType": "disabled",
+    "fastContextMaxChars": 10000,
     "marketDataToolMaxRows": 120,
     "indicatorToolMaxLookbackDays": 30,
     "invokeMaxAttempts": 1,
@@ -26,7 +44,13 @@
     "symbolIntervalSeconds": 8,
     "symbolCacheTtlHours": 18,
     "allowStaleSymbolCacheOnError": 1,
-    "processTimeoutMs": 240000,
+    "symbolWallTimeoutSeconds": 240,
+    "maxDebateRounds": 0,
+    "maxRiskDiscussRounds": 0,
+    "maxRecurLimit": 60,
+    "prewarmCircuitBreakerTimeoutThreshold": 3,
+    "prewarmCircuitBreakerCooldownMs": 7200000,
+    "processTimeoutMs": 270000,
     "processMaxBufferBytes": 8388608,
     "prewarmMaxSymbolsPerRun": 1,
     "prewarmPrioritySymbols": ["QQQ", "SOXX", "KWEB", "ARKK", "ASHR"]

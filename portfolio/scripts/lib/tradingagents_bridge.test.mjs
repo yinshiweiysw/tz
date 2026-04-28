@@ -15,9 +15,15 @@ const bridgeConfigPath = "/Users/yinshiwei/codex/tz-main-simplified/portfolio/co
 
 test("buildTradingAdviceSnapshot maps TradingAgents ratings into bucket and fund advice", async () => {
   const bridgeConfig = await loadTradingAgentsBridgeConfig(bridgeConfigPath);
-  assert.equal(bridgeConfig.providerDefaults.llmProvider, "deepseek");
-  assert.equal(bridgeConfig.providerDefaults.deepThinkModel, "deepseek-v4-flash");
-  assert.equal(bridgeConfig.providerDefaults.quickThinkModel, "deepseek-v4-flash");
+  assert.equal(bridgeConfig.providerDefaults.llmProvider, "glm");
+  assert.equal(bridgeConfig.providerDefaults.deepThinkModel, "glm-5.1");
+  assert.equal(bridgeConfig.providerDefaults.quickThinkModel, "glm-5");
+  assert.equal(bridgeConfig.providerDefaults.brainProfile, "fast");
+  assert.equal(bridgeConfig.providerDefaults.symbolWallTimeoutSeconds, 240);
+  assert.equal(bridgeConfig.providerChain.primary.llmProvider, "glm");
+  assert.equal(bridgeConfig.providerChain.fallback[0].llmProvider, "deepseek");
+  assert.equal(bridgeConfig.providerChain.fallback[0].deepThinkModel, "deepseek-v4-pro");
+  assert.equal(bridgeConfig.providerChain.fallback[0].quickThinkModel, "deepseek-v4-pro");
   const rawSnapshot = await loadTradingAgentsRawFixture();
   const assetMaster = {
     buckets: {

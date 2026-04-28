@@ -1,0 +1,433 @@
+{
+  "version": 1,
+  "asOf": "2026-04-28",
+  "description": "Proxy-based factor labels for the simplified fund OS. V1 is explanatory only and does not change trading decisions.",
+  "factors": {
+    "CN_BROAD": {
+      "label": "A股宽基"
+    },
+    "CN_GROWTH": {
+      "label": "A股成长"
+    },
+    "CN_ACTIVE_QUANT": {
+      "label": "A股主动量化"
+    },
+    "US_TECH": {
+      "label": "美股科技"
+    },
+    "US_SEMI": {
+      "label": "半导体"
+    },
+    "CHINA_INTERNET": {
+      "label": "中概/港股互联网"
+    },
+    "HK_DIVIDEND": {
+      "label": "港股/红利"
+    },
+    "GOLD": {
+      "label": "黄金避险"
+    },
+    "BOND_CASH": {
+      "label": "短债/现金替代"
+    },
+    "TACTICAL_HIGH_BETA": {
+      "label": "战术高波"
+    }
+  },
+  "profiles": {
+    "007339": {
+      "fundName": "易方达沪深300ETF联接C",
+      "primaryFactor": "CN_BROAD",
+      "secondaryFactors": [],
+      "proxySymbols": [
+        "ASHR"
+      ],
+      "region": "CN",
+      "styleTags": [
+        "沪深300",
+        "A股宽基"
+      ],
+      "confidence": 0.82,
+      "asOf": "2026-04-28"
+    },
+    "001917": {
+      "fundName": "招商量化精选股票A",
+      "primaryFactor": "CN_ACTIVE_QUANT",
+      "secondaryFactors": [
+        "CN_BROAD"
+      ],
+      "proxySymbols": [
+        "ASHR"
+      ],
+      "region": "CN",
+      "styleTags": [
+        "A股主动",
+        "量化"
+      ],
+      "confidence": 0.72,
+      "asOf": "2026-04-28"
+    },
+    "006195": {
+      "fundName": "国金量化多因子股票A",
+      "primaryFactor": "CN_ACTIVE_QUANT",
+      "secondaryFactors": [
+        "CN_BROAD"
+      ],
+      "proxySymbols": [
+        "ASHR"
+      ],
+      "region": "CN",
+      "styleTags": [
+        "A股主动",
+        "多因子",
+        "量化"
+      ],
+      "confidence": 0.74,
+      "asOf": "2026-04-28"
+    },
+    "020872": {
+      "fundName": "华夏创业板指数发起式E",
+      "primaryFactor": "CN_GROWTH",
+      "secondaryFactors": [
+        "TACTICAL_HIGH_BETA"
+      ],
+      "proxySymbols": [
+        "ASHR"
+      ],
+      "region": "CN",
+      "styleTags": [
+        "创业板",
+        "A股成长"
+      ],
+      "confidence": 0.78,
+      "asOf": "2026-04-28"
+    },
+    "014219": {
+      "fundName": "汇添富中证科创创业50指数增强C",
+      "primaryFactor": "CN_GROWTH",
+      "secondaryFactors": [
+        "TACTICAL_HIGH_BETA"
+      ],
+      "proxySymbols": [
+        "ASHR"
+      ],
+      "region": "CN",
+      "styleTags": [
+        "科创创业",
+        "A股成长",
+        "高波"
+      ],
+      "confidence": 0.78,
+      "asOf": "2026-04-28"
+    },
+    "006075": {
+      "fundName": "博时标普500ETF联接(QDII)C",
+      "primaryFactor": "US_TECH",
+      "secondaryFactors": [],
+      "proxySymbols": [
+        "QQQ"
+      ],
+      "region": "US",
+      "styleTags": [
+        "美股宽基",
+        "QDII"
+      ],
+      "confidence": 0.58,
+      "asOf": "2026-04-28"
+    },
+    "017641": {
+      "fundName": "摩根标普500指数(QDII)A",
+      "primaryFactor": "US_TECH",
+      "secondaryFactors": [],
+      "proxySymbols": [
+        "QQQ"
+      ],
+      "region": "US",
+      "styleTags": [
+        "美股宽基",
+        "QDII"
+      ],
+      "confidence": 0.58,
+      "asOf": "2026-04-28"
+    },
+    "019118": {
+      "fundName": "景顺长城纳斯达克科技市值加权ETF联接(QDII)E",
+      "primaryFactor": "US_TECH",
+      "secondaryFactors": [],
+      "proxySymbols": [
+        "QQQ"
+      ],
+      "region": "US",
+      "styleTags": [
+        "纳斯达克科技",
+        "QDII"
+      ],
+      "confidence": 0.82,
+      "asOf": "2026-04-28"
+    },
+    "019172": {
+      "fundName": "摩根纳斯达克100指数(QDII)A",
+      "primaryFactor": "US_TECH",
+      "secondaryFactors": [],
+      "proxySymbols": [
+        "QQQ"
+      ],
+      "region": "US",
+      "styleTags": [
+        "纳斯达克100",
+        "QDII"
+      ],
+      "confidence": 0.82,
+      "asOf": "2026-04-28"
+    },
+    "016532": {
+      "fundName": "嘉实纳斯达克100ETF联接(QDII)A",
+      "primaryFactor": "US_TECH",
+      "secondaryFactors": [],
+      "proxySymbols": [
+        "QQQ"
+      ],
+      "region": "US",
+      "styleTags": [
+        "纳斯达克100",
+        "QDII"
+      ],
+      "confidence": 0.82,
+      "asOf": "2026-04-28"
+    },
+    "017204": {
+      "fundName": "华宝海外科技股票(QDII-FOF-LOF)C",
+      "primaryFactor": "US_TECH",
+      "secondaryFactors": [
+        "US_SEMI"
+      ],
+      "proxySymbols": [
+        "QQQ",
+        "SOXX"
+      ],
+      "region": "US",
+      "styleTags": [
+        "海外科技",
+        "QDII"
+      ],
+      "confidence": 0.76,
+      "asOf": "2026-04-28"
+    },
+    "513100": {
+      "fundName": "国泰纳斯达克100ETF",
+      "primaryFactor": "US_TECH",
+      "secondaryFactors": [],
+      "proxySymbols": [
+        "QQQ"
+      ],
+      "region": "US",
+      "styleTags": [
+        "纳斯达克100",
+        "场内代理"
+      ],
+      "confidence": 0.82,
+      "asOf": "2026-04-28"
+    },
+    "018966": {
+      "fundName": "汇添富纳斯达克100ETF发起式联接(QDII)人民币A",
+      "primaryFactor": "US_TECH",
+      "secondaryFactors": [],
+      "proxySymbols": [
+        "QQQ"
+      ],
+      "region": "US",
+      "styleTags": [
+        "纳斯达克100",
+        "QDII"
+      ],
+      "confidence": 0.82,
+      "asOf": "2026-04-28"
+    },
+    "019736": {
+      "fundName": "宝盈纳斯达克100指数发起(QDII)A人民币",
+      "primaryFactor": "US_TECH",
+      "secondaryFactors": [],
+      "proxySymbols": [
+        "QQQ"
+      ],
+      "region": "US",
+      "styleTags": [
+        "纳斯达克100",
+        "QDII"
+      ],
+      "confidence": 0.82,
+      "asOf": "2026-04-28"
+    },
+    "021482": {
+      "fundName": "华夏中证红利低波动ETF发起式联接A",
+      "primaryFactor": "HK_DIVIDEND",
+      "secondaryFactors": [
+        "CN_BROAD"
+      ],
+      "proxySymbols": [
+        "ASHR"
+      ],
+      "region": "CN",
+      "styleTags": [
+        "A股红利",
+        "低波"
+      ],
+      "confidence": 0.68,
+      "asOf": "2026-04-28"
+    },
+    "021142": {
+      "fundName": "华夏港股通央企红利ETF联接A",
+      "primaryFactor": "HK_DIVIDEND",
+      "secondaryFactors": [],
+      "proxySymbols": [],
+      "region": "HK",
+      "styleTags": [
+        "港股红利",
+        "央企红利"
+      ],
+      "confidence": 0.78,
+      "asOf": "2026-04-28"
+    },
+    "022502": {
+      "fundName": "国泰黄金ETF联接E",
+      "primaryFactor": "GOLD",
+      "secondaryFactors": [],
+      "proxySymbols": [],
+      "region": "GLB",
+      "styleTags": [
+        "黄金",
+        "避险"
+      ],
+      "confidence": 0.84,
+      "asOf": "2026-04-28"
+    },
+    "025162": {
+      "fundName": "国泰大宗商品配置(QDII-LOF-FOF)D",
+      "primaryFactor": "GOLD",
+      "secondaryFactors": [
+        "TACTICAL_HIGH_BETA"
+      ],
+      "proxySymbols": [],
+      "region": "GLB",
+      "styleTags": [
+        "大宗商品",
+        "QDII",
+        "高波"
+      ],
+      "confidence": 0.52,
+      "asOf": "2026-04-28"
+    },
+    "023764": {
+      "fundName": "华夏恒生互联网科技业ETF联接(QDII)D",
+      "primaryFactor": "CHINA_INTERNET",
+      "secondaryFactors": [
+        "TACTICAL_HIGH_BETA"
+      ],
+      "proxySymbols": [
+        "KWEB"
+      ],
+      "region": "HK",
+      "styleTags": [
+        "港股互联网",
+        "高波"
+      ],
+      "confidence": 0.82,
+      "asOf": "2026-04-28"
+    },
+    "025209": {
+      "fundName": "永赢先锋半导体智选混合C",
+      "primaryFactor": "US_SEMI",
+      "secondaryFactors": [
+        "CN_GROWTH"
+      ],
+      "proxySymbols": [
+        "SOXX"
+      ],
+      "region": "CN",
+      "styleTags": [
+        "A股半导体",
+        "主动"
+      ],
+      "confidence": 0.68,
+      "asOf": "2026-04-28"
+    },
+    "014855": {
+      "fundName": "嘉实中证半导体产业指数增强C",
+      "primaryFactor": "US_SEMI",
+      "secondaryFactors": [
+        "CN_GROWTH"
+      ],
+      "proxySymbols": [
+        "SOXX"
+      ],
+      "region": "CN",
+      "styleTags": [
+        "A股半导体",
+        "指数增强"
+      ],
+      "confidence": 0.74,
+      "asOf": "2026-04-28"
+    },
+    "008087": {
+      "fundName": "华夏中证5G通信主题ETF联接C",
+      "primaryFactor": "TACTICAL_HIGH_BETA",
+      "secondaryFactors": [
+        "CN_GROWTH"
+      ],
+      "proxySymbols": [
+        "ASHR"
+      ],
+      "region": "CN",
+      "styleTags": [
+        "5G通信",
+        "主题高波"
+      ],
+      "confidence": 0.62,
+      "asOf": "2026-04-28"
+    },
+    "011803": {
+      "fundName": "景顺长城宁景6个月持有期混合A",
+      "primaryFactor": "BOND_CASH",
+      "secondaryFactors": [],
+      "proxySymbols": [],
+      "region": "CN",
+      "styleTags": [
+        "偏债混合",
+        "低波"
+      ],
+      "confidence": 0.78,
+      "asOf": "2026-04-28"
+    },
+    "016482": {
+      "fundName": "兴全恒信债券C",
+      "primaryFactor": "BOND_CASH",
+      "secondaryFactors": [],
+      "proxySymbols": [],
+      "region": "CN",
+      "styleTags": [
+        "债券",
+        "低波"
+      ],
+      "confidence": 0.84,
+      "asOf": "2026-04-28"
+    },
+    "011066": {
+      "fundName": "大成高鑫股票C",
+      "primaryFactor": "CN_BROAD",
+      "secondaryFactors": [
+        "CN_ACTIVE_QUANT"
+      ],
+      "proxySymbols": [
+        "ASHR"
+      ],
+      "region": "CN",
+      "styleTags": [
+        "低波策略",
+        "蓝筹",
+        "A股核心"
+      ],
+      "confidence": 0.64,
+      "asOf": "2026-04-28"
+    }
+  }
+}

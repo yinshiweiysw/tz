@@ -65,6 +65,8 @@ test("runTradingAgentsDecisionCycle falls back to fixture and persists decision 
     },
     {
       env: { DEEPSEEK_API_KEY: "test-key" },
+      refreshMarketProxyQuotes: async () => ({ status: "missing", quotes: [] }),
+      refreshMarketLake: async () => ({ status: "skipped_test", triggered: false }),
       runBridge: async () => {
         throw new Error("deepseek exploded");
       }
@@ -141,6 +143,7 @@ test("runTradingAgentsDecisionCycle refreshes market lake before live bridge and
     },
     {
       env: { DEEPSEEK_API_KEY: "test-key" },
+      refreshMarketProxyQuotes: async () => ({ status: "ready", quotes: [] }),
       refreshMarketLake: async (options) => {
         callOrder.push(["refresh", options.symbols, options.marketLakeDbPath]);
         return {
@@ -224,7 +227,112 @@ test("runTradingAgentsDecisionCycle refreshes market lake before live bridge and
   assert.deepEqual(result.decisionSnapshot.diagnostics.marketDataRefresh.requestedRefreshSymbols, ["QQQ", "SOXX"]);
 });
 
-test("runTradingAgentsDecisionCycle skips market refresh and bridge when live provider key is missing", async () => {
+test("runTradingAgentsDecisionCycle falls back from GLM rate limit to DeepSeek provider", async () => {
+  const portfolioRoot = await mkdtemp(path.join(os.tmpdir(), "tradingagents-decision-cycle-provider-fallback-"));
+  await Promise.all([
+    mkdir(path.join(portfolioRoot, "state"), { recursive: true }),
+    mkdir(path.join(portfolioRoot, "config"), { recursive: true }),
+    mkdir(path.join(portfolioRoot, "data"), { recursive: true })
+  ]);
+
+  await writeFile(
+    path.join(portfolioRoot, "state-manifest.json"),
+    `${JSON.stringify({ canonical_entrypoints: {} }, null, 2)}\n`,
+    "utf8"
+  );
+  await writeFile(
+    path.join(portfolioRoot, "state", "portfolio_state.json"),
+    `${JSON.stringify(
+      {
+        account_id: "main",
+        snapshot_date: "2026-04-24",
+        positions: [],
+        summary: {
+          trade_available_cash_cny: 5000,
+          total_portfolio_assets_cny: 5000
+        }
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  await writeFile(
+    path.join(portfolioRoot, "config", "asset_master.json"),
+    `${JSON.stringify(
+      {
+        buckets: { GLB_MOM: { label: "全球动量" } },
+        assets: [{ symbol: "019118", name: "景顺长城纳斯达克科技市值加权ETF联接(QDII)E", bucket: "GLB_MOM" }]
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  const attempted = [];
+  const result = await runTradingAgentsDecisionCycle(
+    {
+      portfolioRoot,
+      user: "main",
+      mode: "live"
+    },
+    {
+      env: {
+        ZHIPU_API_KEY: "glm-test-key",
+        DEEPSEEK_API_KEY: "deepseek-test-key"
+      },
+      refreshMarketProxyQuotes: async () => ({ status: "ready", quotes: [] }),
+      refreshMarketLake: async () => ({ status: "refreshed", triggered: true }),
+      runBridge: async (options) => {
+        attempted.push({
+          provider: options.providerDefaults.llmProvider,
+          deepModel: options.providerDefaults.deepThinkModel,
+          quickModel: options.providerDefaults.quickThinkModel
+        });
+        if (options.providerDefaults.llmProvider === "glm") {
+          throw new Error("openai.RateLimitError: Error code: 429");
+        }
+        return {
+          rawSnapshot: {
+            generatedAt: "2026-04-24T09:30:00+08:00",
+            asOf: "2026-04-24",
+            mode: "live",
+            source: "TradingAgents",
+            provider: "deepseek",
+            calls: []
+          },
+          adviceSnapshot: {
+            generatedAt: "2026-04-24T09:30:00+08:00",
+            asOf: "2026-04-24",
+            accountId: "main",
+            mode: "live",
+            source: "TradingAgents",
+            provider: "deepseek",
+            status: "advisory_only",
+            bucketSuggestions: [],
+            fundSuggestions: [],
+            blockedSuggestions: []
+          },
+          rawSnapshotPath: path.join(portfolioRoot, "data", "tradingagents_raw_snapshot.json"),
+          adviceSnapshotPath: path.join(portfolioRoot, "data", "trading_advice_snapshot.json")
+        };
+      }
+    }
+  );
+
+  assert.deepEqual(attempted, [
+    { provider: "glm", deepModel: "glm-5.1", quickModel: "glm-5" },
+    { provider: "deepseek", deepModel: "deepseek-v4-pro", quickModel: "deepseek-v4-pro" }
+  ]);
+  assert.equal(result.decisionSnapshot.providerUsed, "deepseek");
+  assert.equal(result.decisionSnapshot.providerMode, "fallback_provider");
+  assert.equal(result.decisionSnapshot.providerFallbackReason, "provider_rate_limited:glm");
+  assert.equal(result.diagnostics.providerRuntime.providerAttempted[0].status, "failed");
+  assert.equal(result.diagnostics.providerRuntime.providerAttempted[1].status, "success");
+});
+
+test("runTradingAgentsDecisionCycle still refreshes market diagnostics but skips bridge when live provider keys are missing", async () => {
   const portfolioRoot = await mkdtemp(path.join(os.tmpdir(), "tradingagents-decision-cycle-missing-key-"));
   await Promise.all([
     mkdir(path.join(portfolioRoot, "state"), { recursive: true }),
@@ -284,9 +392,10 @@ test("runTradingAgentsDecisionCycle skips market refresh and bridge when live pr
     },
     {
       env: {},
+      refreshMarketProxyQuotes: async () => ({ status: "missing", quotes: [] }),
       refreshMarketLake: async () => {
         calls.push("refresh");
-        throw new Error("refresh should not run when provider key is missing");
+        return { status: "refreshed", triggered: true };
       },
       runBridge: async () => {
         calls.push("bridge");
@@ -295,11 +404,11 @@ test("runTradingAgentsDecisionCycle skips market refresh and bridge when live pr
     }
   );
 
-  assert.deepEqual(calls, []);
+  assert.deepEqual(calls, ["refresh"]);
   assert.equal(result.mode, "fallback_fixture");
   assert.equal(result.decisionSnapshot.diagnostics.providerError, "Missing required API key: DEEPSEEK_API_KEY");
-  assert.equal(result.decisionSnapshot.diagnostics.marketDataRefreshStatus, "skipped_missing_provider_key");
-  assert.equal(result.decisionSnapshot.diagnostics.marketDataRefreshTriggered, false);
+  assert.equal(result.decisionSnapshot.diagnostics.marketDataRefreshStatus, "refreshed");
+  assert.equal(result.decisionSnapshot.diagnostics.marketDataRefreshTriggered, true);
 });
 
 test("runTradingAgentsDecisionCycle returns compact provider diagnostics when live bridge connection fails", async () => {
@@ -361,6 +470,8 @@ test("runTradingAgentsDecisionCycle returns compact provider diagnostics when li
     },
     {
       env: { DEEPSEEK_API_KEY: "test-key" },
+      refreshMarketProxyQuotes: async () => ({ status: "missing", quotes: [] }),
+      refreshMarketLake: async () => ({ status: "skipped_test", triggered: false }),
       runBridge: async () => {
         throw new Error(
           "Traceback ... httpcore.RemoteProtocolError: Server disconnected without sending a response ... openai.APIConnectionError: Connection error."

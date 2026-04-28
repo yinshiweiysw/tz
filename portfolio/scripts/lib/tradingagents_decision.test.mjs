@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { loadTradingAgentsBridgeConfig, buildTradingAdviceSnapshot, loadTradingAgentsRawFixture } from "./tradingagents_bridge.mjs";
-import { buildNextSignalMemory, buildTradingDecisionSnapshot } from "./tradingagents_decision.mjs";
+import { applyMarketProxyQuotesToDecisionSnapshot, buildFundDeepDiveTrigger, buildNextSignalMemory, buildTradingDecisionSnapshot } from "./tradingagents_decision.mjs";
+import { resolveFundFactorProfile } from "./fund_factor_attribution.mjs";
 
 const bridgeConfigPath = "/Users/yinshiwei/codex/tz-main-simplified/portfolio/config/tradingagents_bridge.json";
 
@@ -168,6 +169,8 @@ test("buildTradingDecisionSnapshot downgrades low-confidence sell signal to risk
   assert.equal(decision.bucketActions.find((item) => item.bucket === "TACTICAL")?.executionState, "risk_watch");
   assert.match(decision.executionChecklist.observeLine[0]?.note ?? "", /信号置信度未过执行阈值/);
   assert.deepEqual(decision.executionChecklist.observeLine[0]?.reasons, ["confidence_below_action_threshold"]);
+  assert.equal(decision.observationGroups.directionObservations.some((item) => item.bucket === "TACTICAL"), true);
+  assert.equal(typeof decision.fundAnalyses[0]?.statusOneLine, "string");
 });
 
 test("buildTradingDecisionSnapshot keeps weekend previous-close SELL 0.5 as risk_watch with no real fund actions", async () => {
@@ -227,7 +230,7 @@ test("buildTradingDecisionSnapshot keeps weekend previous-close SELL 0.5 as risk
   assert.equal(decision.status, "risk_watch");
   assert.equal(decision.decisionContext.tradingCalendarState, "weekend");
   assert.equal(decision.decisionContext.marketDataTier, "reference_close");
-  assert.equal(decision.decisionContext.marketDataTierLabel, "前收参考");
+  assert.equal(decision.decisionContext.marketDataTierLabel, "前收参考 · 非实时");
   assert.equal(decision.decisionContext.marketDataAsOf, "2026-04-24");
   assert.equal(decision.executionChecklist.realActions.length, 0);
   assert.equal(decision.bucketActions.filter((item) => item.executionState === "risk_watch").length, 3);
@@ -298,7 +301,7 @@ test("buildTradingDecisionSnapshot treats fresh previous-close proxy data as act
   });
 
   assert.equal(decision.decisionContext.marketDataTier, "reference_close");
-  assert.equal(decision.decisionContext.marketDataTierLabel, "前收参考");
+  assert.equal(decision.decisionContext.marketDataTierLabel, "前收参考 · 非实时");
   assert.equal(decision.status, "limited_execute");
   assert.equal(decision.executionChecklist.realActions.length, 1);
   assert.equal(decision.executionChecklist.realActions[0].fundCode, "019118");
@@ -498,6 +501,15 @@ test("buildTradingDecisionSnapshot downgrades buy candidates to observe when buc
     "bucket_not_below_target",
     "below_min_trade_amount"
   ]);
+  assert.match(decision.morningBrief.headline, /有方向信号|不生成真实动作/);
+  assert.match(decision.morningBrief.actionExplanation, /为什么没有真实动作/);
+  assert.equal(Array.isArray(decision.morningBrief.watchFocus), true);
+  assert.equal(decision.observationGroups.directionObservations.some((item) => item.bucket === "GLB_MOM"), true);
+  assert.deepEqual(decision.observationGroups.actionConstraints[0]?.reasons, [
+    "bucket_not_below_target",
+    "below_min_trade_amount"
+  ]);
+  assert.match(decision.observationGroups.actionConstraints[0]?.oneLine ?? "", /未低于目标|最小交易额/);
 });
 
 test("buildTradingDecisionSnapshot keeps missing proxy data in risk_watch", async () => {
@@ -820,9 +832,360 @@ test("buildTradingDecisionSnapshot keeps fallback fixture in observe_only and su
   });
 
   assert.equal(decision.status, "observe_only");
+  assert.equal(decision.providerUsed, "fallback_fixture");
+  assert.equal(decision.providerMode, "fallback_fixture");
   assert.equal(decision.executionChecklist.realActions.length, 0);
   assert.equal(decision.diagnostics.providerError, "glm unavailable");
   assert.match(decision.decisionSummary, /glm live 调用失败/);
+});
+
+test("buildTradingDecisionSnapshot adds per-fund and portfolio analyses from local holdings", async () => {
+  const bridgeConfig = await loadTradingAgentsBridgeConfig(bridgeConfigPath);
+  const factorProfilesConfig = {
+    asOf: "2026-04-28",
+    profiles: {
+      "007339": {
+        primaryFactor: "CN_BROAD",
+        secondaryFactors: [],
+        proxySymbols: ["ASHR"],
+        region: "CN",
+        confidence: 0.82
+      },
+      "023764": {
+        fundName: "华夏恒生互联网科技业ETF联接(QDII)D",
+        primaryFactor: "CHINA_INTERNET",
+        secondaryFactors: ["TACTICAL_HIGH_BETA"],
+        proxySymbols: ["KWEB"],
+        region: "HK",
+        confidence: 0.82
+      }
+    }
+  };
+  const researchProfilesConfig = {
+    asOf: "2026-04-28",
+    profiles: {
+      "007339": {
+        fundName: "易方达沪深300ETF联接C",
+        fundCompany: "易方达基金",
+        fundType: "ETF联接基金",
+        underlyingIndexOrTheme: "沪深300",
+        holdingLookthroughStatus: "latest_quarter_holdings",
+        holdingsAsOf: "2026-03-31",
+        managerName: "测试经理",
+        topHoldings: [{ name: "贵州茅台", weightPct: 5.1, asOf: "2026-03-31" }]
+      },
+      "023764": {
+        fundName: "华夏恒生互联网科技业ETF联接(QDII)D",
+        fundCompany: "华夏基金",
+        fundType: "ETF联接基金/QDII",
+        underlyingIndexOrTheme: "恒生互联网科技业",
+        holdingLookthroughStatus: "theme_only",
+        topIndustries: ["港股互联网"],
+        profileOneLine: "QDII ETF联接 · 港股互联网高波"
+      }
+    }
+  };
+  const rawSnapshot = {
+    generatedAt: "2026-04-24T09:30:00+08:00",
+    asOf: "2026-04-24",
+    mode: "live",
+    source: "TradingAgents",
+    provider: "deepseek",
+    calls: [
+      {
+        symbol: "ASHR",
+        rating: "SELL",
+        confidence: 0.72,
+        thesis: "A股风险回报不足"
+      }
+    ]
+  };
+  const adviceSnapshot = await buildTradingAdviceSnapshot({
+    rawSnapshot,
+    assetMaster: baseAssetMaster,
+    bridgeConfig,
+    accountId: "main",
+    now: new Date("2026-04-24T10:00:00+08:00")
+  });
+
+  const decision = await buildTradingDecisionSnapshot({
+    rawSnapshot,
+    adviceSnapshot,
+    portfolioState: {
+      account_id: "main",
+      snapshot_date: "2026-04-24",
+      positions: [
+        {
+          code: "007339",
+          symbol: "007339",
+          name: "易方达沪深300ETF联接C",
+          amount: 30000,
+          daily_pnl: -120,
+          holding_pnl: 800,
+          confirmation_state: "normal_lag",
+          status: "active",
+          bucket: "CN_CORE"
+        },
+        {
+          name: "华夏恒生互联网科技业ETF联接(QDII)D",
+          amount: 12000,
+          daily_pnl: 30,
+          holding_pnl: -1400,
+          confirmation_state: "holiday_delay",
+          status: "active"
+        }
+      ],
+      summary: {
+        trade_available_cash_cny: 1000,
+        total_portfolio_assets_cny: 100000
+      }
+    },
+    assetMaster: baseAssetMaster,
+    bridgeConfig,
+    factorProfilesConfig,
+    researchProfilesConfig,
+    accountId: "main",
+    signalMemory: {
+      entries: [
+        { bucket: "A_CORE", direction: "sell", rating: "SELL", confidence: 0.7, provider: "deepseek", mode: "live" }
+      ]
+    },
+    now: new Date("2026-04-24T10:00:00+08:00")
+  });
+
+  assert.equal(decision.fundAnalyses.length, 2);
+  assert.equal(decision.fundAnalyses[0].fundCode, "007339");
+  assert.equal(decision.fundAnalyses[0].bucket, "A_CORE");
+  assert.equal(decision.fundAnalyses[0].dayPnl, -120);
+  assert.match(decision.fundAnalyses[0].tradeStance, /减配|观察|复核/);
+  assert.equal(decision.fundAnalyses[0].factorProfile.primaryFactor, "CN_BROAD");
+  assert.equal(decision.fundAnalyses[0].factorContribution.factor, "CN_BROAD");
+  assert.match(decision.fundAnalyses[0].factorOneLine, /A股宽基/);
+  assert.equal(typeof decision.fundAnalyses[0].statusOneLine, "string");
+  assert.match(decision.fundAnalyses[0].statusOneLine, /深看|观察|维持|复核|动作/);
+  assert.equal(decision.fundAnalyses[0].researchProfileQuality.status, "ready");
+  assert.match(decision.fundAnalyses[0].researchProfileQuality.tagLabels.join(" "), /资料已同步/);
+  assert.match(decision.fundAnalyses[0].researchProfileQuality.tagLabels.join(" "), /经理已同步/);
+  assert.match(decision.fundAnalyses[0].researchProfileQuality.tagLabels.join(" "), /重仓已穿透/);
+  assert.equal(decision.fundAnalyses[1].fundCode, "023764");
+  assert.equal(decision.fundAnalyses[1].bucket, "TACTICAL");
+  assert.equal(decision.fundAnalyses[1].factorProfile.primaryFactor, "CHINA_INTERNET");
+  assert.equal(decision.fundAnalyses[1].researchProfile.fundType, "ETF联接基金/QDII");
+  assert.equal(decision.fundAnalyses[1].researchProfile.lookthrough.status, "theme_only");
+  assert.equal(decision.fundAnalyses[1].researchProfileQuality.status, "partial");
+  assert.match(decision.fundAnalyses[1].researchProfileQuality.tagLabels.join(" "), /仅主题穿透/);
+  assert.deepEqual(decision.fundAnalyses[1].factorProfile.proxySymbols, ["KWEB"]);
+  assert.equal(decision.fundAnalyses[1].deepDiveTrigger.needed, true);
+  assert.match(decision.fundAnalyses[1].statusOneLine, /深看/);
+  assert.match(decision.fundAnalyses[1].deepDiveTrigger.reasons.join(","), /large_holding_drawdown/);
+  assert.match(decision.portfolioAnalysis.oneLine, /全组合 2 只基金/);
+  assert.equal(Array.isArray(decision.portfolioAnalysis.exposureSummary), true);
+  assert.equal(Array.isArray(decision.portfolioAnalysis.factorExposureSummary), true);
+  assert.equal(
+    decision.portfolioAnalysis.factorExposureSummary.reduce((sum, item) => sum + item.exposureCny, 0),
+    42000
+  );
+  assert.deepEqual(
+    decision.portfolioAnalysis.factorExposureSummary.map((item) => item.factor),
+    ["CN_BROAD", "CHINA_INTERNET"]
+  );
+  assert.equal(decision.portfolioAnalysis.dominantFactors[0].factor, "CN_BROAD");
+  assert.match(decision.portfolioAnalysis.factorRiskNotes.join(" "), /最大因子暴露|今日主要拖累/);
+  assert.equal(Array.isArray(decision.portfolioAnalysis.deepDiveCandidates), true);
+  assert.equal(Array.isArray(decision.portfolioAnalysis.peerGroupSummary), true);
+  assert.equal(decision.deepDiveCandidates.length > 0, true);
+  assert.equal(Array.isArray(decision.portfolioAnalysis.deepDiveAnalyses), true);
+  assert.equal(Array.isArray(decision.deepDiveAnalyses), true);
+  assert.equal(decision.fundTradingAgentsAdapter.status, "ready");
+  assert.equal(decision.fundTradingAgentsAdapter.adapterMode, "context_only");
+  assert.equal(decision.fundTradingAgentsAdapter.contexts.length, decision.deepDiveCandidates.length);
+  assert.match(decision.fundTradingAgentsAdapter.contexts[0].prompt, /请作为基金交易分析师分析/);
+  assert.match(decision.fundTradingAgentsAdapter.contexts[0].prompt, /基金资料/);
+  assert.equal(typeof decision.fundTradingAgentsAdapter.contexts[0].researchProfile?.lookthrough?.status, "string");
+  assert.equal(Array.isArray(decision.fundTradingAgentsAdapter.contexts[0].analysisQuestions), true);
+  assert.match(decision.deepDiveCandidates[0].deepDiveAnalysis.headline, /必须看|可选看/);
+  assert.match(decision.deepDiveCandidates[0].deepDiveAnalysis.plainOneLine, /不是自动卖出指令|先看|单独处理/);
+  assert.match(decision.deepDiveCandidates[0].deepDiveAnalysis.plainWhy, /简单说|单独拎出来/);
+  assert.match(decision.deepDiveCandidates[0].deepDiveAnalysis.plainGuardrail, /不代表今天买入或卖出/);
+  assert.match(decision.deepDiveAnalyses[0].factorRead, /A股宽基|中概/);
+  assert.equal(Array.isArray(decision.deepDiveAnalyses[0].nextChecks), true);
+});
+
+test("buildTradingDecisionSnapshot groups duplicate factor funds and selects a representative", async () => {
+  const bridgeConfig = await loadTradingAgentsBridgeConfig(bridgeConfigPath);
+  const assetMaster = {
+    ...baseAssetMaster,
+    assets: [
+      ...baseAssetMaster.assets,
+      { symbol: "019736", name: "宝盈纳斯达克100指数发起(QDII)A人民币", bucket: "GLB_MOM" }
+    ]
+  };
+  const rawSnapshot = {
+    generatedAt: "2026-04-24T09:30:00+08:00",
+    asOf: "2026-04-24",
+    mode: "live",
+    source: "TradingAgents",
+    provider: "glm",
+    calls: [
+      {
+        symbol: "QQQ",
+        rating: "HOLD",
+        confidence: 0.7,
+        thesis: "纳指维持观察"
+      }
+    ]
+  };
+  const adviceSnapshot = await buildTradingAdviceSnapshot({
+    rawSnapshot,
+    assetMaster,
+    bridgeConfig,
+    accountId: "main",
+    now: new Date("2026-04-24T10:00:00+08:00")
+  });
+  const factorProfilesConfig = {
+    profiles: {
+      "019118": { primaryFactor: "US_TECH", primaryFactorLabel: "美股科技", proxySymbols: ["QQQ"], region: "US" },
+      "019736": { primaryFactor: "US_TECH", primaryFactorLabel: "美股科技", proxySymbols: ["QQQ"], region: "US" }
+    }
+  };
+  const researchProfilesConfig = {
+    asOf: "2026-04-28",
+    profiles: {
+      "019118": {
+        fundName: "景顺长城纳斯达克科技市值加权ETF联接(QDII)E",
+        fundCompany: "景顺长城基金",
+        fundType: "指数型-海外股票",
+        holdingLookthroughStatus: "theme_only",
+        managerName: "测试经理"
+      },
+      "019736": {
+        fundName: "宝盈纳斯达克100指数发起(QDII)A人民币",
+        fundCompany: "宝盈基金",
+        fundType: "指数型-海外股票",
+        holdingLookthroughStatus: "latest_quarter_holdings",
+        holdingsAsOf: "2026-03-31",
+        managerName: "蔡丹",
+        topHoldings: [{ name: "英伟达", weightPct: 8.2, asOf: "2026-03-31" }]
+      }
+    }
+  };
+  const decision = await buildTradingDecisionSnapshot({
+    rawSnapshot,
+    adviceSnapshot,
+    portfolioState: {
+      positions: [
+        { code: "019118", name: "景顺长城纳斯达克科技市值加权ETF联接(QDII)E", amount: 16000, daily_pnl: -20, holding_pnl: 600, status: "active" },
+        { code: "019736", name: "宝盈纳斯达克100指数发起(QDII)A人民币", amount: 9000, daily_pnl: -60, holding_pnl: -1200, status: "active" }
+      ],
+      summary: {
+        total_portfolio_assets_cny: 100000,
+        trade_available_cash_cny: 5000
+      }
+    },
+    assetMaster,
+    bridgeConfig,
+    factorProfilesConfig,
+    researchProfilesConfig,
+    accountId: "main",
+    now: new Date("2026-04-24T10:00:00+08:00")
+  });
+
+  assert.equal(decision.portfolioAnalysis.peerGroupSummary.length, 1);
+  assert.equal(decision.portfolioAnalysis.peerGroupSummary[0].groupKey, "US_TECH");
+  assert.equal(decision.portfolioAnalysis.peerGroupSummary[0].count, 2);
+  assert.equal(decision.portfolioAnalysis.peerGroupSummary[0].representative.fundCode, "019736");
+  assert.match(decision.portfolioAnalysis.peerGroupSummary[0].oneLine, /代表基金/);
+});
+
+test("resolveFundFactorProfile falls back to bucket and category inference when config is missing", () => {
+  const inferred = resolveFundFactorProfile({
+    fundCode: "099999",
+    fundName: "测试创业板成长主题基金",
+    bucket: "TACTICAL",
+    position: {
+      category: "创业板指数",
+      market: "CN"
+    },
+    assetMaster: baseAssetMaster,
+    factorProfilesConfig: {}
+  });
+
+  assert.equal(inferred.primaryFactor, "CN_GROWTH");
+  assert.equal(inferred.source, "bucket_category_inferred");
+  assert.equal(inferred.confidence, 0.45);
+  assert.equal(inferred.primaryFactorLabel, "A股成长");
+});
+
+test("buildFundDeepDiveTrigger flags drawdown and concentration without calling LLM", () => {
+  const trigger = buildFundDeepDiveTrigger({
+    fundAnalysis: {
+      fundCode: "023764",
+      fundName: "华夏恒生互联网科技业ETF联接(QDII)D",
+      amountCny: 72000,
+      weightPct: 14.5,
+      dayPnl: -200,
+      holdingPnl: -16000,
+      confirmationState: "holiday_delay",
+      tradeStance: "维持观察"
+    },
+    factorProfile: {
+      primaryFactor: "CHINA_INTERNET",
+      primaryFactorLabel: "中概/港股互联网"
+    }
+  });
+
+  assert.equal(trigger.needed, true);
+  assert.equal(trigger.level, "high");
+  assert.match(trigger.reasons.join(","), /large_holding_drawdown/);
+  assert.match(trigger.reasons.join(","), /position_concentration/);
+  assert.match(trigger.reasons.join(","), /high_beta_factor/);
+});
+
+test("buildFundDeepDiveTrigger does not flag bond cash just because the sleeve is large", () => {
+  const trigger = buildFundDeepDiveTrigger({
+    fundAnalysis: {
+      fundCode: "016482",
+      fundName: "兴全恒信债券C",
+      bucket: "CASH",
+      amountCny: 90000,
+      weightPct: 18.3,
+      dayPnl: -10,
+      holdingPnl: 39500,
+      confirmationState: "holiday_delay",
+      tradeStance: "防守维持"
+    },
+    factorProfile: {
+      primaryFactor: "BOND_CASH",
+      primaryFactorLabel: "短债/现金替代"
+    }
+  });
+
+  assert.equal(trigger.needed, false);
+  assert.equal(trigger.assetClass, "bond_cash");
+  assert.doesNotMatch(trigger.reasons.join(","), /position_concentration/);
+});
+
+test("buildFundDeepDiveTrigger still flags abnormal bond cash drawdown", () => {
+  const trigger = buildFundDeepDiveTrigger({
+    fundAnalysis: {
+      fundCode: "099998",
+      fundName: "测试短债基金",
+      bucket: "CASH",
+      amountCny: 50000,
+      weightPct: 10,
+      dayPnl: -50,
+      holdingPnl: -1200,
+      confirmationState: "confirmed",
+      tradeStance: "防守维持"
+    },
+    factorProfile: {
+      primaryFactor: "BOND_CASH",
+      primaryFactorLabel: "短债/现金替代"
+    }
+  });
+
+  assert.equal(trigger.needed, true);
+  assert.match(trigger.reasons.join(","), /bond_cash_abnormal_drawdown/);
 });
 
 test("buildTradingDecisionSnapshot normalizes provider rate limit tracebacks into compact diagnostics", async () => {
@@ -947,4 +1310,191 @@ test("buildTradingDecisionSnapshot normalizes provider timeouts into compact dia
 
   assert.equal(decision.diagnostics.providerError, "provider_timeout:glm");
   assert.match(decision.decisionSummary, /provider_timeout:glm/);
+});
+
+test("buildTradingDecisionSnapshot adds fund-only one-line summaries and keeps raw evidence by reference", async () => {
+  const bridgeConfig = await loadTradingAgentsBridgeConfig(bridgeConfigPath);
+  const rawSnapshot = {
+    generatedAt: "2026-04-24T09:30:00+08:00",
+    asOf: "2026-04-24",
+    mode: "live",
+    source: "TradingAgents",
+    provider: "glm",
+    calls: [
+      {
+        symbol: "ARKK",
+        rating: "SELL",
+        confidence: 0.72,
+        thesis: "## 最终决策\n立即在当前价位市价卖出，开盘清仓，并设置止损线和限价单。",
+        risks: ["高波动主题回撤扩大"],
+        riskJudge: "需要降低战术仓位",
+        investmentJudge: "减配战术"
+      }
+    ]
+  };
+  const adviceSnapshot = await buildTradingAdviceSnapshot({
+    rawSnapshot,
+    assetMaster: baseAssetMaster,
+    bridgeConfig,
+    accountId: "main",
+    now: new Date("2026-04-24T10:00:00+08:00")
+  });
+
+  const decision = await buildTradingDecisionSnapshot({
+    rawSnapshot,
+    adviceSnapshot,
+    portfolioState: {
+      account_id: "main",
+      snapshot_date: "2026-04-24",
+      positions: [
+        {
+          code: "023764",
+          symbol: "023764",
+          name: "华夏恒生互联网科技业ETF联接(QDII)D",
+          amount: 70000,
+          status: "active"
+        }
+      ],
+      summary: {
+        trade_available_cash_cny: 3000,
+        total_portfolio_assets_cny: 100000
+      }
+    },
+    assetMaster: baseAssetMaster,
+    bridgeConfig,
+    accountId: "main",
+    diagnostics: {
+      marketProxyQuotes: {
+        generatedAt: "2026-04-24T10:00:00+08:00",
+        quotes: [{ symbol: "ARKK", price: 50, pctChange: -2.1, quoteTime: "2026-04-24 10:00:00", quoteTier: "live" }]
+      }
+    },
+    signalMemory: {
+      entries: [
+        {
+          generatedAt: "2026-04-23T09:30:00+08:00",
+          asOf: "2026-04-23",
+          bucket: "TACTICAL",
+          rating: "SELL",
+          direction: "sell",
+          confidence: 0.7,
+          provider: "glm",
+          mode: "live"
+        }
+      ]
+    },
+    now: new Date("2026-04-24T10:00:00+08:00")
+  });
+
+  const action = decision.executionChecklist.realActions[0];
+  assert.ok(action);
+  assert.equal(action.rawEvidenceRef, "reasonSummary");
+  assert.equal(Array.isArray(action.evidenceDigest), true);
+  assert.match(action.actionOneLine, /不构成订单/);
+  assert.match(action.riskOneLine, /不等同于全卖/);
+  assert.doesNotMatch(action.fundReasonOneLine, /市价|清仓|止损|开盘|做空|期权|卖出|减仓|立即|限价单|下单/);
+});
+
+test("buildTradingDecisionSnapshot lets proxy quote snapshot override market data tier and exposes provider runtime", async () => {
+  const bridgeConfig = await loadTradingAgentsBridgeConfig(bridgeConfigPath);
+  const rawSnapshot = {
+    generatedAt: "2026-04-24T09:30:00+08:00",
+    asOf: "2026-04-24",
+    mode: "live",
+    source: "TradingAgents",
+    provider: "deepseek",
+    runtimeConfig: {
+      brainProfile: "fast"
+    },
+    calls: []
+  };
+  const adviceSnapshot = {
+    generatedAt: "2026-04-24T09:30:00+08:00",
+    asOf: "2026-04-24",
+    accountId: "main",
+    mode: "live",
+    source: "TradingAgents",
+    provider: "deepseek",
+    bucketSuggestions: [],
+    fundSuggestions: [],
+    blockedSuggestions: []
+  };
+
+  const decision = await buildTradingDecisionSnapshot({
+    rawSnapshot,
+    adviceSnapshot,
+    portfolioState: {
+      account_id: "main",
+      snapshot_date: "2026-04-24",
+      positions: [],
+      summary: {
+        trade_available_cash_cny: 3000,
+        total_portfolio_assets_cny: 100000
+      }
+    },
+    assetMaster: baseAssetMaster,
+    bridgeConfig,
+    accountId: "main",
+    diagnostics: {
+      providerRuntime: {
+        providerUsed: "deepseek",
+        providerMode: "fallback_provider",
+        providerFallbackReason: "provider_rate_limited:glm",
+        providerAttempted: [
+          { provider: "glm", status: "failed", error: "provider_rate_limited:glm" },
+          { provider: "deepseek", status: "success", error: null }
+        ]
+      },
+      marketProxyQuotes: {
+        generatedAt: "2026-04-24T10:00:00+08:00",
+        quotes: [
+          { symbol: "QQQ", price: 420, pctChange: 1.2, quoteTime: "2026-04-24 10:00:00", quoteTier: "delayed" }
+        ]
+      }
+    },
+    now: new Date("2026-04-24T10:00:00+08:00")
+  });
+
+  assert.equal(decision.providerUsed, "deepseek");
+  assert.equal(decision.providerMode, "fallback_provider");
+  assert.equal(decision.providerFallbackReason, "provider_rate_limited:glm");
+  assert.equal(decision.brainProfile, "fast");
+  assert.equal(decision.providerRuntime.brainProfile, "fast");
+  assert.equal(decision.decisionContext.marketDataTier, "delayed");
+  assert.equal(decision.decisionContext.marketDataTierLabel, "延迟行情");
+  assert.equal(decision.marketProxyQuotes.quotes[0].quoteTier, "delayed");
+});
+
+test("applyMarketProxyQuotesToDecisionSnapshot backfills one-line summaries on persisted actions", () => {
+  const snapshot = applyMarketProxyQuotesToDecisionSnapshot(
+    {
+      mode: "live",
+      provider: "deepseek",
+      executionChecklist: {
+        realActions: [
+          {
+            bucket: "A_CORE",
+            bucketLabel: "A股核心",
+            stance: "sell",
+            actionLabel: "减配候选",
+            reasonSummary: "立即在当前价位市价卖出，开盘清仓，设置限价单。",
+            fundReasonOneLine: "立即市价卖出并开盘清仓。",
+            suggestedAmountRangeCny: { min: 1000, max: 2000 },
+            sizingWarnings: []
+          }
+        ]
+      }
+    },
+    {
+      quotes: [{ symbol: "ASHR", quoteTier: "reference_close", quoteTime: "2026-04-24" }]
+    }
+  );
+
+  const action = snapshot.executionChecklist.realActions[0];
+  assert.equal(snapshot.providerUsed, "deepseek");
+  assert.equal(snapshot.providerMode, "live");
+  assert.equal(snapshot.marketDataTier, "reference_close");
+  assert.equal(snapshot.marketDataTierLabel, "前收参考 · 非实时");
+  assert.match(action.actionOneLine, /不构成订单/);
+  assert.doesNotMatch(action.fundReasonOneLine, /市价|清仓|止损|开盘|做空|期权|卖出|减仓|立即|限价单|下单/);
 });

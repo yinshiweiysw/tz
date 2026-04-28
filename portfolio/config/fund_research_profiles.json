@@ -1,0 +1,3213 @@
+{
+  "version": 1,
+  "generatedAt": "2026-04-28T07:03:05.957Z",
+  "asOf": "2026-04-28",
+  "source": "Eastmoney public fund APIs + local fallback profiles",
+  "sourceUrls": [
+    "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx",
+    "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx",
+    "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition",
+    "https://fundf10.eastmoney.com/FundArchivesDatas.aspx"
+  ],
+  "syncStatus": {
+    "status": "ready",
+    "fundCount": 24,
+    "profileCount": 24,
+    "errorCount": 0,
+    "errors": []
+  },
+  "description": "Auto-refreshed fund research profiles for fund-native TradingAgents analysis. Missing lookthrough data is explicit and must not be invented.",
+  "profiles": {
+    "016482": {
+      "fundName": "兴全恒信债券C",
+      "fundCompany": "兴证全球基金",
+      "fundType": "债券型-长债",
+      "region": "CN",
+      "underlyingIndexOrTheme": null,
+      "analysisTemplate": "defensive_fund",
+      "dataQuality": "eastmoney_base_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=016482&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359785961",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=016482&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359785961",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=016482&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359785961",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=016482&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359785961",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=016482&topline=10&year=&month=&rt=1777359785961"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "田志祥",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "田志祥",
+        "id": "30705146",
+        "startDate": "2022-11-09",
+        "days": 1266,
+        "education": "硕士",
+        "resume": "田志祥先生:硕士研究生,中国国籍,2015年7月起至今就职于兴证全球基金管理有限公司,先后担任研究员、投资经理助理、投资经理。2020年7月3日至2025年12月22日担任兴全兴泰定期开放债券型发起式证券投资基金基金经理,2021年12月8日起担任兴证全球恒悦180天持有期债券型证券投资基金基金经理。2024年04月11日担任兴全祥泰定期开放债券型发起式证券投资基金基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 3648186064.14,
+        "endNavYi": 36.48,
+        "scaleCny": 3345089078.5,
+        "scaleYi": 33.45,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "0.00%",
+        "discountedSubscriptionRate": "0.00%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "限大额(单日投资上限500万元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "2",
+      "navDate": "2026-04-27",
+      "holdingLookthroughStatus": "theme_only",
+      "lookthroughSource": "theme_only",
+      "topHoldings": [],
+      "holdingsAsOf": "2026-04-27",
+      "topIndustries": [
+        "短债",
+        "现金管理",
+        "低波防守"
+      ],
+      "dueDiligenceFocus": [
+        "确认流动性、防守角色和回撤是否异常",
+        "检查久期/信用风险是否偏离现金替代定位",
+        "默认不参与进攻动作"
+      ],
+      "limitations": [
+        "最新重仓股未能从公开接口获取，当前按主题/类型降级分析。",
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "债券型-长债 · 主题待确认 · 防守/现金替代 · theme_only",
+      "confidence": 0.72,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "023764": {
+      "fundName": "华夏恒生互联网科技业ETF发起式联接(QDII)D",
+      "fundCompany": "华夏基金",
+      "fundType": "指数型-海外股票",
+      "region": "HK",
+      "underlyingIndexOrTheme": "恒生互联网科技业",
+      "analysisTemplate": "qdii_index_fund",
+      "holdingLookthroughStatus": "theme_only",
+      "topIndustries": [
+        "港股互联网",
+        "平台经济",
+        "消费科技"
+      ],
+      "dueDiligenceFocus": [
+        "优先看 恒生互联网科技业 代理资产趋势与回撤",
+        "检查 QDII 净值确认滞后和申赎限制",
+        "复核同指数/同风格基金是否重复持有"
+      ],
+      "limitations": [
+        "尚未加载最新基金季报重仓股。",
+        "QDII/港股净值可能滞后，不能把代理资产日内波动直接当确认净值。",
+        "最新重仓股未能从公开接口获取，当前按主题/类型降级分析。",
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-海外股票 · 恒生互联网科技业 · 跨市场指数暴露 · theme_only",
+      "confidence": 0.72,
+      "dataQuality": "eastmoney_base_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=023764&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786205",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=023764&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786205",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=023764&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786205",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=023764&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786205",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=023764&topline=10&year=&month=&rt=1777359786205"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "徐猛",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "徐猛",
+        "id": "30106590",
+        "startDate": "2025-03-28",
+        "days": 396,
+        "education": "硕士",
+        "resume": "徐猛先生:清华大学工学硕士。曾任财富证券助理研究员,原中关村证券研究员等。2006年2月加入华夏基金管理有限公司,历任数量投资部基金经理助理,上证原材料交易型开放式指数发起式证券投资基金基金经理(2016年1月29日至2016年3月28日期间)、华夏沪港通恒生交易型开放式指数证券投资基金基金经理(2015年3月12日至2021年2月1日期间)、华夏沪港通恒生交易型开放式指数证券投资基金联接基金基金经理(2015年3月12日至2021年2月1日期间)、上证金融地产交易型开放式指数发起式证券投资基金基金经理(2013年4月8日至2021年7月19日期间)、华夏创业板交易型开放式指数证券投资基金基金经理(2017年12月8日至2021年7月19日期间)、战略新兴成指交易型开放式指数证券投资基金基金经理(2018年7月13日至2021年7月19日期间)、华夏创业板交易型开放式指数证券投资基金发起式联接基金基金经理(2018年8月14日至2021年7月19日期间)、战略新兴成指交易型开放式指数证券投资基金发起式联接基金基金经理(2019年6月5日至2021年7月19日期间)、华夏中小企业100交易型开放式指数基金发起式联接基金基金经理(2018年9月10日至2021年9月10日期间)、中小企业100交易型开放式指数基金基金经理(2016年12月1日至2025年5月21日期间)等,现任投委会成员,恒生交易型开放式指数证券投资基金联接基金基金经理(2015年12月21日起任职)、恒生交易型开放式指数证券投资基金基金经理(2015年12月21日起任职)、华夏上证50交易型开放式指数证券投资基金联接基金基金经理(2016年12月1日起任职)、上证50交易型开放式指数证券投资基金基金经理(2020年3月6日起任职)、华夏中证细分食品饮料产业主题交易型开放式指数证券投资基金基金经理(2020年12月30日起任职)、华夏恒生互联网科技业交易型开放式指数证券投资基金(QDII)基金经理(2021年1月26日起任职)、华夏恒生中国企业交易型开放式指数证券投资基金(QDII)基金经理(2021年2月1日起任职)、华夏中证沪港深500交易型开放式指数证券投资基金基金经理(2021年4月7日起任职)、华夏恒生科技交易型开放式指数证券投资基金(QDII)基金经理(2021年5月18日起任职)、华夏中证科创创业50交易型开放式指数证券投资基金基金经理(2021年6月24日起任职)、华夏中证金融科技主题交易型开放式指数证券投资基金基金经理(2021年7月13日起任职)、华夏中证科创创业50交易型开放式指数证券投资基金发起式联接基金基金经理(2021年8月24日起任职)、华夏中证动漫游戏交易型开放式指数证券投资基金发起式联接基金基金经理(2021年8月31日至2025年9月9日任职)、华夏恒生互联网科技业交易型开放式指数证券投资基金发起式联接基金(QDII)基金经理(2021年9月14日起任职)、华夏恒生科技交易型开放式指数证券投资基金发起式联接基金(QDII)基金经理(2021年9月28日起任职)、华夏中证细分食品饮料产业主题交易型开放式指数证券投资基金发起式联接基金基金经理(2021年10月26日起任职)、华夏中证沪港深500交易型开放式指数证券投资基金发起式联接基金基金经理(2022年12月28日起任职)、华夏恒生中国企业交易型开放式指数证券投资基金发起式联接基金(QDII)基金经理(2023年7月18日起任职)、华夏中证金融科技主题交易型开放式指数证券投资基金发起式联接基金(2025年6月10日起任职)基金经理。曾任华夏中证动漫游戏交易型开放式指数证券投资基金基金经理。华夏国证港股通科技交易型开放式指数证券投资基金基金经理(2025年8月26日起任职)。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 377752775.22,
+        "endNavYi": 3.78,
+        "scaleCny": 583443870.53,
+        "scaleYi": 5.83,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "0.00%",
+        "discountedSubscriptionRate": "0.00%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "限大额(单日投资上限2000万元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-27",
+      "lookthroughSource": "theme_only",
+      "topHoldings": [],
+      "holdingsAsOf": "2026-04-27",
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "022502": {
+      "fundName": "国泰黄金ETF联接E",
+      "fundCompany": "国泰基金",
+      "fundType": "指数型-其他",
+      "region": "CN",
+      "underlyingIndexOrTheme": "黄金避险资产",
+      "analysisTemplate": "index_fund",
+      "dataQuality": "eastmoney_base_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=022502&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786394",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=022502&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786394",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=022502&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786394",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=022502&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786394",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=022502&topline=10&year=&month=&rt=1777359786394"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "艾小军",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "艾小军",
+        "id": "30277862",
+        "startDate": "2024-11-21",
+        "days": 523,
+        "education": "硕士",
+        "resume": "艾小军先生:中国国籍,硕士研究生,2001年5月至2006年9月在华安基金管理有限公司任量化分析师;2006年9月至2007年8月在汇丰晋信基金管理有限公司任应用分析师;2007年9月至2007年10月在平安资产管理有限公司任量化分析师;2007年10月加入国泰基金,历任金融工程分析师、高级产品经理和基金经理助理。2014年1月起任国泰黄金交易型开放式证券投资基金、上证180金融交易型开放式指数证券投资基金、国泰上证180金融交易型开放式指数证券投资基金联接基金的基金经理,2015年3月至2020年12月任国泰深证TMT50指数分级证券投资基金的基金经理,2015年4月至2021年1月任国泰沪深300指数证券投资基金的基金经理,2016年4月起兼任国泰黄金交易型开放式证券投资基金联接基金的基金经理,2016年7月起兼任国泰中证军工交易型开放式指数证券投资基金和国泰中证全指证券公司交易型开放式指数证券投资基金的基金经理,2017年3月至2017年5月任国泰保本混合型证券投资基金的基金经理,2017年3月至2018年12月任国泰策略收益灵活配置混合型证券投资基金的基金经理,2017年3月起兼任国泰国证航天军工指数证券投资基金(LOF)的基金经理,2017年4月起兼任国泰中证申万证券行业指数证券投资基金(LOF)的基金经理,2017年5月至2023年9月任国泰策略价值灵活配置混合型证券投资基金(由国泰保本混合型证券投资基金变更而来)的基金经理,2017年5月至2018年7月任国泰量化收益灵活配置混合型证券投资基金的基金经理,2017年8月起至2019年5月任国泰宁益定期开放灵活配置混合型证券投资基金的基金经理,2018年5月至2022年3月任国泰量化成长优选混合型证券投资基金的基金经理,2018年5月至2019年7月任国泰量化价值精选混合型证券投资基金的基金经理,2018年8月至2019年4月任国泰结构转型灵活配置混合型证券投资基金的基金经理,2018年12月至2019年3月任国泰量化策略收益混合型证券投资基金(由国泰策略收益灵活配置混合型证券投资基金变更而来)的基金经理,2019年4月至2019年11月任国泰沪深300指数增强型证券投资基金(由国泰结构转型灵活配置混合型证券投资基金变更而来)的基金经理,2019年5月至2019年11月任国泰中证500指数增强型证券投资基金(由国泰宁益定期开放灵活配置混合型证券投资基金变更注册而来)的基金经理,2019年5月起兼任国泰CES半导体芯片行业交易型开放式指数证券投资基金(由国泰CES半导体行业交易型开放式指数证券投资基金更名而来)的基金经理,2019年7月至2021年1月任上证5年期国债交易型开放式指数证券投资基金和上证10年期国债交易型开放式指数证券投资基金的基金经理,2019年7月起兼任国泰中证计算机主题交易型开放式指数证券投资基金的基金经理,2019年8月起兼任国泰中证全指通信设备交易型开放式指数证券投资基金的基金经理,2019年9月起兼任国泰中证全指通信设备交易型开放式指数证券投资基金发起式联接基金的基金经理,2020年12月起兼任国泰中证计算机主题交易型开放式指数证券投资基金联接基金(由国泰深证TMT50指数分级证券投资基金转型而来)的基金经理,2021年5月起兼任国泰中证全指证券公司交易型开放式指数证券投资基金发起式联接基金的基金经理,2023年5月起兼任纳斯达克100交易型开放式指数证券投资基金和国泰标普500交易型开放式指数证券投资基金(QDII)的基金经理,2023年7月起兼任国泰中证半导体材料设备主题交易型开放式指数证券投资基金的基金经理。2017年7月起任投资总监(量化)、金融工程总监。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 2667868970.06,
+        "endNavYi": 26.68,
+        "scaleCny": 726303974.48,
+        "scaleYi": 7.26,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "0.00%",
+        "discountedSubscriptionRate": "0.00%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "限大额(单日投资上限200万元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-27",
+      "holdingLookthroughStatus": "theme_only",
+      "lookthroughSource": "theme_only",
+      "topHoldings": [],
+      "holdingsAsOf": "2026-04-27",
+      "topIndustries": [
+        "大宗商品",
+        "黄金/贵金属",
+        "通胀与避险资产"
+      ],
+      "dueDiligenceFocus": [
+        "确认跟踪标的 黄金避险资产 的方向和估值状态",
+        "复核费率、跟踪误差和同标的重复暴露",
+        "不按主动选股逻辑解释短期表现"
+      ],
+      "limitations": [
+        "最新重仓股未能从公开接口获取，当前按主题/类型降级分析。",
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-其他 · 黄金避险资产 · 指数暴露 · theme_only",
+      "confidence": 0.72,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "007339": {
+      "fundName": "易方达沪深300ETF联接C",
+      "fundCompany": "易方达基金",
+      "fundType": "指数型-股票",
+      "region": "CN",
+      "underlyingIndexOrTheme": "沪深300",
+      "analysisTemplate": "index_fund",
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=007339&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786501",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=007339&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786501",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=007339&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786501",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=007339&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786501",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=007339&topline=10&year=&month=&rt=1777359786501"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "余海燕,庞亚平",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "余海燕,庞亚平",
+        "id": "30066753,30589069",
+        "startDate": "2022-12-15",
+        "days": 1230,
+        "education": "硕士",
+        "resume": "余海燕女士:经济学硕士。曾任汇丰银行Consumer Credit Risk信用风险分析师,华宝兴业基金管理有限公司分析师、基金经理助理、基金经理,易方达基金管理有限公司投资发展部产品经理。担任易方达基金管理有限公司易方达沪深300医药卫生交易型开放式指数证券投资基金基金经理(自2013年9月23日起任职)、易方达沪深300非银行金融交易型开放式指数证券投资基金基金经理(自2014年6月26日起任职)、易方达沪深300非银行金融交易型开放式指数证券投资基金联接基金基金经理(自2015年1月22日起任职)、易方达上证50指数分级证券投资基金基金经理(自2015年4月15日起任职直到2021年1月1日离任)、易方达国企改革指数分级证券投资基金基金经理(自2015年6月15日至2021年1月1日任职)、易方达军工指数分级证券投资基金基金经理(自2015年7月8日至2021年1月1日任职)、易方达证券公司指数分级证券投资基金基金经理(自2015年7月8日起任职直到20211年1月1日离任)、易方达沪深300交易型开放式指数发起式证券投资基金基金经理(自2016年4月16日起任职)、易方达中证500交易型开放式指数证券投资基金基金经理(自2016年4月16日起任职)、易方达沪深300交易型开放式指数发起式证券投资基金联接基金基金经理(自2016年4月16日起任职)、易方达中证海外中国互联网50交易型开放式指数证券投资基金基金经理(自2017年1月4日起任职)、易方达中证军工交易型开放式指数证券投资基金基金经理(自2017年7月14日至2021年4月15日)、易方达中证全指证券公司交易型开放式指数证券投资基金基金经理(自2017年7月27日至2021年4月15日)、易方达沪深300医药卫生交易型开放式指数证券投资基金联接基金基金经理(自2017年11月22日起任职)、易方达黄金交易型开放式证券投资基金联接基金基金经理(自2018年8月11日至2021年4月15日)、易方达恒生中国企业交易型开放式指数证券投资基金联接基金基金经理(自2018年8月11日起任职)、易方达黄金交易型开放式证券投资基金基金经理(自2018年8月11日至2021年4月15日)、易方达恒生中国企业交易型开放式指数证券投资基金基金经理(自2018年8月11日起任职)、易方达中证海外中国互联网50交易型开放式指数证券投资基金联接基金基金经理(自2019年1月18日起任职)、易方达中证500交易型开放式指数证券投资基金发起式联接基金基金经理(自2019年3月20日起任职),易方达日兴资管日经225交易型开放式指数证券投资基金(QDII)基金经理(自2019年6月12日起任职)。2022年11月1日起任易方达中证军工交易型开放式指数证券投资基金、易方达中证军工指数证券投资基金(LOF)基金经理。曾任易方达中证港股通互联网交易型开放式指数证券投资基金、易方达中证港股通互联网交易型开放式指数证券投资基金发起式联接基金基金经理。2025年11月22日担任易方达上证50指数证券投资基金(LOF)基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 7214041221.03,
+        "endNavYi": 72.14,
+        "scaleCny": 4076682289.77,
+        "scaleYi": 40.77,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "0.00%",
+        "discountedSubscriptionRate": "0.00%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "开放申购",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-27",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "lookthroughSource": "eastmoney_mobile_position",
+      "topHoldings": [
+        {
+          "code": "300750",
+          "name": "宁德时代",
+          "weightPct": 0.04,
+          "changeType": "不变",
+          "changePct": 0,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300308",
+          "name": "中际旭创",
+          "weightPct": 0.02,
+          "changeType": "不变",
+          "changePct": 0,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "601899",
+          "name": "紫金矿业",
+          "weightPct": 0.02,
+          "changeType": "不变",
+          "changePct": 0,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600519",
+          "name": "贵州茅台",
+          "weightPct": 0.02,
+          "changeType": "减持",
+          "changePct": -0.01,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600036",
+          "name": "招商银行",
+          "weightPct": 0.01,
+          "changeType": "不变",
+          "changePct": 0,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "601318",
+          "name": "中国平安",
+          "weightPct": 0.01,
+          "changeType": "减持",
+          "changePct": -0.01,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600900",
+          "name": "长江电力",
+          "weightPct": 0.01,
+          "changeType": "新增",
+          "changePct": 0.01,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300502",
+          "name": "新易盛",
+          "weightPct": 0.01,
+          "changeType": "减持",
+          "changePct": -0.01,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "002594",
+          "name": "比亚迪",
+          "weightPct": 0.01,
+          "changeType": "新增",
+          "changePct": 0.01,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "000333",
+          "name": "美的集团",
+          "weightPct": 0.01,
+          "changeType": "减持",
+          "changePct": -0.01,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        }
+      ],
+      "holdingsAsOf": "2026-03-31",
+      "topIndustries": [
+        "A股宽基",
+        "蓝筹",
+        "沪深300"
+      ],
+      "dueDiligenceFocus": [
+        "确认跟踪标的 沪深300 的方向和估值状态",
+        "复核费率、跟踪误差和同标的重复暴露",
+        "不按主动选股逻辑解释短期表现"
+      ],
+      "limitations": [
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-股票 · 沪深300 · 指数暴露 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "001917": {
+      "fundName": "招商量化精选股票A",
+      "fundCompany": "招商基金",
+      "fundType": "股票型",
+      "region": "CN",
+      "underlyingIndexOrTheme": null,
+      "analysisTemplate": "active_equity_fund",
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=001917&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786717",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=001917&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786717",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=001917&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786717",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=001917&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359786717",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=001917&topline=10&year=&month=&rt=1777359786717"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "王平",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "王平",
+        "id": "30059748",
+        "startDate": "2016-03-15",
+        "days": 3696,
+        "education": "硕士",
+        "resume": "王平先生:中国国籍,管理学硕士,FRM。2006年加入招商基金管理有限公司,曾任投资风险管理部助理数量分析师、风险管理部数量分析师、高级风控经理,主要负责公司投资风险管理、金融工程研究等工作,现任量化投资部总监兼招商量化精选股票型发起式证券投资基金基金经理(管理时间:2016年3月15日至今)、招商稳荣定期开放灵活配置混合型证券投资基金基金经理(管理时间:2016年10月27日至今)、招商财经大数据策略股票型证券投资基金基金经理(管理时间:2016年11月2日2020年8月1日)、招商沪深300指数增强型证券投资基金基金经理(管理时间:2017年2月10日至今)、招商中证1000指数增强型证券投资基金基金经理(管理时间:2017年3月3日至2024年12月31日)、招商盛合灵活配置混合型证券投资基金基金经理(管理时间:2017年4月29日2021年7月8日)、招商中证500指数增强型证券投资基金基金经理(管理时间:2017年5月17日至2023年12月13日)。2019年11月28日任招商中证红利交易型开放式指数证券投资基金的基金经理。招商中证500等权重指数增强型证券投资基金基金经理(管理时间:2020年12月23日至2024年11月26日)。2021年6月18日任招商中证光伏产业指数型证券投资基金基金经理。招商中证红利交易型开放式指数证券投资基金联接基金基金经理(管理时间:2022年2月23日至今)、招商中证银行AH价格优选交易型开放式指数证券投资基金基金经理(管理时间:2022年3月15日至2023年4月26日)。招商中证800指数增强型证券投资基金基金经理(管理时间:2022年8月23日至今)。招商中证1000增强策略交易型开放式指数证券投资基金基金经理(管理时间:2022年11月18日至2025年3月10日)。2021年12月2日至2023年6月28日担任招商沪深300增强策略交易型开放式指数证券投资基金的基金经理。招商中证500指数增强型证券投资基金基金经理(管理时间:2017年5月17日至今)、招商中证银行AH价格优选交易型开放式指数证券投资基金发起式联接基金基金经理(管理时间:2022年12月28日至2024年1月20日)。招商中证2000指数增强型证券投资基金基金经理(管理时间:2024年1月2日至今)。现拟任招商成长量化选股股票型证券投资基金基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 3647210786.26,
+        "endNavYi": 36.47,
+        "scaleCny": 1036898599.37,
+        "scaleYi": 10.37,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "1.50%",
+        "discountedSubscriptionRate": "0.15%",
+        "redemptionRate": "1.20%",
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 1000,
+        "purchaseStatus": "限大额(单日投资上限2000元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-27",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "lookthroughSource": "eastmoney_mobile_position",
+      "topHoldings": [
+        {
+          "code": "603444",
+          "name": "吉比特",
+          "weightPct": 1.7,
+          "changeType": "增持",
+          "changePct": 0.05,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "001218",
+          "name": "丽臣实业",
+          "weightPct": 1.64,
+          "changeType": "增持",
+          "changePct": 0.09,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "603856",
+          "name": "东宏股份",
+          "weightPct": 1.55,
+          "changeType": "新增",
+          "changePct": 1.55,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600526",
+          "name": "菲达环保",
+          "weightPct": 1.54,
+          "changeType": "增持",
+          "changePct": 0.19,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300358",
+          "name": "楚天科技",
+          "weightPct": 1.52,
+          "changeType": "新增",
+          "changePct": 1.52,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300428",
+          "name": "立中集团",
+          "weightPct": 1.45,
+          "changeType": "新增",
+          "changePct": 1.45,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600479",
+          "name": "千金药业",
+          "weightPct": 1.4,
+          "changeType": "新增",
+          "changePct": 1.4,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "603236",
+          "name": "移远通信",
+          "weightPct": 1.37,
+          "changeType": "减持",
+          "changePct": -0.27,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "000589",
+          "name": "贵州轮胎",
+          "weightPct": 1.36,
+          "changeType": "新增",
+          "changePct": 1.36,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "002011",
+          "name": "盾安环境",
+          "weightPct": 1.33,
+          "changeType": "新增",
+          "changePct": 1.33,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        }
+      ],
+      "holdingsAsOf": "2026-03-31",
+      "topIndustries": [],
+      "dueDiligenceFocus": [
+        "复核基金经理/基金公司与行业穿透是否稳定",
+        "检查风格漂移、回撤和同类主动基金重复暴露",
+        "资料缺失时降低结论置信度"
+      ],
+      "limitations": [
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "股票型 · 主题待确认 · 主动权益风格 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "011066": {
+      "fundName": "大成高鑫股票C",
+      "fundCompany": "大成基金",
+      "fundType": "股票型",
+      "region": "CN",
+      "underlyingIndexOrTheme": "低波蓝筹",
+      "analysisTemplate": "active_equity_fund",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "topIndustries": [
+        "低波蓝筹",
+        "A股核心",
+        "均衡权益"
+      ],
+      "dueDiligenceFocus": [
+        "复核基金经理/基金公司与行业穿透是否稳定",
+        "检查风格漂移、回撤和同类主动基金重复暴露",
+        "资料缺失时降低结论置信度"
+      ],
+      "limitations": [
+        "尚未加载最新季报重仓股和基金经理任期。",
+        "当前只把它作为 A_CORE 低波蓝筹基金处理。",
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "股票型 · 低波蓝筹 · 主动权益风格 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=011066&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787032",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=011066&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787032",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=011066&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787032",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=011066&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787032",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=011066&topline=10&year=&month=&rt=1777359787032"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "刘旭",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "刘旭",
+        "id": "30361915",
+        "startDate": "2020-12-25",
+        "days": 1950,
+        "education": "硕士",
+        "resume": "刘旭先生:中国国籍,管理学硕士。2009年至2010年在毕马威华振会计师事务所任审计师;2011年2月至2013年5月任广发证券研究所研究员;2013年5月加入大成基金管理有限公司。2015年3月30日至2015年7月21日担任大成策略回报股票型证券投资基金基金经理助理。2015年7月22日至2015年7月28日任大成策略回报混合型证券投资基金基金经理助理。2015年3月30日至2015年7月21日担任大成竞争优势混合型证券投资基金的基金经理助理。2015年7月22日至2015年7月28日担任大成竞争优势混合型证券投资基金的基金经理助理。2015年3月30日至2015年7月28日担任大成高新技术产业股票型证券投资基金基金经理助理,2015年7月29日起任大成高新技术产业股票型证券投资基金基金经理。2016年8月20日至2021年3月17日任大成创新成长混合型证券投资基金(LOF)基金经理。具有基金从业资格。2019年12月24日任职大成优势企业混合型证券投资基金基金经理。2020年6月5日至2024年7月3日任大成睿裕六个月持有期股票型证券投资基金基金经理。2020年8月11日至2026年1月19日担任大成睿鑫股票型证券投资基金基金经理。2021年3月15日起任大成核心价值甄选混合型证券投资基金基金经理。2022年6月7日起任大成匠心卓越三年持有期混合型证券投资基金基金经理。2023年1月18日起任大成慧心优选一年持有期混合型证券投资基金基金经理。2023年12月1日起任大成至信回报三年定期开放混合型证券投资基金基金经理。具有基金从业资格。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 4167144379.83,
+        "endNavYi": 41.67,
+        "scaleCny": 833973234.48,
+        "scaleYi": 8.34,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "0.00%",
+        "discountedSubscriptionRate": "0.00%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "开放申购",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-27",
+      "lookthroughSource": "eastmoney_mobile_position",
+      "topHoldings": [
+        {
+          "code": "000333",
+          "name": "美的集团",
+          "weightPct": 10.54,
+          "changeType": "增持",
+          "changePct": 1.51,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "002595",
+          "name": "豪迈科技",
+          "weightPct": 7.1,
+          "changeType": "减持",
+          "changePct": -1.53,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "00941",
+          "name": "中国移动",
+          "weightPct": 6.98,
+          "changeType": "减持",
+          "changePct": -1.78,
+          "market": "116",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600660",
+          "name": "福耀玻璃",
+          "weightPct": 6.56,
+          "changeType": "增持",
+          "changePct": 1.53,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600690",
+          "name": "海尔智家",
+          "weightPct": 6.4,
+          "changeType": "减持",
+          "changePct": -0.22,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300750",
+          "name": "宁德时代",
+          "weightPct": 4.01,
+          "changeType": "增持",
+          "changePct": 0.99,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600885",
+          "name": "宏发股份",
+          "weightPct": 3.72,
+          "changeType": "新增",
+          "changePct": 3.72,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600352",
+          "name": "浙江龙盛",
+          "weightPct": 3.67,
+          "changeType": "增持",
+          "changePct": 0.44,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600741",
+          "name": "华域汽车",
+          "weightPct": 3.62,
+          "changeType": "增持",
+          "changePct": 0.26,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "00883",
+          "name": "中国海洋石油",
+          "weightPct": 3.51,
+          "changeType": "减持",
+          "changePct": -1.43,
+          "market": "116",
+          "source": "eastmoney_mobile_position"
+        }
+      ],
+      "holdingsAsOf": "2026-03-31",
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "021482": {
+      "fundName": "华夏中证红利低波动ETF发起式联接A",
+      "fundCompany": "华夏基金",
+      "fundType": "指数型-股票",
+      "region": "CN",
+      "underlyingIndexOrTheme": "港股/央企红利",
+      "analysisTemplate": "index_fund",
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=021482&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787175",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=021482&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787175",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=021482&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787175",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=021482&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787175",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=021482&topline=10&year=&month=&rt=1777359787175"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "杨斯琪",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "杨斯琪",
+        "id": "30824749",
+        "startDate": "2024-07-02",
+        "days": 665,
+        "education": "硕士",
+        "resume": "杨斯琪女士:硕士。2018年7月加入华夏基金管理有限公司,历任数量投资部研究员、基金经理助理,现任华夏中证红利低波动交易型开放式指数证券投资基金基金经理(2024年6月11日起任职)、华夏中证汽车零部件主题交易型开放式指数证券投资基金基金经理(2024年6月11日起至2025年12月18日任职)、华夏创业板指数发起式证券投资基金基金经理(2024年6月11日起至2025年9月9日)、华夏中证红利低波动交易型开放式指数证券投资基金发起式联接基金基金经理(2024年7月2日起任职)、华夏中证全指公用事业交易型开放式指数证券投资基金基金经理(2024年7月10日至2025年9月9日)、华夏中证全指运输交易型开放式指数证券投资基金发起式联接基金基金经理(2024年11月7日起任职)、华夏中证全指运输交易型开放式指数证券投资基金基金经理(2024年11月7日起任职)、华夏中证汽车零部件主题交易型开放式指数证券投资基金发起式联接基金基金经理(2024年11月19日至2025年12月18日任职)、华夏中证红利质量交易型开放式指数证券投资基金发起式联接基金基金经理(2024年11月25日起任职)、华夏中证红利质量交易型开放式指数证券投资基金基金经理(2024年11月25日起任职)、华夏中证全指公用事业交易型开放式指数证券投资基金发起式联接基金基金经理(2024年12月24日起任职)、华夏国证自由现金流交易型开放式指数证券投资基金基金经理(2025年2月19日起任职)、华夏上证科创板半导体材料设备主题交易型开放式指数证券投资基金基金经理(2025年3月24日起任职)、华夏上证科创板人工智能交易型开放式指数证券投资基金基金经理(2025年3月26日起任职)、华夏国证自由现金流交易型开放式指数证券投资基金发起式联接基金基金经理(2025年4月29日起任职)、华夏国证通用航空产业交易型开放式指数证券投资基金基金经理(2025年5月21日起任职)、华夏上证智选科创板价值50策略交易型开放式指数证券投资基金基金经理(2025年7月16日起任职)、华夏中证500自由现金流交易型开放式指数证券投资基金基金经理(2025年7月23日起任职)、华夏国证通用航空产业交易型开放式指数证券投资基金发起式联接基金基金经理(2025年8月12日起任职)、华夏上证科创板半导体材料设备主题交易型开放式指数证券投资基金发起式联接基金基金经理(2025年9月2日起任职)、华夏上证智选科创板价值50策略交易型开放式指数证券投资基金发起式联接基金基金经理(2025年9月9日起任职)、华夏上证科创板人工智能交易型开放式指数证券投资基金联接基金基金经理(2025年9月23日起任职)。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 468297013.52,
+        "endNavYi": 4.68,
+        "scaleCny": 424736336.86,
+        "scaleYi": 4.25,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "1.20%",
+        "discountedSubscriptionRate": "0.12%",
+        "redemptionRate": "1.00%",
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "开放申购",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-27",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "lookthroughSource": "eastmoney_mobile_position",
+      "topHoldings": [
+        {
+          "code": "601857",
+          "name": "中国石油",
+          "weightPct": 0.03,
+          "changeType": "新增",
+          "changePct": 0.03,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "601825",
+          "name": "沪农商行",
+          "weightPct": 0.03,
+          "changeType": "不变",
+          "changePct": 0,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "601369",
+          "name": "陕鼓动力",
+          "weightPct": 0.03,
+          "changeType": "不变",
+          "changePct": 0,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "601009",
+          "name": "南京银行",
+          "weightPct": 0.03,
+          "changeType": "减持",
+          "changePct": -0.01,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600938",
+          "name": "中国海油",
+          "weightPct": 0.03,
+          "changeType": "新增",
+          "changePct": 0.03,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600750",
+          "name": "华润江中",
+          "weightPct": 0.03,
+          "changeType": "不变",
+          "changePct": 0,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "000001",
+          "name": "平安银行",
+          "weightPct": 0.03,
+          "changeType": "减持",
+          "changePct": -0.01,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600016",
+          "name": "民生银行",
+          "weightPct": 0.03,
+          "changeType": "不变",
+          "changePct": 0,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "601229",
+          "name": "上海银行",
+          "weightPct": 0.03,
+          "changeType": "减持",
+          "changePct": -0.01,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600502",
+          "name": "安徽建工",
+          "weightPct": 0.03,
+          "changeType": "新增",
+          "changePct": 0.03,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        }
+      ],
+      "holdingsAsOf": "2026-03-31",
+      "topIndustries": [
+        "港股红利",
+        "央企",
+        "高股息"
+      ],
+      "dueDiligenceFocus": [
+        "确认跟踪标的 港股/央企红利 的方向和估值状态",
+        "复核费率、跟踪误差和同标的重复暴露",
+        "不按主动选股逻辑解释短期表现"
+      ],
+      "limitations": [
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-股票 · 港股/央企红利 · 指数暴露 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "020872": {
+      "fundName": "华夏创业板指数发起式E",
+      "fundCompany": "华夏基金",
+      "fundType": "指数型-股票",
+      "region": "CN",
+      "underlyingIndexOrTheme": "A股成长",
+      "analysisTemplate": "index_fund",
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=020872&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787281",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=020872&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787281",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=020872&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787281",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=020872&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787281",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=020872&topline=10&year=&month=&rt=1777359787281"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "张金志",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "张金志",
+        "id": "30848147",
+        "startDate": "2025-09-09",
+        "days": 231,
+        "education": "硕士",
+        "resume": "张金志先生:硕士。2019年7月至2022年9月,曾任南方基金管理股份有限公司指数及量化研究员;2022年10月至2024年12月,曾任华宝基金管理有限公司基金经理助理等。2024年12月加入华夏基金管理有限公司,历任研究员、基金经理助理。2025年6月3日担任华夏中证云计算与大数据主题交易型开放式指数证券投资基金发起式联接基金、华夏中证全指房地产交易型开放式指数证券投资基金发起式联接基金、华夏中证全指房地产交易型开放式指数证券投资基金、华夏沪深300ESG基准交易型开放式指数证券投资基金、华夏中证云计算与大数据主题交易型开放式指数证券投资基金、华夏沪深300ESG基准交易型开放式指数证券投资基金发起式联接基金基金经理。2025年7月29日担任华夏中证农业主题交易型开放式指数证券投资基金基金经理。2025年9月9日起任华夏中证智选1000成长创新策略交易型开放式指数证券投资基金、华夏中证智选1000价值稳健策略交易型开放式指数证券投资基金、华夏创业板指数发起式证券投资基金、华夏中证全指公用事业交易型开放式指数证券投资基金、华夏中证智选1000价值稳健策略交易型开放式指数证券投资基金发起式联接基金、华夏中证智选1000成长创新策略交易型开放式指数证券投资基金发起式联接基金基金经理。2025年10月13日担任华夏创业板综合交易型开放式指数证券投资基金发起式联接基金、华夏创业板综合交易型开放式指数证券投资基金基金经理、华夏中证全指医疗器械交易型开放式指数证券投资基金基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 15778977.7,
+        "endNavYi": 0.16,
+        "scaleCny": 9411572.05,
+        "scaleYi": 0.09,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "0.00%",
+        "discountedSubscriptionRate": "0.00%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "开放申购",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-27",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "lookthroughSource": "eastmoney_mobile_position",
+      "topHoldings": [
+        {
+          "code": "300750",
+          "name": "宁德时代",
+          "weightPct": 18.74,
+          "changeType": "增持",
+          "changePct": 1.56,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300308",
+          "name": "中际旭创",
+          "weightPct": 8.86,
+          "changeType": "减持",
+          "changePct": -0.64,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300502",
+          "name": "新易盛",
+          "weightPct": 7.17,
+          "changeType": "增持",
+          "changePct": 0.19,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300059",
+          "name": "东方财富",
+          "weightPct": 4.42,
+          "changeType": "减持",
+          "changePct": -1.03,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300274",
+          "name": "阳光电源",
+          "weightPct": 4.05,
+          "changeType": "减持",
+          "changePct": -0.57,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300476",
+          "name": "胜宏科技",
+          "weightPct": 2.78,
+          "changeType": "减持",
+          "changePct": -0.41,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300394",
+          "name": "天孚通信",
+          "weightPct": 2.41,
+          "changeType": "增持",
+          "changePct": 0.77,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300124",
+          "name": "汇川技术",
+          "weightPct": 2.4,
+          "changeType": "减持",
+          "changePct": -0.31,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300760",
+          "name": "迈瑞医疗",
+          "weightPct": 1.82,
+          "changeType": "减持",
+          "changePct": -0.29,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300498",
+          "name": "温氏股份",
+          "weightPct": 1.68,
+          "changeType": "减持",
+          "changePct": -0.03,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        }
+      ],
+      "holdingsAsOf": "2026-03-31",
+      "topIndustries": [
+        "A股成长",
+        "科技制造",
+        "高波弹性"
+      ],
+      "dueDiligenceFocus": [
+        "确认跟踪标的 A股成长 的方向和估值状态",
+        "复核费率、跟踪误差和同标的重复暴露",
+        "不按主动选股逻辑解释短期表现"
+      ],
+      "limitations": [
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-股票 · A股成长 · 指数暴露 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "006195": {
+      "fundName": "国金量化多因子股票A",
+      "fundCompany": "国金基金",
+      "fundType": "股票型",
+      "region": "CN",
+      "underlyingIndexOrTheme": null,
+      "analysisTemplate": "active_equity_fund",
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=006195&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787388",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=006195&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787388",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=006195&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787388",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=006195&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787388",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=006195&topline=10&year=&month=&rt=1777359787388"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "马芳,姚加红",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "马芳,姚加红",
+        "id": "30712198,30693912",
+        "startDate": "2023-01-05",
+        "days": 1209,
+        "education": "硕士",
+        "resume": "姚加红先生:硕士。历任博时基金管理有限公司信息技术部高级程序员,国金基金管理有限公司信息技术部总经理、指数投资事业部副总经理。现任国金基金管理有限公司量化投资中心总经理,兼任国金量化多因子股票型证券投资基金、国金量化多策略灵活配置混合型证券投资基金、国金中证A500指数增强型证券投资基金的基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 4016545602.33,
+        "endNavYi": 40.17,
+        "scaleCny": 1277255561.79,
+        "scaleYi": 12.77,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "1.50%",
+        "discountedSubscriptionRate": "0.15%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "限大额(单日投资上限10000元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-27",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "lookthroughSource": "eastmoney_mobile_position",
+      "topHoldings": [
+        {
+          "code": "688525",
+          "name": "佰维存储",
+          "weightPct": 1.62,
+          "changeType": "新增",
+          "changePct": 1.62,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "002008",
+          "name": "大族激光",
+          "weightPct": 1.25,
+          "changeType": "新增",
+          "changePct": 1.25,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300394",
+          "name": "天孚通信",
+          "weightPct": 1.21,
+          "changeType": "新增",
+          "changePct": 1.21,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688498",
+          "name": "源杰科技",
+          "weightPct": 1.07,
+          "changeType": "新增",
+          "changePct": 1.07,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300274",
+          "name": "阳光电源",
+          "weightPct": 1,
+          "changeType": "新增",
+          "changePct": 1,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300058",
+          "name": "蓝色光标",
+          "weightPct": 0.99,
+          "changeType": "减持",
+          "changePct": -0.49,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600010",
+          "name": "包钢股份",
+          "weightPct": 0.88,
+          "changeType": "新增",
+          "changePct": 0.88,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "000338",
+          "name": "潍柴动力",
+          "weightPct": 0.87,
+          "changeType": "减持",
+          "changePct": -0.33,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "000792",
+          "name": "盐湖股份",
+          "weightPct": 0.86,
+          "changeType": "新增",
+          "changePct": 0.86,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688167",
+          "name": "炬光科技",
+          "weightPct": 0.84,
+          "changeType": "新增",
+          "changePct": 0.84,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        }
+      ],
+      "holdingsAsOf": "2026-03-31",
+      "topIndustries": [],
+      "dueDiligenceFocus": [
+        "复核基金经理/基金公司与行业穿透是否稳定",
+        "检查风格漂移、回撤和同类主动基金重复暴露",
+        "资料缺失时降低结论置信度"
+      ],
+      "limitations": [
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "股票型 · 主题待确认 · 主动权益风格 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "011803": {
+      "fundName": "景顺长城宁景6个月持有混合A",
+      "fundCompany": "景顺长城基金",
+      "fundType": "混合型-偏债",
+      "region": "CN",
+      "underlyingIndexOrTheme": null,
+      "analysisTemplate": "defensive_fund",
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=011803&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787800",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=011803&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787800",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=011803&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787800",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=011803&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787800",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=011803&topline=10&year=&month=&rt=1777359787800"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "董晗,李训练",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "董晗,李训练",
+        "id": "30074226,30790544",
+        "startDate": "2024-12-17",
+        "days": 497,
+        "education": "硕士",
+        "resume": "董晗先生:中国国籍,硕士研究生,曾任易方达基金管理有限公司金属、非金属行业研究员,2007年9月加入国投瑞银基金管理有限公司研究部。2014年7月24日起任国投瑞银景气行业证券投资基金基金经理,2014年11月22日至2020年7月18日任国投瑞银美丽中国灵活配置混合型证券投资基金基金经理,2015年3月14日起兼任国投瑞银创新动力混合型证券投资基金(原国投瑞银创新动力股票型证券投资基金)基金经理,2015年6月19日起兼任国投瑞银成长优选混合型证券投资基金(原国投瑞银成长优选股票型证券投资基金)基金经理,2016年1月19日起兼任国投瑞银瑞源保本混合型证券投资基金基金经理。曾于2011年7月21日至2014年7月23日期间担任国投瑞银中证上游资源产业指数证券投资基金(LOF)基金经理。2016年1月19日至2019年12月28日期间担任国投瑞银境煊灵活配置混合型证券投资基金基金经理。2017年5月20日至2020年7月18日担任国投瑞银优化增强债券型证券投资基金基金经理。2016年1月19日至2020年7月18日担任国投瑞银瑞源灵活配置混合型证券投资基金基金经理。2018年11月3日至2020年7月18日国投瑞银锐意改革灵活配置混合型证券投资基金基金经理。2020年10月30日起担任景顺长城景颐招利6个月持有期债券型证券投资基金、景顺长城景颐双利债券型证券投资基金、景顺长城景颐嘉利6个月持有期债券型证券投资基金基金经理。曾任景顺长城安景一年持有期混合型证券投资基金、景顺长城安鼎一年持有期混合型证券投资基金基金经理。2026年3月31日任景顺长城核心中景一年持有期混合型证券投资基金基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 6644669775.51,
+        "endNavYi": 66.45,
+        "scaleCny": 4930881770.3,
+        "scaleYi": 49.31,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "0.80%",
+        "discountedSubscriptionRate": "0.08%",
+        "redemptionRate": "0.60%",
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "限大额(单日投资上限10000元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "3",
+      "navDate": "2026-04-27",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "lookthroughSource": "eastmoney_mobile_position",
+      "topHoldings": [
+        {
+          "code": "00981",
+          "name": "中芯国际",
+          "weightPct": 0.87,
+          "changeType": "减持",
+          "changePct": -0.59,
+          "market": "116",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688072",
+          "name": "拓荆科技",
+          "weightPct": 0.85,
+          "changeType": "新增",
+          "changePct": 0.85,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "601898",
+          "name": "中煤能源",
+          "weightPct": 0.75,
+          "changeType": "新增",
+          "changePct": 0.75,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "000408",
+          "name": "藏格矿业",
+          "weightPct": 0.73,
+          "changeType": "减持",
+          "changePct": -0.31,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "000792",
+          "name": "盐湖股份",
+          "weightPct": 0.7,
+          "changeType": "减持",
+          "changePct": -0.4,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600010",
+          "name": "包钢股份",
+          "weightPct": 0.7,
+          "changeType": "新增",
+          "changePct": 0.7,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "002371",
+          "name": "北方华创",
+          "weightPct": 0.61,
+          "changeType": "新增",
+          "changePct": 0.61,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600562",
+          "name": "国睿科技",
+          "weightPct": 0.6,
+          "changeType": "减持",
+          "changePct": -0.52,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600893",
+          "name": "航发动力",
+          "weightPct": 0.59,
+          "changeType": "新增",
+          "changePct": 0.59,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "601100",
+          "name": "恒立液压",
+          "weightPct": 0.59,
+          "changeType": "减持",
+          "changePct": -0.42,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        }
+      ],
+      "holdingsAsOf": "2026-03-31",
+      "topIndustries": [
+        "短债",
+        "现金管理",
+        "低波防守"
+      ],
+      "dueDiligenceFocus": [
+        "确认流动性、防守角色和回撤是否异常",
+        "检查久期/信用风险是否偏离现金替代定位",
+        "默认不参与进攻动作"
+      ],
+      "limitations": [
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "混合型-偏债 · 主题待确认 · 防守/现金替代 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "017204": {
+      "fundName": "华宝海外科技股票(QDII-LOF)C",
+      "fundCompany": "华宝基金",
+      "fundType": "QDII-普通股票",
+      "region": "US",
+      "underlyingIndexOrTheme": "美股科技/纳斯达克",
+      "analysisTemplate": "qdii_active_fund",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "topIndustries": [
+        "海外科技",
+        "美股成长",
+        "AI/软件平台"
+      ],
+      "dueDiligenceFocus": [
+        "优先看 美股科技/纳斯达克 的代理资产与净值确认滞后",
+        "复核基金经理/组合风格和海外高波风险",
+        "检查与同类 QDII 基金是否重复暴露"
+      ],
+      "limitations": [
+        "尚未加载 FOF 最新底层基金持仓。",
+        "FOF 透明度低于指数基金，结论需要降低置信度。",
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "QDII-普通股票 · 美股科技/纳斯达克 · 跨市场主动/主题暴露 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=017204&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787910",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=017204&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787910",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=017204&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787910",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=017204&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787910",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=017204&topline=10&year=&month=&rt=1777359787910"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "周晶,杨洋,赵启元",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "周晶,杨洋,赵启元",
+        "id": "30200459,30732062,30804032",
+        "startDate": "2023-08-05",
+        "days": 997,
+        "education": "博士",
+        "resume": "周晶先生:经济学博士、工商管理硕士。先后在美国德州奥斯丁市德亚资本、泛太平洋证券(美国)和汇丰证券(美国)从事数量分析、另类投资分析和证券投资研究工作。2005年至2007年在华宝基金管理有限公司任内控审计风险管理部主管,2011年6月再次加入华宝基金管理有限公司,先后担任首席策略分析师、策略部总经理、海外投资部总经理、公司总经理助理兼国际业务部总经理,现任华宝基金管理有限公司首席投资官。2013年6月至2015年11月任华宝成熟市场动量优选证券投资基金基金经理,2014年9月起兼任华宝标普石油天然气上游股票指数证券投资基金(LOF)基金经理,2015年9月至2017年8月任华宝中国互联网股票型证券投资基金基金经理。2016年3月任华宝标普美国品质消费股票指数证券投资基金(LOF)基金经理。2016年6月兼任华宝标普香港上市中国中小盘指数证券投资基金(LOF)基金经理,2017年4月任华宝港股通恒生中国(香港上市)25指数证券投资基金(LOF)基金经理,2018年3月兼任华宝港股通恒生香港35指数证券投资基金(LOF)基金经理。2018年10月起任华宝标普沪港深中国增强价值指数证券投资基金(LOF)基金经理。2019年11月27日任职华宝致远混合型证券投资基金(QDII)基金经理。任职华宝英国富时100指数发起式证券投资基金基金经理。2022年09月05日任华宝海外中国成长混合型证券投资基金的基金经理,2022年12月起任华宝中证港股通互联网交易型开放式指数证券投资基金发起式联接基金基金经理。2023年3月起任华宝纳斯达克精选股票型发起式证券投资基金(QDII)基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 516792107.99,
+        "endNavYi": 5.17,
+        "scaleCny": 279923319.84,
+        "scaleYi": 2.8,
+        "asOf": "2026-04-24",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "0.00%",
+        "discountedSubscriptionRate": "0.00%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "限大额(单日投资上限100元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-24",
+      "lookthroughSource": "eastmoney_f10_holdings",
+      "topHoldings": [
+        {
+          "code": "NVDA",
+          "name": "英伟达",
+          "weightPct": 0.08,
+          "sharesText": "0.01",
+          "marketValueText": "34.04",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-09-30"
+        }
+      ],
+      "holdingsAsOf": "2023-09-30",
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "008087": {
+      "fundName": "华夏中证5G通信主题ETF联接C",
+      "fundCompany": "华夏基金",
+      "fundType": "指数型-股票",
+      "region": "CN",
+      "underlyingIndexOrTheme": null,
+      "analysisTemplate": "index_fund",
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=008087&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787975",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=008087&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787975",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=008087&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787975",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=008087&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359787975",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=008087&topline=10&year=&month=&rt=1777359787975"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "李俊",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "李俊",
+        "id": "30563849",
+        "startDate": "2019-12-10",
+        "days": 2331,
+        "education": "硕士",
+        "resume": "李俊先生:北京大学法学学士、工商管理硕士。曾任职于北京市金杜律师事务所证券部。2008年12月加入华夏基金管理有限公司,历任数量投资部研究员、基金经理助理,华夏新趋势灵活配置混合型证券投资基金基金经理(2018年1月17日至2021年5月26日期间)、华夏新锦绣灵活配置混合型证券投资基金基金经理(2019年1月31日至2021年5月26日期间)、华夏中证全指证券公司交易型开放式指数证券投资基金基金经理(2019年9月17日至2021年12月13日期间)、华夏中证全指证券公司交易型开放式指数证券投资基金发起式联接基金基金经理(2020年4月3日至2021年12月13日期间)、上证金融地产交易型开放式指数发起式证券投资基金基金经理(2017年12月11日至2022年3月14日期间)、华夏中证智能汽车主题交易型开放式指数证券投资基金基金经理(2021年5月13日至2022年8月22日期间)、上证医药卫生交易型开放式指数发起式证券投资基金基金经理(2021年5月27日至2022年8月22日期间)、华夏中证农业主题交易型开放式指数证券投资基金基金经理(2021年12月29日至2024年5月31日期间)、华夏中证新能源交易型开放式指数证券投资基金发起式联接基金基金经理(2022年12月27日至2024年5月31日期间)、华夏中证物联网主题交易型开放式指数证券投资基金基金经理(2021年7月22日至2024年11月7日期间)、华夏中证A500指数证券投资基金基金经理(2024年10月31日至2024年11月17日期间)、华夏中证全指房地产交易型开放式指数证券投资基金基金经理(2019年11月28日至2025年6月3日期间)、华夏中证全指房地产交易型开放式指数证券投资基金发起式联接基金基金经理(2019年11月28日至2025年6月3日期间)等,现任华夏中证5G通信主题交易型开放式指数证券投资基金基金经理(2019年9月17日起任职)、华夏中证银行交易型开放式指数证券投资基金基金经理(2019年10月24日起任职)、华夏中证银行交易型开放式指数证券投资基金发起式联接基金基金经理(2019年12月6日起任职)、华夏中证人工智能主题交易型开放式指数证券投资基金基金经理(2019年12月9日起任职)、华夏中证5G通信主题交易型开放式指数证券投资基金发起式联接基金基金经理(2019年12月10日起任职)、华夏中证新能源汽车交易型开放式指数证券投资基金基金经理(2020年2月20日起任职)、华夏中证人工智能主题交易型开放式指数证券投资基金发起式联接基金基金经理(2020年6月16日起任职)、华夏沪港通恒生交易型开放式指数证券投资基金基金经理(2021年2月1日起任职)、华夏沪港通恒生交易型开放式指数证券投资基金联接基金基金经理(2021年2月1日起任职)、华夏中证生物科技主题交易型开放式指数证券投资基金基金经理(2021年3月4日起任职)、华夏中证光伏产业指数发起式证券投资基金基金经理(2021年8月17日起任职)、华夏中证新能源汽车交易型开放式指数证券投资基金发起式联接基金基金经理(2021年9月9日起任职)、华夏中证港股通50交易型开放式指数证券投资基金基金经理(2021年12月16日起任职)、华夏北证50成份指数证券投资基金基金经理(2022年12月28日起任职)、华夏中证生物科技主题交易型开放式指数证券投资基金发起式联接基金基金经理(2023年3月16日起任职)、华夏中证港股通50交易型开放式指数证券投资基金发起式联接基金基金经理(2023年7月6日起任职)、华夏中证A500交易型开放式指数证券投资基金基金经理(2024年11月8日起任职)、华夏中证A500交易型开放式指数证券投资基金联接基金基金经理(2024年11月18日起任职)、华夏上证580交易型开放式指数证券投资基金基金经理(2025年8月20日起任职)。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 2325069251.04,
+        "endNavYi": 23.25,
+        "scaleCny": 1063438980.25,
+        "scaleYi": 10.63,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "0.00%",
+        "discountedSubscriptionRate": "0.00%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "开放申购",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-27",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "lookthroughSource": "eastmoney_mobile_position",
+      "topHoldings": [
+        {
+          "code": "300502",
+          "name": "新易盛",
+          "weightPct": 0.23,
+          "changeType": "增持",
+          "changePct": 0.02,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300308",
+          "name": "中际旭创",
+          "weightPct": 0.21,
+          "changeType": "不变",
+          "changePct": 0,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "002475",
+          "name": "立讯精密",
+          "weightPct": 0.17,
+          "changeType": "减持",
+          "changePct": -0.01,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "601138",
+          "name": "工业富联",
+          "weightPct": 0.15,
+          "changeType": "减持",
+          "changePct": -0.02,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "603986",
+          "name": "兆易创新",
+          "weightPct": 0.11,
+          "changeType": "增持",
+          "changePct": 0.01,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "002384",
+          "name": "东山精密",
+          "weightPct": 0.1,
+          "changeType": "增持",
+          "changePct": 0.03,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300394",
+          "name": "天孚通信",
+          "weightPct": 0.1,
+          "changeType": "增持",
+          "changePct": 0.04,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "000063",
+          "name": "中兴通讯",
+          "weightPct": 0.08,
+          "changeType": "不变",
+          "changePct": 0,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "000988",
+          "name": "华工科技",
+          "weightPct": 0.08,
+          "changeType": "新增",
+          "changePct": 0.08,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "600487",
+          "name": "亨通光电",
+          "weightPct": 0.07,
+          "changeType": "新增",
+          "changePct": 0.07,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        }
+      ],
+      "holdingsAsOf": "2026-03-31",
+      "topIndustries": [],
+      "dueDiligenceFocus": [
+        "确认跟踪标的 指数 的方向和估值状态",
+        "复核费率、跟踪误差和同标的重复暴露",
+        "不按主动选股逻辑解释短期表现"
+      ],
+      "limitations": [
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-股票 · 主题待确认 · 指数暴露 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "014855": {
+      "fundName": "嘉实中证半导体指数增强发起式C",
+      "fundCompany": "嘉实基金",
+      "fundType": "指数型-股票",
+      "region": "CN",
+      "underlyingIndexOrTheme": "半导体产业链",
+      "analysisTemplate": "index_fund",
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=014855&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788089",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=014855&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788089",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=014855&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788089",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=014855&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788089",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=014855&topline=10&year=&month=&rt=1777359788089"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "刘斌",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "刘斌",
+        "id": "30054195",
+        "startDate": "2022-04-22",
+        "days": 1467,
+        "education": "博士",
+        "resume": "刘斌先生:中国国籍,博士,具有基金从业资格。曾任长盛基金管理有限公司金融工程研究员、高级金融工程研究员、基金经理、金融工程与量化投资部总监等职务。2009年11月25日至2013年11月4日任长盛量化红利股票基金经理,2010年8月4日至2011年12月20日任长盛沪深300指数(LOF)基金经理,2012年7月20日至2013年11月4日任长盛成长价值混合基金经理,2012年9月13日至2013年11月4日任长盛同辉深1003等权重分级基金经理。2013年12月加入嘉实基金管理有限公司股票投资部,从事投资、研究工作,现任增强风格投资总监。2014年5月15日至2020年5月14日任嘉实绝对收益策略定期开放混合型发起式证券投资基金基金经理、2014年5月15日至2016年7月27日任嘉实研究阿尔法股票型证券投资基金基金经理、2016年7月22日至2020年5月14日任嘉实对冲套利定期开放混合型发起式证券投资基金基金经理、2015年12月7日至今任嘉实腾讯自选股大数据策略股票型证券投资基金基金经理、2018年1月19日至2023年1月16日任嘉实润泽量化一年定期开放混合型证券投资基金基金经理、2021年3月27日至2025年12月27日任嘉实沪深300指数研究增强型证券投资基金基金经理、2021年11月26日至2025年12月27日任嘉实量化精选股票型证券投资基金基金经理、2022年4月22日至今任嘉实中证半导体产业指数增强型发起式证券投资基金基金经理。2018年2月9日至2023年1月10日任嘉实润和量化6个月定期开放混合型证券投资基金基金经理。曾任嘉实低碳精选混合型发起式证券投资基金的基金经理。2024年12月14日起任嘉实兴锐优选一年持有期混合型证券投资基金的基金经理。2024年12月16日起担任嘉实优质精选混合型证券投资基金基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 4601895863.41,
+        "endNavYi": 46.02,
+        "scaleCny": 2308510380.83,
+        "scaleYi": 23.09,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "0.00%",
+        "discountedSubscriptionRate": "0.00%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "开放申购",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-27",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "lookthroughSource": "eastmoney_mobile_position",
+      "topHoldings": [
+        {
+          "code": "688012",
+          "name": "中微公司",
+          "weightPct": 9.94,
+          "changeType": "减持",
+          "changePct": -0.66,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "002371",
+          "name": "北方华创",
+          "weightPct": 9.76,
+          "changeType": "减持",
+          "changePct": -0.08,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688072",
+          "name": "拓荆科技",
+          "weightPct": 8.07,
+          "changeType": "增持",
+          "changePct": 0.99,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300604",
+          "name": "长川科技",
+          "weightPct": 7.08,
+          "changeType": "增持",
+          "changePct": 2.37,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688256",
+          "name": "寒武纪",
+          "weightPct": 6.55,
+          "changeType": "减持",
+          "changePct": -2.71,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688981",
+          "name": "中芯国际",
+          "weightPct": 5.5,
+          "changeType": "减持",
+          "changePct": -2.38,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688041",
+          "name": "海光信息",
+          "weightPct": 5.35,
+          "changeType": "减持",
+          "changePct": -1.36,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688361",
+          "name": "中科飞测",
+          "weightPct": 4.99,
+          "changeType": "新增",
+          "changePct": 4.99,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688120",
+          "name": "华海清科",
+          "weightPct": 4.93,
+          "changeType": "增持",
+          "changePct": 0.47,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688200",
+          "name": "华峰测控",
+          "weightPct": 4.21,
+          "changeType": "增持",
+          "changePct": 1.18,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        }
+      ],
+      "holdingsAsOf": "2026-03-31",
+      "topIndustries": [
+        "半导体",
+        "硬件",
+        "先进制造"
+      ],
+      "dueDiligenceFocus": [
+        "确认跟踪标的 半导体产业链 的方向和估值状态",
+        "复核费率、跟踪误差和同标的重复暴露",
+        "不按主动选股逻辑解释短期表现"
+      ],
+      "limitations": [
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-股票 · 半导体产业链 · 指数暴露 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "014219": {
+      "fundName": "汇添富中证科创创业50指数增强发起式C",
+      "fundCompany": "汇添富基金",
+      "fundType": "指数型-股票",
+      "region": "CN",
+      "underlyingIndexOrTheme": "A股成长",
+      "analysisTemplate": "index_fund",
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=014219&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788208",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=014219&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788208",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=014219&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788208",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=014219&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788208",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=014219&topline=10&year=&month=&rt=1777359788208"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "赖中立",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "赖中立",
+        "id": "30195060",
+        "startDate": "2022-03-29",
+        "days": 1491,
+        "education": "硕士",
+        "resume": "赖中立先生:中国国籍,北京大学中国经济研究中心金融学硕士。曾任泰达宏利基金管理有限公司风险管理分析师。2010年8月加入汇添富基金管理股份有限公司,历任金融工程部分析师、基金经理助理。2012年11月1日至2023年8月23日任汇添富黄金及贵金属证券投资基金(LOF)的基金经理。2014年3月6日至2023年4月13日任汇添富恒生指数型证券投资基金(QDII-LOF)的基金经理。2015年1月6日至2023年4月13日任汇添富深证300交易型开放式指数证券投资基金联接基金的基金经理。2015年1月6日至2023年4月13日任深证300交易型开放式指数证券投资基金的基金经理。2015年5月26日至2016年7月13日任汇添富香港优势精选混合型证券投资基金的基金经理。2016年12月29日至2023年4月13日任汇添富中证环境治理指数型证券投资基金(LOF)的基金经理。2017年5月18日至今任汇添富优选回报灵活配置混合型证券投资基金的基金经理。2017年11月24日至2023年4月13日任汇添富中证港股通高股息投资指数发起式证券投资基金(LOF)的基金经理。2021年10月26日至2023年8月23日任汇添富中证沪港深消费龙头指数型发起式证券投资基金的基金经理。2021年10月26日至今任汇添富中证光伏产业指数增强型发起式证券投资基金的基金经理。2022年3月29日至今任汇添富中证科创创业50指数增强型发起式证券投资基金的基金经理。2022年7月5日至2023年7月31日任汇添富恒生香港上市生物科技交易型开放式指数证券投资基金(QDII)的基金经理。2024年1月31日至2025年9月17日担任汇添富稳乐回报债券型发起式证券投资基金基金经理。2025年10月24日起任汇添富华证专精特新100指数型发起式证券投资基金、汇添富中证环境治理指数型证券投资基金(LOF)的基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 192792105.9,
+        "endNavYi": 1.93,
+        "scaleCny": 142289085.44,
+        "scaleYi": 1.42,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "0.00%",
+        "discountedSubscriptionRate": "0.00%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "开放申购",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-27",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "lookthroughSource": "eastmoney_mobile_position",
+      "topHoldings": [
+        {
+          "code": "300502",
+          "name": "新易盛",
+          "weightPct": 9.71,
+          "changeType": "减持",
+          "changePct": -0.11,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300750",
+          "name": "宁德时代",
+          "weightPct": 9.36,
+          "changeType": "增持",
+          "changePct": 1.88,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300308",
+          "name": "中际旭创",
+          "weightPct": 9.36,
+          "changeType": "减持",
+          "changePct": -0.47,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300274",
+          "name": "阳光电源",
+          "weightPct": 8.26,
+          "changeType": "增持",
+          "changePct": 0.02,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688041",
+          "name": "海光信息",
+          "weightPct": 7.49,
+          "changeType": "增持",
+          "changePct": 1.67,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300476",
+          "name": "胜宏科技",
+          "weightPct": 6.19,
+          "changeType": "增持",
+          "changePct": 0.06,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300394",
+          "name": "天孚通信",
+          "weightPct": 5.79,
+          "changeType": "增持",
+          "changePct": 2.03,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688256",
+          "name": "寒武纪",
+          "weightPct": 5.39,
+          "changeType": "减持",
+          "changePct": -3.9,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "00981",
+          "name": "中芯国际",
+          "weightPct": 3.07,
+          "changeType": "减持",
+          "changePct": -0.52,
+          "market": "116",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688498",
+          "name": "源杰科技",
+          "weightPct": 3.03,
+          "changeType": "新增",
+          "changePct": 3.03,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        }
+      ],
+      "holdingsAsOf": "2026-03-31",
+      "topIndustries": [
+        "A股成长",
+        "科技制造",
+        "高波弹性"
+      ],
+      "dueDiligenceFocus": [
+        "确认跟踪标的 A股成长 的方向和估值状态",
+        "复核费率、跟踪误差和同标的重复暴露",
+        "不按主动选股逻辑解释短期表现"
+      ],
+      "limitations": [
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-股票 · A股成长 · 指数暴露 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "025162": {
+      "fundName": "国泰大宗商品(QDII-LOF)D",
+      "fundCompany": "国泰基金",
+      "fundType": "QDII-商品",
+      "region": "GLB",
+      "underlyingIndexOrTheme": "大宗商品/黄金卫星仓",
+      "analysisTemplate": "qdii_commodity_fund",
+      "holdingLookthroughStatus": "fund_of_funds_theme",
+      "topIndustries": [
+        "大宗商品",
+        "黄金/贵金属",
+        "通胀与避险资产"
+      ],
+      "dueDiligenceFocus": [
+        "确认商品/黄金基金是对冲卫星仓，不按权益进攻仓处理",
+        "复核商品、黄金、汇率和海外交易日带来的净值滞后",
+        "若 HEDGE 桶偏离目标，优先按仓位上限复核"
+      ],
+      "limitations": [
+        "尚未加载 FOF 最新底层商品基金穿透。",
+        "商品基金与股票基金风险来源不同，不应按权益动量直接下结论。",
+        "最新重仓股未能从公开接口获取，当前按主题/类型降级分析。",
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "QDII-商品 · 大宗商品/黄金卫星仓 · 商品/对冲卫星 · fund_of_funds_theme",
+      "confidence": 0.72,
+      "dataQuality": "eastmoney_base_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=025162&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788325",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=025162&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788325",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=025162&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788325",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=025162&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788325",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=025162&topline=10&year=&month=&rt=1777359788325"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "朱丹",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "朱丹",
+        "id": "30717163",
+        "startDate": "2025-08-11",
+        "days": 260,
+        "education": "硕士",
+        "resume": "朱丹女士:国籍中国,硕士研究生,2016年1月加入国泰基金管理有限公司,历任研究员、基金经理助理,现拟任基金经理。2023年6月起任国际业务部副总监。2020年11月6日起担任国泰恒生港股通指数证券投资基金(LOF)基金经理。2022年1月27日起担任国泰大宗商品配置证券投资基金(LOF)基金经理。2022年1月27日起担任国泰纳斯达克100指数证券投资基金基金经理。2022年12月30日至2024年2月21日任国泰蓝筹精选混合型证券投资基金基金经理。2024年8月13日起担任国泰中国企业境外高收益债券型证券投资基金基金经理。2024年7月23日担任国泰中证港股通高股息投资交易型开放式指数证券投资基金基金经理。2024年8月29日担任国泰中证香港内地国有企业交易型开放式指数证券投资基金(QDII)基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 187761190.32,
+        "endNavYi": 1.88,
+        "scaleCny": 245276522.78,
+        "scaleYi": 2.45,
+        "asOf": "2026-04-24",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "1.50%",
+        "discountedSubscriptionRate": "0.15%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 1000,
+        "purchaseStatus": "限大额(单日投资上限1000元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "5",
+      "navDate": "2026-04-24",
+      "lookthroughSource": "theme_only",
+      "topHoldings": [],
+      "holdingsAsOf": "2026-04-24",
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "018966": {
+      "fundName": "汇添富纳斯达克100ETF发起式联接(QDII)人民币A",
+      "fundCompany": "汇添富基金",
+      "fundType": "指数型-海外股票",
+      "region": "US",
+      "underlyingIndexOrTheme": "纳斯达克100",
+      "analysisTemplate": "qdii_index_fund",
+      "dataQuality": "eastmoney_base_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=018966&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788421",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=018966&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788421",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=018966&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788421",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=018966&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788421",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=018966&topline=10&year=&month=&rt=1777359788421"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "过蓓蓓",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "过蓓蓓",
+        "id": "30362194",
+        "startDate": "2023-08-02",
+        "days": 1000,
+        "education": "博士",
+        "resume": "过蓓蓓女士:国籍:中国,中国科学技术大学金融工程博士研究生。曾任国泰基金管理有限公司金融工程部助理分析师、量化投资部基金经理助理。2015年6月加入汇添富基金管理股份有限公司。2015年8月3日至今任汇添富中证主要消费交易型开放式指数证券投资基金联接基金的基金经理。2015年8月3日至2023年4月13日任中证金融地产交易型开放式指数证券投资基金的基金经理。2015年8月3日至2023年4月6日担任中证能源交易型开放式指数证券投资基金的基金经理。2015年8月3日至今任中证医药卫生交易型开放式指数证券投资基金的基金经理。2015年8月3日至今任中证主要消费交易型开放式指数证券投资基金的基金经理。2015年8月18日至2023年08月28日任汇添富深证300交易型开放式指数证券投资基金联接基金的基金经理。2015年8月18日至2023年05月22日任深证300交易型开放式指数证券投资基金的基金经理。2016年12月22日至今任汇添富中证生物科技主题指数型发起式证券投资基金(LOF)的基金经理。2016年12月29日至今任汇添富中证中药指数型发起式证券投资基金(LOF)的基金经理。2018年5月23日至今任汇添富中证新能源汽车产业指数型发起式证券投资基金(LOF)的基金经理。曾任中证银行交易型开放式指数证券投资基金的基金经理。2019年3月26日至今任汇添富中证医药卫生交易型开放式指数证券投资基金联接基金的基金经理。2019年4月15日至2022年6月13日任中证银行交易型开放式指数证券投资基金联接基金的基金经理。2019年10月8日至今任中证800交易型开放式指数证券投资基金的基金经理。2021年2月1日至今任汇添富国证生物医药交易型开放式指数证券投资基金的基金经理。2021年6月3日至今任汇添富中证新能源汽车产业交易型开放式指数证券投资基金的基金经理。2021年9月29日至2023年5月18日任汇添富中证800交易型开放式指数证券投资基金联接基金的基金经理。2022年2月28日至今任汇添富国证生物医药交易型开放式指数证券投资基金联接基金的基金经理。2022年8月15日至今任汇添富纳斯达克生物科技交易型开放式指数证券投资基金(QDII)的基金经理。2022年9月26日至今任汇添富中证中药交易型开放式指数证券投资基金的基金经理。2022年10月20日至2024年04月08日任汇添富中证100交易型开放式指数证券投资基金的基金经理。2022年12月2日至今任汇添富中证中药交易型开放式指数证券投资基金联接基金(LOF)的基金经理。2023年3月14日至今任汇添富纳斯达克生物科技交易型开放式指数证券投资基金发起式联接基金(QDII)的基金经理。2023年3月30日至今任汇添富纳斯达克100交易型开放式指数证券投资基金(QDII)的基金经理。2023年08月02日至今任汇添富纳斯达克100ETF发起式联接(QDII)的基金经理。2023年08月23日至今任汇添富黄金及贵金属证券投资基金(LOF)基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 1035381093.19,
+        "endNavYi": 10.35,
+        "scaleCny": 751968858.03,
+        "scaleYi": 7.52,
+        "asOf": "2026-04-24",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "1.20%",
+        "discountedSubscriptionRate": "0.12%",
+        "redemptionRate": "1.00%",
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "限大额(单日投资上限100元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-24",
+      "holdingLookthroughStatus": "theme_only",
+      "lookthroughSource": "theme_only",
+      "topHoldings": [],
+      "holdingsAsOf": "2026-04-24",
+      "topIndustries": [
+        "美股科技",
+        "AI/云计算",
+        "大型成长股"
+      ],
+      "dueDiligenceFocus": [
+        "优先看 纳斯达克100 代理资产趋势与回撤",
+        "检查 QDII 净值确认滞后和申赎限制",
+        "复核同指数/同风格基金是否重复持有"
+      ],
+      "limitations": [
+        "最新重仓股未能从公开接口获取，当前按主题/类型降级分析。",
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-海外股票 · 纳斯达克100 · 跨市场指数暴露 · theme_only",
+      "confidence": 0.72,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "019736": {
+      "fundName": "宝盈纳斯达克100指数发起(QDII)A人民币",
+      "fundCompany": "宝盈基金",
+      "fundType": "指数型-海外股票",
+      "region": "US",
+      "underlyingIndexOrTheme": "纳斯达克100",
+      "analysisTemplate": "qdii_index_fund",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "topIndustries": [
+        "美股科技",
+        "AI/云计算",
+        "大型成长股"
+      ],
+      "dueDiligenceFocus": [
+        "优先看 纳斯达克100 代理资产趋势与回撤",
+        "检查 QDII 净值确认滞后和申赎限制",
+        "复核同指数/同风格基金是否重复持有"
+      ],
+      "limitations": [
+        "尚未加载最新指数成分权重和基金跟踪误差。",
+        "当前以纳斯达克100代理风险为主。",
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-海外股票 · 纳斯达克100 · 跨市场指数暴露 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=019736&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788511",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=019736&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788511",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=019736&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788511",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=019736&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788511",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=019736&topline=10&year=&month=&rt=1777359788511"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "蔡丹",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "蔡丹",
+        "id": "30283570",
+        "startDate": "2024-03-22",
+        "days": 767,
+        "education": "硕士",
+        "resume": "蔡丹女士:中国国籍,CFA,中山大学概率论与数理统计硕士。曾任职于网易互动娱乐有限公司、广发证券股份有限公司,2011年9月至2017年7月任职于长城证券股份有限公司,先后担任金融研究所金融工程研究员、资产管理部量化投资经理、执行董事。2017年7月加入宝盈基金管理有限公司,现任量化投资部总经理,宝盈中证100指数增强型证券投资基金、宝盈北证50成份指数型发起式证券投资基金基金、宝盈中证A500指数增强型证券投资基金、宝盈国证证券龙头指数型发起式证券投资基金、宝盈祥和9个月定期开放混合型证券投资基金、宝盈祥庆9个月持有期混合型证券投资基金、宝盈华证龙头红利50指数型发起式证券投资基金、宝盈新锐灵活配置混合型证券投资基金、宝盈纳斯达克100指数型发起式证券投资基金(QDII)基金经理。2023年6月10日担任宝盈祥庆9个月持有期混合型证券投资基金基金经理。2023年9月26日起担任宝盈祥颐定期开放混合型证券投资基金、宝盈祥裕增强回报混合型证券投资基金基金经理。2024年1月16日起担任宝盈新锐灵活配置混合型证券投资基金的基金经理。曾任宝盈祥泰混合型证券投资基金、宝盈祥瑞混合型证券投资基金、宝盈中证沪港深科技龙头指数型发起式证券投资基金的基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 568119670.83,
+        "endNavYi": 5.68,
+        "scaleCny": 457702630.31,
+        "scaleYi": 4.58,
+        "asOf": "2026-04-24",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "1.20%",
+        "discountedSubscriptionRate": "0.12%",
+        "redemptionRate": "1.00%",
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "限大额(单日投资上限100元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-24",
+      "lookthroughSource": "eastmoney_mobile_position",
+      "topHoldings": [
+        {
+          "code": "NVDA",
+          "name": "英伟达",
+          "weightPct": 8.2,
+          "changeType": "减持",
+          "changePct": -0.33,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "AAPL",
+          "name": "苹果",
+          "weightPct": 7.21,
+          "changeType": "减持",
+          "changePct": -0.35,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "MSFT",
+          "name": "微软",
+          "weightPct": 5.32,
+          "changeType": "减持",
+          "changePct": -1.44,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "AMZN",
+          "name": "亚马逊",
+          "weightPct": 4.33,
+          "changeType": "减持",
+          "changePct": -0.31,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "TSLA",
+          "name": "特斯拉",
+          "weightPct": 3.59,
+          "changeType": "减持",
+          "changePct": -0.15,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "META",
+          "name": "Meta Platforms Inc-A",
+          "weightPct": 3.28,
+          "changeType": "减持",
+          "changePct": -0.37,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "WMT",
+          "name": "沃尔玛",
+          "weightPct": 3.25,
+          "changeType": "新增",
+          "changePct": 3.25,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "GOOGL",
+          "name": "谷歌-A",
+          "weightPct": 3.24,
+          "changeType": "减持",
+          "changePct": -0.19,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "GOOG",
+          "name": "谷歌-C",
+          "weightPct": 3.03,
+          "changeType": "减持",
+          "changePct": -0.16,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "AVGO",
+          "name": "博通",
+          "weightPct": 2.85,
+          "changeType": "减持",
+          "changePct": -0.22,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        }
+      ],
+      "holdingsAsOf": "2026-03-31",
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "019172": {
+      "fundName": "摩根纳斯达克100指数(QDII)人民币A",
+      "fundCompany": "摩根基金(中国)",
+      "fundType": "指数型-海外股票",
+      "region": "US",
+      "underlyingIndexOrTheme": "纳斯达克100",
+      "analysisTemplate": "qdii_index_fund",
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=019172&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788622",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=019172&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788622",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=019172&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788622",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=019172&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788622",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=019172&topline=10&year=&month=&rt=1777359788622"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "何智豪",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "何智豪",
+        "id": "30725072",
+        "startDate": "2025-10-22",
+        "days": 188,
+        "education": "硕士",
+        "resume": "何智豪先生:复旦大学应用数学硕士。曾任中国国际金融股份有限公司组合与量化策略研究员、资产管理部高级经理。2020年7月起加入摩根基金管理(中国)有限公司(原上投摩根基金管理有限公司),现任指数及量化投资部基金经理。2021年2月5日至2025年11月10日担任上投摩根量化多因子灵活配置混合型证券投资基金基金经理。2021年2月5日至2022年6月24日担任上投摩根优选多因子股票型证券投资基金基金经理。2021年2月19日任上投摩根MSCI中国A股交易型开放式指数证券投资基金联接基金基金经理、上投摩根中证消费服务领先指数证券投资基金基金经理、上投摩根标普港股通低波红利指数型证券投资基金基金经理。2021年12月3日担任上投摩根中证沪港深科技100交易型开放式指数证券投资基金基金经理。2021年12月30日任上投摩根恒生科技交易型开放式指数证券投资基金(QDII)基金经理。2025年10月22日担任摩根上证科创板新一代信息技术交易型开放式指数证券投资基金、摩根纳斯达克100指数型发起式证券投资基金(QDII)基金经理。曾任摩根MSCI中国A股交易型开放式指数证券投资基金基金经理。2025年10月22日担任摩根恒生科技交易型开放式指数证券投资基金发起式联接基金(QDII)基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 2177654587.36,
+        "endNavYi": 21.78,
+        "scaleCny": 1496183644.88,
+        "scaleYi": 14.96,
+        "asOf": "2026-04-24",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "1.20%",
+        "discountedSubscriptionRate": "0.12%",
+        "redemptionRate": "1.00%",
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "限大额(单日投资上限100元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-24",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "lookthroughSource": "eastmoney_mobile_position",
+      "topHoldings": [
+        {
+          "code": "NVDA",
+          "name": "英伟达",
+          "weightPct": 8.28,
+          "changeType": "减持",
+          "changePct": -0.23,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "AAPL",
+          "name": "苹果",
+          "weightPct": 7.28,
+          "changeType": "减持",
+          "changePct": -0.26,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "MSFT",
+          "name": "微软",
+          "weightPct": 5.37,
+          "changeType": "减持",
+          "changePct": -1.38,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "AMZN",
+          "name": "亚马逊",
+          "weightPct": 4.37,
+          "changeType": "减持",
+          "changePct": -0.26,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "TSLA",
+          "name": "特斯拉",
+          "weightPct": 3.63,
+          "changeType": "减持",
+          "changePct": -0.11,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "META",
+          "name": "Meta Platforms Inc-A",
+          "weightPct": 3.3,
+          "changeType": "减持",
+          "changePct": -0.34,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "WMT",
+          "name": "沃尔玛",
+          "weightPct": 3.28,
+          "changeType": "新增",
+          "changePct": 3.28,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "GOOGL",
+          "name": "谷歌-A",
+          "weightPct": 3.27,
+          "changeType": "减持",
+          "changePct": -0.15,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "GOOG",
+          "name": "谷歌-C",
+          "weightPct": 3.05,
+          "changeType": "减持",
+          "changePct": -0.14,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "AVGO",
+          "name": "博通",
+          "weightPct": 2.87,
+          "changeType": "减持",
+          "changePct": -0.2,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        }
+      ],
+      "holdingsAsOf": "2026-03-31",
+      "topIndustries": [
+        "美股科技",
+        "AI/云计算",
+        "大型成长股"
+      ],
+      "dueDiligenceFocus": [
+        "优先看 纳斯达克100 代理资产趋势与回撤",
+        "检查 QDII 净值确认滞后和申赎限制",
+        "复核同指数/同风格基金是否重复持有"
+      ],
+      "limitations": [
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-海外股票 · 纳斯达克100 · 跨市场指数暴露 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "016532": {
+      "fundName": "嘉实纳斯达克100ETF发起联接(QDII)A人民币",
+      "fundCompany": "嘉实基金",
+      "fundType": "指数型-海外股票",
+      "region": "US",
+      "underlyingIndexOrTheme": "纳斯达克100",
+      "analysisTemplate": "qdii_index_fund",
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=016532&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788730",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=016532&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788730",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=016532&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788730",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=016532&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788730",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=016532&topline=10&year=&month=&rt=1777359788730"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "张钟玉,蒋一茜",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "张钟玉,蒋一茜",
+        "id": "30334245,30383521",
+        "startDate": "2024-10-28",
+        "days": 547,
+        "education": "硕士",
+        "resume": "张钟玉女士:会计学硕士。国籍:中国。具有基金从业资格。曾任大成基金管理有限公司研究员、数量分析师、基金经理。2021年9月加入嘉实基金管理有限公司指数投资部。2015年2月28日至2021年9月2日任大成核心双动力混合型证券投资基金基金经理,2015年2月28日至2021年9月2日任深证成长40交易型开放式指数证券投资基金基金经理,2015年2月28日至2021年9月2日任大成深证成长40交易型开放式指数证券投资基金联接基金基金经理,2015年2月28日至2021年9月2日任大成中证500深市交易型开放式指数证券投资基金基金经理,2015年2月28日至2021年9月2日任大成沪深300指数证券投资基金基金经理,2019年2月28日至2021年9月2日任大成MSCI中国A股质优价值100交易型开放式指数证券投资基金基金经理,2019年2月28日至2021年9月2日任大成MSCI中国A股质优价值100交易型开放式指数证券投资基金联接基金基金经理。2022年1月25日至2022年12月26日任嘉实创业板交易型开放式指数证券投资基金基金经理、2022年1月27日至2022年9月20日任嘉实中关村A股交易型开放式指数证券投资基金基金经理、2022年9月15日至2023年7月13日任嘉实纳斯达克100指数型发起式证券投资基金(QDII)基金经理、2022年11月24日至2024年1月11日任嘉实创业板增强策略交易型开放式指数证券投资基金基金经理、2022年12月29日至2025年2月14日任嘉实中证内地运输主题交易型开放式指数证券投资基金基金经理、2023年4月12日至2024年9月13日任嘉实恒生中国企业交易型开放式指数证券投资基金(QDII)基金经理、2022年1月25日至今任嘉实恒生中国企业指数证券投资基金(QDII-LOF)基金经理、2022年1月27日至今任嘉实中证金融地产交易型开放式指数证券投资基金基金经理、2022年1月27日至今任嘉实中证金融地产交易型开放式指数证券投资基金联接基金基金经理、2022年4月13日至今任嘉实上海金交易型开放式证券投资基金基金经理、2022年5月18日至2026年3月12日任嘉实上证科创板新一代信息技术交易型开放式指数证券投资基金基金经理、2022年10月20日至今任嘉实中证全指证券公司指数型发起式证券投资基金基金经理、2023年3月2日至今任嘉实上海金交易型开放式证券投资基金发起式联接基金基金经理、2023年4月12日至今任嘉实黄金证券投资基金(LOF)基金经理、2023年4月27日至今任嘉实国证通信交易型开放式指数证券投资基金基金经理、2023年5月31日至今任嘉实纳斯达克100交易型开放式指数证券投资基金(QDII)基金经理、2023年7月14日至今任嘉实纳斯达克100交易型开放式指数证券投资基金发起式联接基金(QDII)基金经理、2023年9月11日至今任嘉实国证通信交易型开放式指数证券投资基金发起式联接基金基金经理、2023年11月2日至今任嘉实标普石油天然气勘探及生产精选行业交易型开放式指数证券投资基金(QDII)基金经理、2023年12月26日至今任嘉实标普生物科技精选行业交易型开放式指数证券投资基金(QDII)基金经理、2024年4月3日至今任嘉实德国DAX交易型开放式指数证券投资基金(QDII)基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 1886192469.51,
+        "endNavYi": 18.86,
+        "scaleCny": 1053438179.17,
+        "scaleYi": 10.53,
+        "asOf": "2026-04-24",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "1.00%",
+        "discountedSubscriptionRate": "0.10%",
+        "redemptionRate": "0.80%",
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "暂停申购(单日投资上限100元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-24",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "lookthroughSource": "eastmoney_f10_holdings",
+      "topHoldings": [
+        {
+          "code": "MSFT",
+          "name": "微软",
+          "weightPct": 11.88,
+          "sharesText": "1.99",
+          "marketValueText": "4,886.90",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-06-30"
+        },
+        {
+          "code": "AAPL",
+          "name": "苹果",
+          "weightPct": 11.56,
+          "sharesText": "3.39",
+          "marketValueText": "4,755.73",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-06-30"
+        },
+        {
+          "code": "NVDA",
+          "name": "英伟达",
+          "weightPct": 6.39,
+          "sharesText": "0.86",
+          "marketValueText": "2,626.89",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-06-30"
+        },
+        {
+          "code": "AMZN",
+          "name": "亚马逊",
+          "weightPct": 6.3,
+          "sharesText": "2.75",
+          "marketValueText": "2,592.26",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-06-30"
+        },
+        {
+          "code": "TSLA",
+          "name": "特斯拉",
+          "weightPct": 3.91,
+          "sharesText": "0.85",
+          "marketValueText": "1,607.96",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-06-30"
+        },
+        {
+          "code": "META",
+          "name": "Meta Platforms Inc-A",
+          "weightPct": 3.88,
+          "sharesText": "0.77",
+          "marketValueText": "1,596.10",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-06-30"
+        },
+        {
+          "code": "GOOGL",
+          "name": "谷歌-A",
+          "weightPct": 3.41,
+          "sharesText": "1.62",
+          "marketValueText": "1,404.73",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-06-30"
+        },
+        {
+          "code": "GOOG",
+          "name": "谷歌-C",
+          "weightPct": 3.35,
+          "sharesText": "1.58",
+          "marketValueText": "1,377.15",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-06-30"
+        },
+        {
+          "code": "AVGO",
+          "name": "博通",
+          "weightPct": 2.21,
+          "sharesText": "0.15",
+          "marketValueText": "909.47",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-06-30"
+        },
+        {
+          "code": "PEP",
+          "name": "百事",
+          "weightPct": 1.56,
+          "sharesText": "0.48",
+          "marketValueText": "641.61",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-06-30"
+        }
+      ],
+      "holdingsAsOf": "2023-06-30",
+      "topIndustries": [
+        "美股科技",
+        "AI/云计算",
+        "大型成长股"
+      ],
+      "dueDiligenceFocus": [
+        "优先看 纳斯达克100 代理资产趋势与回撤",
+        "检查 QDII 净值确认滞后和申赎限制",
+        "复核同指数/同风格基金是否重复持有"
+      ],
+      "limitations": [
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-海外股票 · 纳斯达克100 · 跨市场指数暴露 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "025209": {
+      "fundName": "永赢先锋半导体智选混合发起C",
+      "fundCompany": "永赢基金",
+      "fundType": "混合型-偏股",
+      "region": "CN",
+      "underlyingIndexOrTheme": "半导体产业链",
+      "analysisTemplate": "active_equity_fund",
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=025209&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788819",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=025209&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788819",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=025209&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788819",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=025209&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788819",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=025209&topline=10&year=&month=&rt=1777359788819"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "张海啸",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "张海啸",
+        "id": "30797520",
+        "startDate": "2025-09-12",
+        "days": 228,
+        "education": "硕士",
+        "resume": "张海啸先生:中国,复旦大学经济学硕士。曾任中海基金管理有限公司投研中心高级研究员,现任永赢基金管理有限公司权益投资部基金经理。2023年5月30日担任永赢半导体产业智选混合型发起式证券投资基金基金经理。2023年11月29日至2024年12月28日担任永赢优质精选混合型发起式证券投资基金基金经理。2024年6月17日担任永赢优质生活混合型证券投资基金基金经理。2025年8月21日担任永赢资源慧选混合型发起式证券投资基金基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 16549327324.55,
+        "endNavYi": 165.49,
+        "scaleCny": 10350213936.26,
+        "scaleYi": 103.5,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "0.00%",
+        "discountedSubscriptionRate": "0.00%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "限大额(单日投资上限50万元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-27",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "lookthroughSource": "eastmoney_mobile_position",
+      "topHoldings": [
+        {
+          "code": "001309",
+          "name": "德明利",
+          "weightPct": 9.51,
+          "changeType": "减持",
+          "changePct": -1.93,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "301308",
+          "name": "江波龙",
+          "weightPct": 8.25,
+          "changeType": "减持",
+          "changePct": -1.46,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688525",
+          "name": "佰维存储",
+          "weightPct": 8.25,
+          "changeType": "减持",
+          "changePct": -2.58,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "603986",
+          "name": "兆易创新",
+          "weightPct": 7.68,
+          "changeType": "增持",
+          "changePct": 0.79,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300475",
+          "name": "香农芯创",
+          "weightPct": 6.35,
+          "changeType": "减持",
+          "changePct": -4.17,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "300223",
+          "name": "北京君正",
+          "weightPct": 5.8,
+          "changeType": "减持",
+          "changePct": -1.25,
+          "market": "0",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688008",
+          "name": "澜起科技",
+          "weightPct": 4.73,
+          "changeType": "减持",
+          "changePct": -0.07,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688766",
+          "name": "普冉股份",
+          "weightPct": 4.38,
+          "changeType": "新增",
+          "changePct": 4.38,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688233",
+          "name": "神工股份",
+          "weightPct": 2.92,
+          "changeType": "减持",
+          "changePct": -3.09,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "688123",
+          "name": "聚辰股份",
+          "weightPct": 2.58,
+          "changeType": "新增",
+          "changePct": 2.58,
+          "market": "1",
+          "source": "eastmoney_mobile_position"
+        }
+      ],
+      "holdingsAsOf": "2026-03-31",
+      "topIndustries": [
+        "半导体",
+        "硬件",
+        "先进制造"
+      ],
+      "dueDiligenceFocus": [
+        "复核基金经理/基金公司与行业穿透是否稳定",
+        "检查风格漂移、回撤和同类主动基金重复暴露",
+        "资料缺失时降低结论置信度"
+      ],
+      "limitations": [
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "混合型-偏股 · 半导体产业链 · 主动权益风格 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "021142": {
+      "fundName": "华夏港股通央企红利ETF联接A",
+      "fundCompany": "华夏基金",
+      "fundType": "指数型-股票",
+      "region": "CN",
+      "underlyingIndexOrTheme": "港股/央企红利",
+      "analysisTemplate": "qdii_index_fund",
+      "dataQuality": "eastmoney_base_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=021142&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788916",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=021142&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788916",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=021142&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788916",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=021142&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359788916",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=021142&topline=10&year=&month=&rt=1777359788916"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "鲁亚运",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "鲁亚运",
+        "id": "30768964",
+        "startDate": "2024-04-16",
+        "days": 742,
+        "education": "硕士",
+        "resume": "鲁亚运先生:硕士,曾任国泰基金管理有限公司研究员、银华基金管理有限公司营销经理。2020年6月加入华夏基金管理有限公司,历任数量投资部研究员、基金经理助理,华夏恒生互联网科技业交易型开放式指数证券投资基金发起式联接基金(QDII)基金经理(2022年6月10日至2024年7月3日期间)、华夏中证石化产业交易型开放式指数证券投资基金发起式联接基金基金经理(2023年3月14日至2024年11月7日期间)、华夏中证石化产业交易型开放式指数证券投资基金基金经理(2023年3月27日至2024年11月7日期间)、华夏中证农业主题交易型开放式指数证券投资基金基金经理(2024年5月31日至2025年7月29日期间)、华夏中证农业主题交易型开放式指数证券投资基金发起式联接基金基金经理(2022年8月19日至2025年9月9日期间)、华夏中证2000交易型开放式指数证券投资基金发起式联接基金基金经理(2023年11月8日至2025年9月9日期间)、华夏中证物联网主题交易型开放式指数证券投资基金发起式联接基金基金经理(2023年11月10日至2025年9月9日期间)等,现任华夏创业板动量成长交易型开放式指数证券投资基金发起式联接基金基金经理(2022年6月10日起任职)、华夏中证全指证券公司交易型开放式指数证券投资基金发起式联接基金基金经理(2022年6月10日起任职)、华夏国证疫苗与生物科技指数发起式证券投资基金基金经理(2022年9月6日起任职)、战略新兴成指交易型开放式指数证券投资基金发起式联接基金基金经理(2023年3月27日起任职)、战略新兴成指交易型开放式指数证券投资基金基金经理(2023年3月27日起任职)、华夏中证浙江国资创新发展交易型开放式指数证券投资基金基金经理(2023年3月27日起任职)、华夏中证浙江国资创新发展交易型开放式指数证券投资基金联接基金基金经理(2023年3月27日起任职)、华夏中证2000交易型开放式指数证券投资基金基金经理(2023年9月6日起任职)、华夏中证港股通央企红利交易型开放式指数证券投资基金基金经理(2024年2月7日起任职)、华夏中证全指可选消费交易型开放式指数证券投资基金基金经理(2024年3月18日起任职)、华夏中证全指信息技术交易型开放式指数证券投资基金基金经理(2024年3月27日起任职)、华夏中证港股通央企红利交易型开放式指数证券投资基金发起式联接基金基金经理(2024年4月16日起任职)、华夏中证全指可选消费交易型开放式指数证券投资基金发起式联接基金基金经理(2024年6月6日起任职)、华夏中证全指信息技术交易型开放式指数证券投资基金发起式联接基金基金经理(2024年10月15日起任职)、华夏上证科创板生物医药交易型开放式指数证券投资基金基金经理(2025年5月14日起任职)、华夏中证动漫游戏交易型开放式指数证券投资基金基金经理(2025年7月29日起任职)、华夏中证A500增强策略交易型开放式指数证券投资基金基金经理(2025年8月6日起任职)、华夏中证动漫游戏交易型开放式指数证券投资基金发起式联接基金基金经理(2025年9月9日起任职)、华夏中证港股通互联网交易型开放式指数证券投资基金基金经理(2026年1月21日起任职)。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 768117124.23,
+        "endNavYi": 7.68,
+        "scaleCny": 532747856.32,
+        "scaleYi": 5.33,
+        "asOf": "2026-04-27",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "1.20%",
+        "discountedSubscriptionRate": "0.12%",
+        "redemptionRate": "1.00%",
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "开放申购",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-27",
+      "holdingLookthroughStatus": "theme_only",
+      "lookthroughSource": "theme_only",
+      "topHoldings": [],
+      "holdingsAsOf": "2026-04-27",
+      "topIndustries": [
+        "港股红利",
+        "央企",
+        "高股息"
+      ],
+      "dueDiligenceFocus": [
+        "优先看 港股/央企红利 代理资产趋势与回撤",
+        "检查 QDII 净值确认滞后和申赎限制",
+        "复核同指数/同风格基金是否重复持有"
+      ],
+      "limitations": [
+        "最新重仓股未能从公开接口获取，当前按主题/类型降级分析。",
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-股票 · 港股/央企红利 · 跨市场指数暴露 · theme_only",
+      "confidence": 0.72,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "006075": {
+      "fundName": "博时标普500ETF联接C",
+      "fundCompany": "博时基金",
+      "fundType": "指数型-海外股票",
+      "region": "US",
+      "underlyingIndexOrTheme": "标普500",
+      "analysisTemplate": "qdii_index_fund",
+      "dataQuality": "eastmoney_base_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=006075&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359789015",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=006075&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359789015",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=006075&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359789015",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=006075&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359789015",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=006075&topline=10&year=&month=&rt=1777359789015"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "万琼",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "万琼",
+        "id": "30352716",
+        "startDate": "2021-09-23",
+        "days": 1678,
+        "education": "硕士",
+        "resume": "万琼女士:硕士。2004年起先后在中企动力科技股份有限公司、华夏基金工作。2011年加入博时基金管理有限公司。历任投资助理、基金经理助理、博时富时中国A股指数证券投资基金(2017年9月29日-2019年9月5日)、上证超级大盘交易型开放式指数证券投资基金(2015年6月8日-2019年10月11日)、博时上证超级大盘交易型开放式指数证券投资基金联接基金(2015年6月8日-2019年10月11日)、博时恒生沪深港通大湾区综合交易型开放式指数证券投资基金(2020年4月30日-2022年5月27日)、博时上证自然资源交易型开放式指数证券投资基金联接基金(2015年6月8日-2022年7月7日)、上证自然资源交易型开放式指数证券投资基金(2015年6月8日-2022年7月7日)、博时中证可持续发展100交易型开放式指数证券投资基金(2020年1月19日-2023年3月8日)、博时中证红利交易型开放式指数证券投资基金(2020年3月20日-2023年3月8日)、博时沪深300交易型开放式指数证券投资基金(2020年4月3日-2023年3月8日)、博时创业板指数证券投资基金(2021年4月2日-2023年3月8日)、博时纳斯达克100指数型发起式证券投资基金(QDII)(2022年7月26日-2023年9月25日)、博时中证港股通消费主题交易型开放式指数证券投资基金(2022年3月3日-2024年11月8日)的基金经理。现任指数与量化投资部投资总监助理兼博时标普500交易型开放式指数证券投资基金联接基金(2015年10月8日—至今)、博时标普500交易型开放式指数证券投资基金(2015年10月8日—至今)、博时中证500交易型开放式指数证券投资基金(2019年8月1日—至今)、博时中证500交易型开放式指数证券投资基金发起式联接基金(2019年12月30日—至今)、博时恒生医疗保健交易型开放式指数证券投资基金(QDII)(2021年3月18日—至今)、博时恒生港股通高股息率交易型开放式指数证券投资基金(2021年5月11日—至今)、博时恒生科技交易型开放式指数证券投资基金(QDII)(2021年5月17日—至今)、博时中证全球中国教育主题交易型开放式指数证券投资基金(QDII)(2021年6月8日—至今)、博时恒生科技交易型开放式指数证券投资基金发起式联接基金(QDII)(2021年12月21日—至今)、博时恒生医疗保健交易型开放式指数证券投资基金发起式联接基金(QDII)(2021年12月28日—至今)、博时恒生港股通高股息率交易型开放式指数证券投资基金发起式联接基金(2022年1月10日—至今)、博时纳斯达克100交易型开放式指数证券投资基金(QDII)(2023年4月19日—至今)、博时纳斯达克100交易型开放式指数证券投资基金发起式联接基金(QDII)(2023年9月26日—至今)、博时创业板综合交易型开放式指数证券投资基金(2025年8月15日—至今)、博时创业板综合交易型开放式指数证券投资基金联接基金(2025年12月2日—至今)的基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 1240593892.55,
+        "endNavYi": 12.41,
+        "scaleCny": 262015093.79,
+        "scaleYi": 2.62,
+        "asOf": "2026-04-24",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "0.00%",
+        "discountedSubscriptionRate": "0.00%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 500,
+        "purchaseStatus": "限大额(单日投资上限100元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-24",
+      "holdingLookthroughStatus": "theme_only",
+      "lookthroughSource": "theme_only",
+      "topHoldings": [],
+      "holdingsAsOf": "2026-04-24",
+      "topIndustries": [],
+      "dueDiligenceFocus": [
+        "优先看 标普500 代理资产趋势与回撤",
+        "检查 QDII 净值确认滞后和申赎限制",
+        "复核同指数/同风格基金是否重复持有"
+      ],
+      "limitations": [
+        "最新重仓股未能从公开接口获取，当前按主题/类型降级分析。",
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-海外股票 · 标普500 · 跨市场指数暴露 · theme_only",
+      "confidence": 0.72,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "019118": {
+      "fundName": "景顺长城纳斯达克科技ETF联接(QDII)E人民币",
+      "fundCompany": "景顺长城基金",
+      "fundType": "指数型-海外股票",
+      "region": "US",
+      "underlyingIndexOrTheme": "美股科技/纳斯达克",
+      "analysisTemplate": "qdii_index_fund",
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=019118&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359789367",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=019118&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359789367",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=019118&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359789367",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=019118&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359789367",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=019118&topline=10&year=&month=&rt=1777359789367"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "汪洋,张晓南",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "汪洋,张晓南",
+        "id": "30132446,30362245",
+        "startDate": "2023-08-16",
+        "days": 986,
+        "education": "双硕士",
+        "resume": "汪洋先生:国籍:中国,1980年出生,金融工程及计算机科学双硕士。相关业务资格:证券投资基金从业资格。从业经历:2009年起曾任华泰联合证券有限责任公司金融工程高级研究员,华泰柏瑞基金管理有限公司基金经理助理。2013年5月6日加入汇添富基金管理股份有限公司,负责指数及ETF产品的投资、研究工作,2013年9月13日起任汇添富中证主要消费ETF基金经理、汇添富中证医药卫生ETF基金经理、汇添富中证能源ETF基金经理、汇添富中证金融地产ETF基金的基金经理,2013年11月7日起任深证300交易型开放式指数证券投资基金及其联接基金的基金经理。2015年加入博时基金管理有限公司,历任指数投资部总经理助理、指数投资部副总经理。现任指数与量化投资部副总经理,曾任博时上证50ETF联接基金(2016年5月16日至2021年9月23日)的基金经理。博时中证可持续发展100交易型开放式指数证券投资基金基金经理(2020年1月19日至2021年9月23日),博时标普500ETF基金基金经理(2016年5月16日至2021年9月23日),博时上证50ETF基金基金经理(2016年5月16日至2021年9月23日),博时标普500ETF联接(QDII)基金基金经理(2016年5月16日至2021年9月23日)。2022年5月20日至2023年6月19日担任景顺长城中证500增强策略交易型开放式指数证券投资基金的基金经理。曾任景顺长城国证新能源车电池交易型开放式指数证券投资基金基金经理、景顺长城全球半导体芯片产业股票型证券投资基金(QDII-LOF)基金经理。2025年5月20日起担任景顺长城中证港股通科技交易型开放式指数证券投资基金、景顺长城中证港股通科技交易型开放式指数证券投资基金发起式联接基金基金经理。2025年7月15日起担任景顺长城中证国新港股通央企红利交易型开放式指数证券投资基金基金经理。2025年8月13日担任景顺长城国证港股通红利低波动率交易型开放式指数证券投资基金基金经理。2025年10月17日起担任景顺长城中证国新港股通央企红利交易型开放式指数证券投资基金联接基金基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 803209539.17,
+        "endNavYi": 8.03,
+        "scaleCny": 380391265.5,
+        "scaleYi": 3.8,
+        "asOf": "2026-04-24",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "0.00%",
+        "discountedSubscriptionRate": "0.00%",
+        "redemptionRate": null,
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "暂停申购(单日投资上限100元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-24",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "lookthroughSource": "eastmoney_f10_holdings",
+      "topHoldings": [
+        {
+          "code": "MSFT",
+          "name": "微软",
+          "weightPct": 8.55,
+          "sharesText": "2.33",
+          "marketValueText": "5,276.04",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-09-07"
+        },
+        {
+          "code": "AAPL",
+          "name": "苹果",
+          "weightPct": 8.09,
+          "sharesText": "4.06",
+          "marketValueText": "4,991.14",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-09-07"
+        },
+        {
+          "code": "NVDA",
+          "name": "英伟达",
+          "weightPct": 7.57,
+          "sharesText": "1.50",
+          "marketValueText": "4,671.91",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-09-07"
+        },
+        {
+          "code": "META",
+          "name": "Meta Platforms Inc-A",
+          "weightPct": 4.7,
+          "sharesText": "1.35",
+          "marketValueText": "2,901.45",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-09-07"
+        },
+        {
+          "code": "GOOGL",
+          "name": "谷歌-A",
+          "weightPct": 4.3,
+          "sharesText": "2.82",
+          "marketValueText": "2,649.90",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-09-07"
+        },
+        {
+          "code": "GOOG",
+          "name": "谷歌-C",
+          "weightPct": 4.23,
+          "sharesText": "2.76",
+          "marketValueText": "2,610.50",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-09-07"
+        },
+        {
+          "code": "AVGO",
+          "name": "博通",
+          "weightPct": 3.32,
+          "sharesText": "0.34",
+          "marketValueText": "2,050.22",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-09-07"
+        },
+        {
+          "code": "ADBE",
+          "name": "奥多比",
+          "weightPct": 2.25,
+          "sharesText": "0.38",
+          "marketValueText": "1,390.07",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-09-07"
+        },
+        {
+          "code": "AMD",
+          "name": "超威半导体",
+          "weightPct": 1.61,
+          "sharesText": "1.35",
+          "marketValueText": "993.43",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-09-07"
+        },
+        {
+          "code": "INTC",
+          "name": "英特尔",
+          "weightPct": 1.44,
+          "sharesText": "3.49",
+          "marketValueText": "890.31",
+          "source": "eastmoney_f10_holdings",
+          "asOf": "2023-09-07"
+        }
+      ],
+      "holdingsAsOf": "2023-09-07",
+      "topIndustries": [
+        "美股科技",
+        "AI/云计算",
+        "大型成长股"
+      ],
+      "dueDiligenceFocus": [
+        "优先看 美股科技/纳斯达克 代理资产趋势与回撤",
+        "检查 QDII 净值确认滞后和申赎限制",
+        "复核同指数/同风格基金是否重复持有"
+      ],
+      "limitations": [
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-海外股票 · 美股科技/纳斯达克 · 跨市场指数暴露 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    },
+    "017641": {
+      "fundName": "摩根标普500指数(QDII)人民币A",
+      "fundCompany": "摩根基金(中国)",
+      "fundType": "指数型-海外股票",
+      "region": "US",
+      "underlyingIndexOrTheme": "标普500",
+      "analysisTemplate": "qdii_index_fund",
+      "dataQuality": "eastmoney_holdings_sync",
+      "sourceMode": "eastmoney_sync",
+      "sourceUrls": [
+        "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=017641&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359789470",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundManagerList.ashx?FCODE=017641&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359789470",
+        "https://fundmobapi.eastmoney.com/FundMApi/FundMangerDetail.ashx?FCODE=017641&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359789470",
+        "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE=017641&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0&Uid=&_=1777359789470",
+        "https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=017641&topline=10&year=&month=&rt=1777359789470"
+      ],
+      "asOf": "2026-04-28",
+      "fetchedAt": "2026-04-28T07:03:05.957Z",
+      "managerName": "张军",
+      "managerSourceStatus": "eastmoney_sync",
+      "manager": {
+        "name": "张军",
+        "id": "30043326",
+        "startDate": "2023-04-06",
+        "days": 1118,
+        "education": "硕士",
+        "resume": "张军先生:中国国籍,硕士,毕业于上海复旦大学。曾担任上海国际信托有限公司国际业务部经理,交易部经理。2004年6月加入上投摩根基金管理有限公司,先后担任交易部总监、投资经理、基金经理、投资组合管理部总监、投资绩效评估总监、国际投资部总监、组合基金投资部总监,现担任投资董事兼高级基金经理。自2008年3月起担任上投摩根亚太优势混合型证券投资基金基金经理,自2012年3月起同时担任上投摩根全球天然资源混合型证券投资基金基金经理,自2016年12月起同时担任上投摩根全球多元配置证券投资基金基金经理,自2018年10月起同时担任上投摩根欧洲动力策略股票型证券投资基金(QDII)基金经理,自2019年7月起同时担任上投摩根日本精选股票型证券投资基金(QDII)基金经理,自2021年1月起同时担任上投摩根富时发达市场REITs指数型证券投资基金(QDII)基金经理。2021年6月1日起担任上投摩根全球新兴市场混合型证券投资基金基金经理。2021年6月8日起至2023年3月3日担任上投摩根标普港股通低波红利指数型证券投资基金基金经理。曾任上投摩根恒生科技交易型开放式指数证券投资基金(QDII)基金经理。",
+        "source": "eastmoney_manager_api"
+      },
+      "fundSize": {
+        "endNavCny": 3661555344.2,
+        "endNavYi": 36.62,
+        "scaleCny": 2465625910.24,
+        "scaleYi": 24.66,
+        "asOf": "2026-04-24",
+        "sourceField": "ENDNAV"
+      },
+      "fees": {
+        "subscriptionRate": "1.20%",
+        "discountedSubscriptionRate": "0.12%",
+        "redemptionRate": "1.00%",
+        "minSubscriptionCny": 10,
+        "minPurchaseCny": 100,
+        "purchaseStatus": "限大额(单日投资上限100元)",
+        "redemptionStatus": "开放赎回"
+      },
+      "riskLevel": "4",
+      "navDate": "2026-04-24",
+      "holdingLookthroughStatus": "latest_quarter_holdings",
+      "lookthroughSource": "eastmoney_mobile_position",
+      "topHoldings": [
+        {
+          "code": "NVDA",
+          "name": "英伟达",
+          "weightPct": 7.45,
+          "changeType": "减持",
+          "changePct": -0.12,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "AAPL",
+          "name": "苹果",
+          "weightPct": 6.6,
+          "changeType": "减持",
+          "changePct": -0.11,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "MSFT",
+          "name": "微软",
+          "weightPct": 4.84,
+          "changeType": "减持",
+          "changePct": -1.14,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "AMZN",
+          "name": "亚马逊",
+          "weightPct": 3.56,
+          "changeType": "减持",
+          "changePct": -0.17,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "GOOGL",
+          "name": "谷歌-A",
+          "weightPct": 2.94,
+          "changeType": "减持",
+          "changePct": -0.09,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "AVGO",
+          "name": "博通",
+          "weightPct": 2.57,
+          "changeType": "减持",
+          "changePct": -0.09,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "GOOG",
+          "name": "谷歌-C",
+          "weightPct": 2.35,
+          "changeType": "减持",
+          "changePct": -0.09,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "META",
+          "name": "Meta Platforms Inc-A",
+          "weightPct": 2.19,
+          "changeType": "减持",
+          "changePct": -0.15,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "TSLA",
+          "name": "特斯拉",
+          "weightPct": 1.84,
+          "changeType": "减持",
+          "changePct": -0.19,
+          "market": "105",
+          "source": "eastmoney_mobile_position"
+        },
+        {
+          "code": "BRK_B",
+          "name": "伯克希尔哈撒韦-B",
+          "weightPct": 1.55,
+          "changeType": "增持",
+          "changePct": 0.06,
+          "market": "106",
+          "source": "eastmoney_mobile_position"
+        }
+      ],
+      "holdingsAsOf": "2026-03-31",
+      "topIndustries": [],
+      "dueDiligenceFocus": [
+        "优先看 标普500 代理资产趋势与回撤",
+        "检查 QDII 净值确认滞后和申赎限制",
+        "复核同指数/同风格基金是否重复持有"
+      ],
+      "limitations": [
+        "公开接口字段可能滞后于基金公告，交易判断仍需本地基金护栏复核。"
+      ],
+      "profileOneLine": "指数型-海外股票 · 标普500 · 跨市场指数暴露 · latest_quarter_holdings",
+      "confidence": 0.82,
+      "diagnostics": {
+        "eastmoneyErrorCount": 0,
+        "eastmoneyErrors": []
+      }
+    }
+  }
+}

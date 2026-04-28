@@ -22,6 +22,24 @@ function trimText(value) {
   return text || null;
 }
 
+function normalizeBrainProfile(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  return ["fast", "full"].includes(text) ? text : null;
+}
+
+function resolveRawBrainProfile(rawSnapshot = {}, bridgeConfig = {}) {
+  return (
+    normalizeBrainProfile(rawSnapshot?.runtimeConfig?.brainProfile) ??
+    normalizeBrainProfile(rawSnapshot?.runtimeDiagnostics?.brainProfile) ??
+    normalizeBrainProfile(
+      (Array.isArray(rawSnapshot?.calls) ? rawSnapshot.calls : [])
+        .map((call) => call?.runtimeDiagnostics?.brainProfile)
+        .find(Boolean)
+    ) ??
+    normalizeBrainProfile(bridgeConfig?.providerDefaults?.brainProfile)
+  );
+}
+
 function toDisplayBucketLabel(assetMaster = {}, bucket) {
   return (
     trimText(assetMaster?.buckets?.[bucket]?.label) ??
@@ -124,6 +142,7 @@ export async function buildTradingAdviceSnapshot({
     mode: trimText(rawSnapshot?.mode) ?? "fixture",
     source: trimText(rawSnapshot?.source) ?? "TradingAgents",
     provider: trimText(rawSnapshot?.provider),
+    brainProfile: resolveRawBrainProfile(rawSnapshot, bridgeConfig),
     status: guarded.status,
     freshnessLabel: guarded.freshness.freshnessLabel,
     ageHours: guarded.freshness.ageHours,

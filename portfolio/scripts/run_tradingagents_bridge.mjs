@@ -30,6 +30,11 @@ function toNonNegativeInteger(value, fallback) {
   return Number.isFinite(numeric) && numeric >= 0 ? Math.floor(numeric) : fallback;
 }
 
+function extractTradingAgentsDiagnosticPath(value) {
+  const text = String(value ?? "");
+  return text.match(/\[tradingagents_diagnostic\]\s+path=([^\s]+)/)?.[1] ?? null;
+}
+
 function normalizeSelectedAnalysts(value, fallback = ["market", "social", "news", "fundamentals"]) {
   const raw = Array.isArray(value) ? value.join(",") : String(value ?? "");
   const items = raw
@@ -46,6 +51,11 @@ function trimText(value) {
 
 function slugify(value) {
   return String(value ?? "").trim().replace(/[^A-Za-z0-9._-]+/g, "_") || "unknown";
+}
+
+function normalizeBrainProfile(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  return ["fast", "full"].includes(text) ? text : "full";
 }
 
 function parseIsoDate(value) {
@@ -123,12 +133,19 @@ export function buildTradingAgentsSymbolCachePath({
   portfolioRoot = "",
   env = process.env
 } = {}) {
-  return path.join(
+  const base = [
     resolveTradingAgentsSymbolCacheRoot({ portfolioRoot, env }),
     slugify(tradeDate),
     slugify(providerDefaults?.llmProvider ?? "glm"),
     slugify(providerDefaults?.deepThinkModel ?? "glm-5.1"),
-    slugify(providerDefaults?.quickThinkModel ?? "glm-5"),
+    slugify(providerDefaults?.quickThinkModel ?? "glm-5")
+  ];
+  const brainProfile = normalizeBrainProfile(providerDefaults?.brainProfile);
+  if (brainProfile !== "full") {
+    base.push(slugify(brainProfile));
+  }
+  return path.join(
+    ...base,
     `${slugify(String(symbol ?? "").toUpperCase())}.json`
   );
 }
@@ -228,10 +245,12 @@ export function buildLiveRawSnapshotFromSymbolCache({
     mode: "live",
     source: "TradingAgents",
     provider: String(providerDefaults?.llmProvider ?? "glm"),
+    brainProfile: normalizeBrainProfile(providerDefaults?.brainProfile),
     runtimeConfig: {
       requestTimeoutSeconds: toPositiveNumber(providerDefaults?.requestTimeoutSeconds, 90),
       requestMaxRetries: Math.max(0, Number(providerDefaults?.requestMaxRetries) || 0),
       selectedAnalysts: normalizeSelectedAnalysts(providerDefaults?.selectedAnalysts),
+      brainProfile: normalizeBrainProfile(providerDefaults?.brainProfile),
       maxTokens: Math.max(1, Number(providerDefaults?.maxTokens) || 1200),
       temperature: toNonNegativeNumber(providerDefaults?.temperature, 0.2),
       thinkingType: String(providerDefaults?.thinkingType ?? "disabled"),
@@ -246,10 +265,15 @@ export function buildLiveRawSnapshotFromSymbolCache({
       symbolBackoffSeconds: toPositiveNumber(providerDefaults?.symbolBackoffSeconds, 30),
       symbolMaxBackoffSeconds: toPositiveNumber(providerDefaults?.symbolMaxBackoffSeconds, 120),
       symbolIntervalSeconds: toNonNegativeNumber(providerDefaults?.symbolIntervalSeconds, 8),
-      symbolCacheTtlHours: toPositiveNumber(providerDefaults?.symbolCacheTtlHours, 18)
+      symbolWallTimeoutSeconds: toNonNegativeNumber(providerDefaults?.symbolWallTimeoutSeconds, 0),
+      symbolCacheTtlHours: toPositiveNumber(providerDefaults?.symbolCacheTtlHours, 18),
+      maxDebateRounds: toNonNegativeInteger(providerDefaults?.maxDebateRounds, 1),
+      maxRiskDiscussRounds: toNonNegativeInteger(providerDefaults?.maxRiskDiscussRounds, 1),
+      maxRecurLimit: Math.max(1, Number(providerDefaults?.maxRecurLimit) || 100)
     },
     runtimeDiagnostics: {
       cacheOnlyBridge: true,
+      brainProfile: normalizeBrainProfile(providerDefaults?.brainProfile),
       cacheHits: calls.length,
       cacheFallbacks: 0,
       liveRuns: 0,
@@ -271,6 +295,8 @@ export function runLiveRawSnapshot({
 } = {}) {
   const runnerScript = fileURLToPath(new URL("./run_tradingagents_raw_snapshot.py", import.meta.url));
   const processTimeoutMs = toPositiveNumber(providerDefaults?.processTimeoutMs, defaultProcessTimeoutMs);
+  const diagnosticsDir = trimText(providerDefaults?.diagnosticsDir) ??
+    (trimText(portfolioRoot) ? path.join(String(portfolioRoot).trim(), "data", "tradingagents_run_diagnostics") : "");
   const result = spawnSyncFn(
     externalPython,
     [
@@ -321,10 +347,24 @@ export function runLiveRawSnapshot({
       String(toPositiveNumber(providerDefaults?.symbolMaxBackoffSeconds, 90)),
       "--symbol-interval-seconds",
       String(toNonNegativeNumber(providerDefaults?.symbolIntervalSeconds, 5)),
+      "--symbol-wall-timeout-seconds",
+      String(toNonNegativeNumber(providerDefaults?.symbolWallTimeoutSeconds, 0)),
       "--symbol-cache-ttl-hours",
       String(toPositiveNumber(providerDefaults?.symbolCacheTtlHours, 18)),
       "--allow-stale-symbol-cache-on-error",
       String(Number(providerDefaults?.allowStaleSymbolCacheOnError) === 0 ? 0 : 1),
+      "--brain-profile",
+      normalizeBrainProfile(providerDefaults?.brainProfile),
+      "--fast-context-max-chars",
+      String(Math.max(1000, Number(providerDefaults?.fastContextMaxChars) || 12000)),
+      "--max-debate-rounds",
+      String(toNonNegativeInteger(providerDefaults?.maxDebateRounds, 1)),
+      "--max-risk-discuss-rounds",
+      String(toNonNegativeInteger(providerDefaults?.maxRiskDiscussRounds, 1)),
+      "--max-recur-limit",
+      String(Math.max(1, Number(providerDefaults?.maxRecurLimit) || 100)),
+      "--diagnostics-dir",
+      diagnosticsDir,
       "--output",
       "-"
     ],
@@ -345,15 +385,33 @@ export function runLiveRawSnapshot({
 
   if (result.error) {
     if (result.error.code === "ETIMEDOUT") {
-      throw new Error(`TradingAgents live snapshot timed out after ${processTimeoutMs}ms`);
+      const timeoutError = new Error(`TradingAgents live snapshot timed out after ${processTimeoutMs}ms`);
+      timeoutError.diagnosticPath = extractTradingAgentsDiagnosticPath(result.stderr);
+      throw timeoutError;
     }
     throw result.error;
   }
   if (result.status !== 0) {
-    throw new Error(String(result.stderr || result.stdout || "TradingAgents live snapshot failed").trim());
+    const failed = new Error(String(result.stderr || result.stdout || "TradingAgents live snapshot failed").trim());
+    failed.diagnosticPath = extractTradingAgentsDiagnosticPath(`${result.stderr ?? ""}\n${result.stdout ?? ""}`);
+    throw failed;
   }
 
-  return JSON.parse(String(result.stdout ?? "{}").trim() || "{}");
+  const parsed = JSON.parse(String(result.stdout ?? "{}").trim() || "{}");
+  parsed.brainProfile = normalizeBrainProfile(parsed?.brainProfile ?? providerDefaults?.brainProfile);
+  parsed.runtimeConfig = {
+    ...(parsed.runtimeConfig ?? {}),
+    ...(parsed.brainProfile ? { brainProfile: parsed.brainProfile } : {})
+  };
+  parsed.runtimeDiagnostics = {
+    ...(parsed.runtimeDiagnostics ?? {}),
+    ...(parsed.brainProfile ? { brainProfile: parsed.brainProfile } : {}),
+    runDiagnosticPath:
+      parsed?.runtimeDiagnostics?.runDiagnosticPath ??
+      extractTradingAgentsDiagnosticPath(result.stderr) ??
+      null
+  };
+  return parsed;
 }
 
 export async function resolveTradingAgentsMarketLakeDbPath(portfolioRoot) {
@@ -370,7 +428,14 @@ export async function runTradingAgentsBridge(rawOptions = {}) {
   const accountId = resolveAccountId(rawOptions);
   const mode = String(rawOptions?.mode ?? "live").trim().toLowerCase() || "live";
   let resolvedMode = mode;
-  const bridgeConfig = await loadTradingAgentsBridgeConfig(rawOptions?.configPath);
+  const loadedBridgeConfig = await loadTradingAgentsBridgeConfig(rawOptions?.configPath);
+  const bridgeConfig = {
+    ...loadedBridgeConfig,
+    providerDefaults: {
+      ...(loadedBridgeConfig?.providerDefaults ?? {}),
+      ...(rawOptions?.providerDefaults ?? rawOptions?.providerDefaultsOverride ?? {})
+    }
+  };
   const tradeDate = String(rawOptions?.tradeDate ?? rawOptions?.["trade-date"] ?? formatShanghaiDate()).trim();
 
   let rawSnapshot;
